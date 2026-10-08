@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio SEOZ — Dijital Davetiye Editörü</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="css/canvas.css">
+<link rel="stylesheet" href="css/editor-chrome.css">
+</head>
+<body>
+
+<div id="app"></div>
+
+<!-- Çekirdek (editör + view.html ORTAK kullanır) -->
+<script src="js/core/document-model.js"></script>
+<script src="js/core/layout-engine.js"></script>
+<script src="js/core/storage.js"></script>
+<script src="js/core/blob-store.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/core/cloud-store.js"></script>
+<script src="js/core/renderer.js"></script>
+<script src="js/core/qr-encoder.js"></script>
+<script src="js/fonts-library.js"></script>
+<script src="js/entry-scene.js"></script>
+<script src="js/modules/module-registry.js"></script>
+<script src="js/modules/location.js"></script>
+<script src="js/modules/music.js"></script>
+<script src="js/modules/countdown.js"></script>
+<script src="js/modules/rsvp.js"></script>
+<script src="js/modules/gallery.js"></script>
+<script src="js/modules/guest-upload.js"></script>
+<script src="js/modules/celebration.js"></script>
+<script src="js/modules/poll.js"></script>
+<script src="js/modules/qrcode.js"></script>
+<script src="js/modules/calendar.js"></script>
+<script src="js/modules/feedback.js"></script>
+
+<!-- Yalnızca editöre özel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="js/editor/image-utils.js"></script>
+<script src="js/editor/drag-resize.js"></script>
+<script src="js/editor/text-panel.js"></script>
+<script src="js/editor/image-panel.js"></script>
+<script src="js/editor/entry-panel.js"></script>
+<script src="js/editor/poll-panel.js"></script>
+<script src="js/editor/module-panel.js"></script>
+<script src="js/editor/responsive-panel.js"></script>
+<script src="js/editor/layers-panel.js"></script>
+<script src="js/editor/library-view.js"></script>
+<script src="js/editor/publish.js"></script>
+<script src="js/editor/export-package.js"></script>
+<script src="js/editor/editor-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Davetiye — Studio SEOZ</title>
+<link rel="stylesheet" href="css/canvas.css">
+<style>
+  html, body{ margin:0; min-height:100vh; background:#E9E4D8; }
+  /* EK MADDE DÜZELTMESİ — ZEMİN PNG YÜKSEKLİK/BOŞLUK SORUNU:
+     Bu sınıf yalnızca YAYIN sayfasında kullanılır (editörün kendi
+     önizleme paneli hâlâ paylaşılan .seoz-canvas-outer'ı olduğu gibi
+     kullanır, buradan etkilenmez). Dış sarmalayıcı her zaman EN AZ
+     ekran yüksekliği kadar tutulur — davetiye içeriği kısa olsa bile
+     altında/üstünde "boşta" kalan, hiçbir şeyin kaplamadığı bir alan
+     OLUŞMAZ; o alan her zaman bu sabit, hemen hazır (asenkron
+     beklemeyen) nötr renkle dolu kalır. 100dvh, mobil tarayıcılarda
+     adres çubuğu görünür/gizlenirken 100vh'nin verdiği yanlış
+     (fazla/eksik) yükseklik sorununu düzeltir — destekleyen
+     tarayıcılarda 100vh'nin üzerine yazar, desteklemeyenlerde
+     sessizce yok sayılır. */
+  .seoz-view-outer{ min-height:100vh; min-height:100dvh; }
+  .view-message{
+    min-height: 100vh; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding: 24px; font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem; color:#5C5A4E;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<!-- Yalnızca çekirdek + view-app.js. js/editor/ klasöründen HİÇBİR dosya
+     buraya yüklenmez — müşteri tarafında düzenleme kodu yapısal olarak
+     hiç var olmaz. -->
+<script src="js/core/document-model.js"></script>
+<script src="js/core/layout-engine.js"></script>
+<script src="js/core/storage.js"></script>
+<script src="js/core/blob-store.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/core/cloud-store.js"></script>
+<script src="js/core/renderer.js"></script>
+<script src="js/core/qr-encoder.js"></script>
+<script src="js/fonts-library.js"></script>
+<script src="js/entry-scene.js"></script>
+<script src="js/modules/module-registry.js"></script>
+<script src="js/modules/location.js"></script>
+<script src="js/modules/music.js"></script>
+<script src="js/modules/countdown.js"></script>
+<script src="js/modules/rsvp.js"></script>
+<script src="js/modules/gallery.js"></script>
+<script src="js/modules/guest-upload.js"></script>
+<script src="js/modules/celebration.js"></script>
+<script src="js/modules/poll.js"></script>
+<script src="js/modules/qrcode.js"></script>
+<script src="js/modules/calendar.js"></script>
+<script src="js/modules/feedback.js"></script>
+<script src="js/view-app.js"></script>
+</body>
+</html>

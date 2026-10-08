@@ -1,0 +1,229 @@
+/* =============================================================================
+   STUDIO SEOZ EDİTÖRÜ — editor-chrome.css
+   Yalnızca index.html (editör) tarafından yüklenir. view.html bu dosyayı
+   HİÇ import etmez — müşteri tarafında panel/tutamaç görünmesi bu yüzden
+   yapısal olarak imkânsızdır.
+
+   Not: Bu proje mevcut Studio SEOZ mağaza sitesinden bağımsızdır; renk/
+   tipografi tokenleri burada kendi başına, o projeye hiç referans
+   vermeden tanımlanmıştır.
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap');
+
+:root{
+  --ink: #23261F;
+  --ink-soft: #6B6A5E;
+  --paper: #FAF8F3;
+  --paper-alt: #F0ECE2;
+  --line: #DCD5C6;
+  --gold: #93703F;
+  --accent: #5B6E52;
+  --danger: #A3503F;
+  --f-display: 'Cormorant Garamond', serif;
+  --f-body: 'Manrope', sans-serif;
+}
+
+*, *::before, *::after{ box-sizing: border-box; }
+body.seoz-editor-body{
+  margin: 0;
+  font-family: var(--f-body);
+  color: var(--ink);
+  background: var(--paper-alt);
+  font-size: 14px;
+}
+button{ font: inherit; cursor: pointer; }
+input, select, textarea{ font: inherit; }
+.hidden{ display: none !important; }
+.spacer{ flex: 1; }
+
+.btn{
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 3px; border: 1px solid transparent;
+  font-size: .82rem; font-weight: 600;
+}
+.btn-primary{ background: var(--ink); color: var(--paper); }
+.btn-primary:hover{ background: #33362C; }
+.btn-gold{ background: var(--gold); color: #fff; }
+.btn-gold:hover{ background: #7C5F35; }
+.btn-outline{ background: #fff; border-color: var(--line); color: var(--ink); }
+.btn-outline:hover{ border-color: var(--gold); color: var(--gold); }
+/* MADDE 4: Geri Al/İleri Al butonları geçmiş yokken pasif görünür. */
+.btn-outline:disabled{ opacity: .4; cursor: not-allowed; pointer-events: none; }
+.btn-outline:disabled:hover{ border-color: var(--line); color: var(--ink); }
+.btn-danger-text{ background: none; color: var(--danger); font-size: .78rem; }
+.btn-icon{ width: 30px; height: 30px; padding: 0; background: none; border-radius: 3px; }
+.btn-icon:hover{ background: var(--paper-alt); }
+
+/* =========================================================================
+   LIBRARY VIEW (doküman listesi)
+   ========================================================================= */
+.library-shell{ max-width: 1040px; margin: 0 auto; padding: 40px 24px 80px; }
+.library-header{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; flex-wrap: wrap; gap: 14px; }
+.library-header h1{ font-family: var(--f-display); font-size: 1.8rem; font-weight: 600; }
+.library-header .sub{ color: var(--ink-soft); font-size: .84rem; margin-top: 4px; }
+.library-actions{ display: flex; gap: 10px; }
+
+.doc-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+.doc-card{
+  background: #fff; border: 1px solid var(--line); padding: 18px;
+  display: flex; flex-direction: column; gap: 10px; cursor: pointer;
+  transition: border-color .15s;
+}
+.doc-card:hover{ border-color: var(--gold); }
+.doc-card-thumb{
+  aspect-ratio: 9/13; background: var(--paper-alt); display: flex; align-items: center; justify-content: center;
+  font-family: var(--f-display); color: var(--ink-soft); font-size: .8rem;
+}
+.doc-card h3{ font-family: var(--f-display); font-size: 1.1rem; font-weight: 600; }
+.doc-card .meta{ font-size: .72rem; color: var(--ink-soft); }
+.doc-card .badge{
+  display: inline-block; font-size: .68rem; padding: 2px 8px; border-radius: 10px;
+  background: var(--paper-alt); color: var(--ink-soft); width: fit-content;
+}
+.doc-card .badge.is-published{ background: #E1E8DC; color: #3E6B36; }
+.doc-card-actions{ display: flex; gap: 8px; margin-top: auto; }
+.empty-library{ text-align: center; padding: 80px 20px; color: var(--ink-soft); }
+
+/* Yeni davetiye modalı */
+.modal-overlay{ position: fixed; inset: 0; background: rgba(35,38,31,.4); display: flex; align-items: center; justify-content: center; z-index: 900; padding: 20px; }
+.modal-card{ background: #fff; padding: 28px; width: 100%; max-width: 380px; }
+.modal-card h2{ font-family: var(--f-display); font-size: 1.3rem; font-weight: 600; margin-bottom: 16px; }
+.field{ margin-bottom: 14px; }
+.field label{ display: block; font-size: .76rem; color: var(--ink-soft); margin-bottom: 5px; }
+.field input, .field select, .field textarea{
+  width: 100%; border: 1px solid var(--line); padding: 9px 10px; background: #fff; color: var(--ink);
+}
+
+/* =========================================================================
+   EDITOR SHELL
+   ========================================================================= */
+.editor-shell{ display: flex; flex-direction: column; height: 100vh; }
+
+.editor-topbar{
+  height: 56px; flex: 0 0 56px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 16px; background: var(--ink); color: var(--paper);
+  border-bottom: 1px solid #000;
+}
+.editor-topbar .back-btn{ color: var(--paper); background: none; padding: 6px; }
+.editor-topbar .doc-title-input{
+  background: transparent; border: none; color: var(--paper);
+  font-family: var(--f-display); font-size: 1.05rem; font-weight: 600;
+  border-bottom: 1px solid transparent; padding: 4px 2px; max-width: 260px;
+}
+.editor-topbar .doc-title-input:focus{ border-bottom-color: var(--gold); outline: none; }
+.editor-topbar .spacer{ flex: 1; }
+.editor-topbar .save-status{ font-size: .74rem; color: rgba(250,248,243,.6); white-space: nowrap; }
+.editor-topbar .bp-toggle{ display: flex; border: 1px solid rgba(250,248,243,.3); border-radius: 20px; overflow: hidden; }
+.editor-topbar .bp-toggle button{ background: none; color: rgba(250,248,243,.7); padding: 6px 14px; font-size: .76rem; }
+.editor-topbar .bp-toggle button.active{ background: rgba(250,248,243,.14); color: #fff; }
+
+.editor-toolbar{
+  flex: 0 0 auto; min-height: 46px; display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.editor-toolbar input[type="color"]{ width: 40px; height: 34px; border: 1px solid var(--line); padding: 2px; background: #fff; }
+.editor-toolbar select{
+  padding: 9px 12px; border: 1px solid var(--line); background: #fff; color: var(--ink);
+  font-size: .82rem; border-radius: 3px;
+}
+
+.editor-body{ flex: 1; display: flex; min-height: 0; }
+
+.editor-canvas-area{
+  flex: 1; overflow: auto; padding: 40px 20px; display: flex; justify-content: center;
+  background:
+    repeating-linear-gradient(45deg, #ECE7DA, #ECE7DA 10px, #E7E1D2 10px, #E7E1D2 20px);
+}
+.editor-canvas-area .seoz-canvas-outer{ background: transparent; align-items: flex-start; }
+.editor-canvas-area .seoz-canvas-scale-wrap{
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,.35);
+}
+
+.editor-sidebar{
+  flex: 0 0 300px; background: #fff; border-left: 1px solid var(--line);
+  overflow-y: auto; display: flex; flex-direction: column;
+}
+.sidebar-section{ border-bottom: 1px solid var(--line); padding: 16px; }
+.sidebar-section h4{ font-size: .74rem; font-weight: 700; color: var(--ink-soft); margin-bottom: 12px; letter-spacing: .01em; }
+.sidebar-empty{ font-size: .8rem; color: var(--ink-soft); }
+
+.layer-list{ display: flex; flex-direction: column; gap: 4px; }
+.layer-list-item{
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 8px; border-radius: 3px; cursor: pointer; font-size: .82rem;
+}
+.layer-list-item:hover{ background: var(--paper-alt); }
+.layer-list-item.selected{ background: #EFE6D6; }
+.layer-list-item .name{ flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-list-item .layer-actions{ display: none; gap: 2px; }
+.layer-list-item:hover .layer-actions{ display: flex; }
+
+/* Property panel */
+.prop-row{ display: flex; gap: 8px; margin-bottom: 12px; }
+.prop-row .field{ flex: 1; margin-bottom: 0; }
+.toggle-btn-group{ display: flex; gap: 4px; }
+.toggle-btn-group button{
+  flex: 1; border: 1px solid var(--line); background: #fff; padding: 7px; border-radius: 3px;
+}
+.toggle-btn-group button.active{ background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.numeric-with-unit{ display: flex; align-items: center; border: 1px solid var(--line); }
+.numeric-with-unit input{ border: none; flex: 1; padding: 8px 10px; }
+.numeric-with-unit span{ padding: 0 8px; color: var(--ink-soft); font-size: .74rem; }
+.prop-actions{ display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.prop-actions .btn{ flex: 1; }
+
+/* =========================================================================
+   CANVAS ÜZERİNDE SEÇİM / SÜRÜKLEME (yalnızca editörde)
+   ========================================================================= */
+.seoz-layer.seoz-editable{ cursor: move; }
+.seoz-layer.seoz-editable:hover{ outline: 1px dashed rgba(147,112,63,.6); }
+.seoz-layer.selected{ outline: 2px solid var(--gold) !important; }
+.resize-handle{
+  position: absolute; right: -6px; bottom: -6px;
+  width: 12px; height: 12px; background: var(--gold); border: 2px solid #fff;
+  border-radius: 50%; cursor: se-resize; z-index: 50;
+  display: none;
+}
+.seoz-layer.selected .resize-handle{ display: block; }
+
+.publish-toast{
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); padding: 12px 20px; border-radius: 30px;
+  font-size: .82rem; z-index: 950; opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.publish-toast.show{ opacity: 1; }
+
+/* =========================================================================
+   GALERİ KÜÇÜK RESİM IZGARASI (FAZ 6 — yalnızca panel arayüzü)
+   ========================================================================= */
+.gallery-thumb-grid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.gallery-thumb-item{
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--paper-alt);
+  border: 1px solid var(--line);
+}
+.gallery-thumb-item img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery-thumb-remove{
+  position: absolute; top: 2px; right: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(0,0,0,.6); color: #fff; font-size: .6rem;
+  line-height: 1; padding: 0;
+}
+.gallery-thumb-move{
+  position: absolute; bottom: 2px; left: 2px; right: 2px;
+  display: flex; gap: 2px;
+}
+.gallery-thumb-move button{
+  flex: 1; background: rgba(0,0,0,.55); color: #fff; font-size: .65rem;
+  border-radius: 2px; padding: 1px 0;
+}
