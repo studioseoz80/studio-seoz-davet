@@ -1,5 +1,7 @@
 # Supabase Üzerinden Gerçek Müşteri Linki — Kurulum ve Test
 
+> **Güncelleme:** Güvenlik için `GUCLENDIRME-REHBERI.md` → bölüm 4 izinleri sıkılaştırır (yalnızca sen yayınlayabilirsin). Bu rehberdeki ilk kurulumdan sonra o adımları uygula.
+
 ## Ne değişti?
 "Yayına Hazırla"ya basınca:
 1. Eskisi gibi bu tarayıcıya yerel yayın yapılır (`view.html?doc=...` çalışmaya devam eder).

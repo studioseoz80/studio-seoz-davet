@@ -63,12 +63,14 @@
           </div>
           <button class="btn btn-outline" data-export>JSON Dışa Aktar</button>
           <button class="btn btn-outline" data-export-package>Yayın Paketi İndir (.zip)</button>
+          <button class="btn btn-outline" data-cloud-auth style="display:none;" title="Yayın için Supabase girişi"></button>
           <button class="btn btn-gold" data-publish>Yayına Hazırla</button>
         </div>
 
         <div class="editor-toolbar">
           <button class="btn btn-outline" data-undo title="Geri Al (Ctrl+Z)">↶ Geri Al</button>
           <button class="btn btn-outline" data-redo title="İleri Al (Ctrl+Y)">↷ İleri Al</button>
+          <button class="btn btn-outline" data-duplicate-selected title="Seçili Öğeyi Çoğalt (Ctrl+D)">⧉ Çoğalt</button>
           <button class="btn btn-outline" data-delete-selected title="Seçili Öğeyi Sil (Delete)">🗑 Sil</button>
           <span style="width:1px;background:var(--line);align-self:stretch;margin:0 4px;"></span>
           <button class="btn btn-outline" data-add-text>+ Metin Ekle</button>
@@ -173,6 +175,8 @@
       if (bgColorInput && doc.canvas.background.type === "color") bgColorInput.value = doc.canvas.background.value;
       const deleteBtn = appRoot.querySelector("[data-delete-selected]");
       if (deleteBtn) deleteBtn.disabled = !selectedLayerId;
+      const duplicateBtn = appRoot.querySelector("[data-duplicate-selected]");
+      if (duplicateBtn) duplicateBtn.disabled = !selectedLayerId;
       applySelectionClass();
     }
 
@@ -452,6 +456,8 @@
       // MADDE 4: seçili öğe yoksa "Sil" butonu da pasif olsun.
       const deleteBtn = appRoot.querySelector("[data-delete-selected]");
       if (deleteBtn) deleteBtn.disabled = !selectedLayerId;
+      const duplicateBtn = appRoot.querySelector("[data-duplicate-selected]");
+      if (duplicateBtn) duplicateBtn.disabled = !selectedLayerId;
     }
 
     /* ---------------- LAYER OPERATIONS ---------------- */
@@ -513,12 +519,32 @@
     function duplicateLayer(layer) {
       const copy = JSON.parse(JSON.stringify(layer));
       copy.id = SeozDocModel.generateId("layer");
-      copy.x += 16; copy.y += 16;
+      if (layer.type === "text") {
+        // GÜÇLENDİRME (hızlı akış: çoğalt → yazıyı değiştir → konumla):
+        // Metin kopyası orijinalin TAM ALTINA, aynı hizada yerleşir — üst
+        // üste binmez. Masaüstü özel konumu açıksa o da aynı miktarda
+        // kaydırılır. Tüm stil (font, boyut, renk, metalik, hizalama,
+        // kalınlık vb.) JSON kopyası sayesinde birebir aynıdır.
+        const node = canvasEl.querySelector(`[data-layer-id="${layer.id}"]`);
+        const shift = Math.round((node ? node.offsetHeight : 40) + 8);
+        copy.y += shift;
+        if (copy.desktopOverride && copy.desktopOverride.enabled && copy.desktopOverride.y != null) {
+          copy.desktopOverride.y += shift;
+        }
+      } else {
+        copy.x += 16; copy.y += 16;
+      }
       copy.z = SeozDocModel.nextZ(doc);
       doc.layers.push(copy);
       fullCanvasRender();
       selectLayer(copy.id);
       scheduleAutosave(true);
+      if (copy.type === "text") {
+        // Yeni kopya seçili; metin kutusu odaklanır ve içeriği seçilir —
+        // kullanıcı doğrudan yeni yazıyı yazmaya başlayabilir.
+        const ta = propPanelEl.querySelector('textarea[data-f="text"]');
+        if (ta) { ta.focus(); ta.select(); }
+      }
     }
 
     function deleteLayer(id) {
@@ -529,6 +555,8 @@
       scheduleAutosave(true);
       const deleteBtn = appRoot.querySelector("[data-delete-selected]");
       if (deleteBtn) deleteBtn.disabled = !selectedLayerId;
+      const duplicateBtn = appRoot.querySelector("[data-duplicate-selected]");
+      if (duplicateBtn) duplicateBtn.disabled = !selectedLayerId;
     }
 
     function reorderLayer(layer, dir) {
@@ -593,8 +621,13 @@
     appRoot.querySelector("[data-delete-selected]").addEventListener("click", () => {
       if (selectedLayerId) deleteLayer(selectedLayerId);
     });
+    appRoot.querySelector("[data-duplicate-selected]").addEventListener("click", () => {
+      const sel = doc.layers.find(l => l.id === selectedLayerId);
+      if (sel) duplicateLayer(sel);
+    });
     updateUndoRedoButtons();
     appRoot.querySelector("[data-delete-selected]").disabled = !selectedLayerId;
+    appRoot.querySelector("[data-duplicate-selected]").disabled = !selectedLayerId;
 
     function isTypingInField(target) {
       if (!target) return false;
@@ -617,6 +650,13 @@
       if ((ctrlOrCmd && e.key.toLowerCase() === "y") || (ctrlOrCmd && e.shiftKey && e.key.toLowerCase() === "z")) {
         e.preventDefault();
         redo();
+        return;
+      }
+      if (ctrlOrCmd && !e.shiftKey && e.key.toLowerCase() === "d" && selectedLayerId) {
+        // Ctrl+D tarayıcıda "yer imi ekle" demektir — editörde çoğalt.
+        e.preventDefault();
+        const sel = doc.layers.find(l => l.id === selectedLayerId);
+        if (sel) duplicateLayer(sel);
         return;
       }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedLayerId && !isTypingInField(e.target)) {
@@ -739,6 +779,39 @@
       }
     });
 
+    /* ---------------- SUPABASE GİRİŞ DÜĞMESİ ---------------- */
+    const cloudAuthBtn = appRoot.querySelector("[data-cloud-auth]");
+    function updateCloudAuthButton() {
+      if (!SeozPublish.isCloudConfigured()) { cloudAuthBtn.style.display = "none"; return; }
+      const email = SeozCloudStore.getSessionEmail();
+      cloudAuthBtn.style.display = "";
+      cloudAuthBtn.textContent = email ? "☁ " + email : "☁ Giriş Yap";
+      cloudAuthBtn.title = email ? "Giriş yapıldı — çıkış için tıklayın" : "Yayın için e-posta ile giriş";
+    }
+    function startLogin() {
+      const email = prompt("Supabase'de tanımlı e-posta adresin:\n(Bu adrese tek kullanımlık giriş bağlantısı gönderilecek.)");
+      if (!email) return;
+      cloudAuthBtn.disabled = true;
+      SeozCloudStore.sendLoginLink(email)
+        .then(() => alert(
+          "Giriş bağlantısı gönderildi: " + email.trim() + "\n\n" +
+          "E-postanı aç ve bağlantıya BU tarayıcıda tıkla. Editör açılınca giriş tamamlanır.\n" +
+          "(Taslakların bu tarayıcıda kayıtlı; bağlantı onları etkilemez.)"
+        ))
+        .catch(err => alert("Giriş bağlantısı gönderilemedi.\n\n" + (err && err.message ? err.message : "")))
+        .finally(() => { cloudAuthBtn.disabled = false; });
+    }
+    cloudAuthBtn.addEventListener("click", () => {
+      if (SeozCloudStore.getSessionEmail()) {
+        if (confirm("Supabase oturumu kapatılsın mı?\n(Taslakların silinmez.)")) {
+          SeozCloudStore.signOut().finally(updateCloudAuthButton);
+        }
+      } else {
+        startLogin();
+      }
+    });
+    updateCloudAuthButton();
+
     appRoot.querySelector("[data-publish]").addEventListener("click", () => {
       const doPublish = () => {
         // 1) MEVCUT YEREL YAYIN — değişmedi.
@@ -774,6 +847,14 @@
           })
           .catch(err => {
             console.error("[Studio SEOZ] Supabase yayını başarısız:", err);
+            if (err && err.code === "AUTH_REQUIRED") {
+              updateCloudAuthButton();
+              if (!SeozCloudStore.getSessionEmail() &&
+                  confirm("Yayın sırasında hata oluştu.\n\nYayınlamak için giriş yapman gerekiyor. Şimdi e-postana giriş bağlantısı gönderilsin mi?\n\n(Yerel yayın kaydedildi; taslağın güvende.)")) {
+                startLogin();
+                return;
+              }
+            }
             alert(
               "Yayın sırasında hata oluştu.\n\n" +
               (err && err.message ? err.message : "Bilinmeyen hata.") +
@@ -821,6 +902,28 @@
     return String(str || "").replace(/"/g, "&quot;");
   }
 
-  window.addEventListener("hashchange", route);
-  document.addEventListener("DOMContentLoaded", route);
+  /* GİRİŞ DÖNÜŞÜ: E-postadaki Supabase giriş bağlantısı editörü
+     "#access_token=..." ile açar. Önce bu yakalanıp oturum kaydedilir,
+     sonra normal yönlendirme (kütüphane/editör) çalışır. Supabase ayarlı
+     değilse bu adım hiçbir şey yapmaz. */
+  async function boot() {
+    let loginMsg = null;
+    if (typeof SeozCloudStore !== "undefined" && SeozCloudStore.isConfigured()) {
+      try {
+        const r = await SeozCloudStore.handleAuthRedirect();
+        if (r.handled) loginMsg = r.error ? "Giriş yapılamadı: " + r.error : "Giriş yapıldı: " + (SeozCloudStore.getSessionEmail() || "");
+      } catch (e) { loginMsg = "Giriş yapılamadı."; }
+    }
+    route();
+    if (loginMsg) showToast(loginMsg);
+  }
+
+  // Giriş bağlantısı editör zaten açıkken aynı sekmede açılırsa sayfa
+  // yeniden yüklenmez, yalnızca adres (#...) değişir — o durumu da yakala.
+  window.addEventListener("hashchange", () => {
+    if (String(window.location.hash).indexOf("access_token=") !== -1 ||
+        String(window.location.hash).indexOf("error_description=") !== -1) boot();
+    else route();
+  });
+  document.addEventListener("DOMContentLoaded", boot);
 })();

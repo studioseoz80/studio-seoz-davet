@@ -18,7 +18,9 @@
     numberSize: 26,
     textColor: "#1E2A22",
     boxColor: "#FFFFFF",
-    boxBorderColor: "#DCD5C6"
+    boxBorderColor: "#DCD5C6",
+    // GÜÇLENDİRME: başlık ve rakamlar için metalik yazı (varsayılan kapalı)
+    metallic: "none"
   };
 
   const SETTINGS_SCHEMA = [
@@ -30,7 +32,11 @@
     { key: "numberSize", type: "number", label: "Rakam Boyutu", unit: "px" },
     { key: "textColor", type: "color", label: "Yazı Rengi" },
     { key: "boxColor", type: "color", label: "Kutu Rengi" },
-    { key: "boxBorderColor", type: "color", label: "Kutu Kenarlık Rengi" }
+    { key: "boxBorderColor", type: "color", label: "Kutu Kenarlık Rengi" },
+    {
+      key: "metallic", type: "select", label: "Yazı Metalik Efekti (başlık ve rakamlar)",
+      options: [{ value: "none", label: "Yok" }, { value: "gold", label: "Altın (Koyu Zemin)" }, { value: "silver", label: "Gümüş (Koyu Zemin)" }, { value: "copper-gold", label: "Bakır Altın (Açık Zemin)" }, { value: "dark-silver", label: "Koyu Gümüş (Açık Zemin)" }, { value: "copper", label: "Bakır" }]
+    }
   ];
 
   const UNITS = [["gun", "Gün"], ["saat", "Saat"], ["dakika", "Dk"], ["saniye", "Sn"]];
@@ -52,6 +58,7 @@
       titleEl.style.fontFamily = `"${s.fontFamily}", serif`;
       titleEl.style.fontSize = s.titleSize + "px";
       titleEl.style.color = s.textColor;
+      if (global.SeozRenderer && global.SeozRenderer.applyMetallicText) global.SeozRenderer.applyMetallicText(titleEl, s.metallic, s.textColor);
       wrap.appendChild(titleEl);
     }
 
@@ -77,6 +84,7 @@
       num.style.fontSize = s.numberSize + "px";
       num.style.fontWeight = "600";
       num.style.color = s.textColor;
+      if (global.SeozRenderer && global.SeozRenderer.applyMetallicText) global.SeozRenderer.applyMetallicText(num, s.metallic, s.textColor);
       box.appendChild(num);
       numberEls[key] = num;
 

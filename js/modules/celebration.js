@@ -68,7 +68,7 @@
     { key: "bgColor", type: "color", label: "Buton Rengi", showIf: s => s.triggerMode === "button" },
     {
       key: "metallic", type: "select", label: "Buton Metalik Efekti", showIf: s => s.triggerMode === "button",
-      options: [{ value: "none", label: "Yok" }, { value: "gold", label: "Altın (Koyu Zemin)" }, { value: "silver", label: "Gümüş (Koyu Zemin)" }, { value: "copper-gold", label: "Bakır Altın (Açık Zemin)" }, { value: "dark-silver", label: "Koyu Gümüş (Açık Zemin)" }]
+      options: [{ value: "none", label: "Yok" }, { value: "gold", label: "Altın (Koyu Zemin)" }, { value: "silver", label: "Gümüş (Koyu Zemin)" }, { value: "copper-gold", label: "Bakır Altın (Açık Zemin)" }, { value: "dark-silver", label: "Koyu Gümüş (Açık Zemin)" }, { value: "copper", label: "Bakır" }]
     },
     { key: "buttonWidth", type: "number", label: "Buton Genişliği", unit: "px", min: 60, showIf: s => s.triggerMode === "button" },
     { key: "buttonHeight", type: "number", label: "Buton Yüksekliği", unit: "px", min: 30, showIf: s => s.triggerMode === "button" },

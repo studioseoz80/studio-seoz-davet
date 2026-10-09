@@ -24,6 +24,8 @@ require("../js/modules/guest-upload.js");
 require("../js/modules/celebration.js");
 require("../js/modules/poll.js");
 require("../js/modules/feedback.js");
+require("../js/modules/gift.js");
+require("../js/modules/calendar.js");
 require("../js/editor/publish.js");
 require("../js/editor/export-package.js");
 require("../js/fonts-library.js");
@@ -128,7 +130,7 @@ assert(doc.entry.cardSrc === "data:image/png;base64,BBBB", "iç kart görseli ay
 
 // 13) FAZ 4/5/6 — modül kayıt sistemi
 const modules = SeozModuleRegistry.listModules();
-assert(modules.length === 9, "9 modül kayıtlı (konum, müzik, geri sayım, RSVP, galeri, anı yükle, kutlama efekti, anket, görüş bildir)");
+assert(modules.length === 11, "11 modül kayıtlı (konum, müzik, geri sayım, RSVP, galeri, anı yükle, kutlama efekti, anket, görüş bildir, hediye, takvime ekle)");
 assert(SeozModuleRegistry.getModule("location") && SeozModuleRegistry.getModule("music") && SeozModuleRegistry.getModule("countdown") && SeozModuleRegistry.getModule("rsvp") && SeozModuleRegistry.getModule("gallery") && SeozModuleRegistry.getModule("guest-upload") && SeozModuleRegistry.getModule("celebration"), "her yedi modül id'siyle bulunabiliyor");
 assert(SeozModuleRegistry.getModule("olmayan-modul") === null, "kayıtlı olmayan modül null döner (renderer güvenli şekilde çöküyor değil)");
 
@@ -352,12 +354,21 @@ const withFilledEntryWarnings = SeozPublish.validateForPublish(publishTestDoc);
 assert(!withFilledEntryWarnings.some(w => w.indexOf("Giriş sahnesi") !== -1), "Giriş görseli doldurulunca ilgili uyarı kayboluyor");
 
 // 26) FAZ 10 — genişletilmiş font kütüphanesi
-assert(SeozFonts.FONT_CATEGORIES.length === 5, "5 font kategorisi hâlâ mevcut (kategori sayısı değişmedi)");
-SeozFonts.FONT_CATEGORIES.forEach(cat => {
-  assert(cat.fonts.length === 5, `'${cat.label}' kategorisinde 5 font var`);
-});
-assert(SeozFonts.allFonts().length === 25, "Toplamda 25 font kayıtlı");
-assert(new Set(SeozFonts.allFonts()).size === 25, "25 fontun hepsi birbirinden FARKLI (kazara tekrar eden font yok)");
+// GÜÇLENDİRME: kütüphane büyüdü — eski 25 fontun HEPSİ hâlâ mevcut olmalı.
+const ORIGINAL_25 = ["Alex Brush","Petit Formal Script","Dancing Script","Great Vibes","Parisienne","Cormorant Garamond","Playfair Display","Libre Baskerville","EB Garamond","Marcellus","Manrope","Poppins","Work Sans","Outfit","Jost","Pacifico","Baloo 2","Fredoka","Bungee","Caveat","Inter","Source Sans 3","Roboto","IBM Plex Sans","Lato"];
+ORIGINAL_25.forEach(f => assert(SeozFonts.allFonts().includes(f), `eski font korunuyor: ${f}`));
+["script", "serif", "modern", "party", "corporate"].forEach(id => assert(SeozFonts.FONT_CATEGORIES.some(c => c.id === id), `eski kategori korunuyor: ${id}`));
+assert(SeozFonts.allFonts().length === 63, "Toplamda 63 font kayıtlı (25 eski + 38 yeni)");
+assert(new Set(SeozFonts.allFonts()).size === SeozFonts.allFonts().length, "fontların hepsi birbirinden FARKLI (kazara tekrar eden font yok)");
+// canvas.css her fontu yüklüyor mu?
+const canvasCss = require("fs").readFileSync(__dirname + "/../css/canvas.css", "utf8");
+SeozFonts.allFonts().forEach(f => assert(canvasCss.includes("family=" + f.replace(/ /g, "+")), `canvas.css fontu yüklüyor: ${f}`));
+// Son kullanılan fontlar
+SeozFonts.markFontUsed("Cinzel"); SeozFonts.markFontUsed("Allura"); SeozFonts.markFontUsed("Cinzel");
+assert(JSON.stringify(SeozFonts.getRecentFonts().slice(0, 2)) === JSON.stringify(["Cinzel", "Allura"]), "Son kullanılan fontlar en yeni üstte, tekrar etmeden");
+const opts = SeozFonts.optionsHTML("Cinzel");
+assert(opts.indexOf("Son Kullanılanlar") !== -1 && (opts.match(/selected/g) || []).length === 1, "Font seçicide 'Son Kullanılanlar' var ve tek bir seçili öğe var");
+assert(SeozFonts.optionsHTML("Fredoka").indexOf("⚠") !== -1, "Türkçe harfi eksik eski font uyarıyla gösteriliyor");
 
 // 27) ACİL DÜZELTME — gerçek yayın paketi: idb: referanslarını genel
 // (modül bilmeden) tarama ile bulma ve değiştirme mantığı
@@ -429,7 +440,8 @@ assert(celebDef.settingsSchema.find(f => f.key === "metallic").showIf({ triggerM
 
 // Galeri ve Geri Sayım'da buton olmadığı için metalik alanı da YOK
 assert(!SeozModuleRegistry.getModule("gallery").settingsSchema.some(f => f.key === "metallic"), "Galeri'de metalik alan YOK (buton içermiyor, kapsam dışı)");
-assert(!SeozModuleRegistry.getModule("countdown").settingsSchema.some(f => f.key === "metallic"), "Geri Sayım'da metalik alan YOK (buton içermiyor, kapsam dışı)");
+assert(SeozModuleRegistry.getModule("countdown").settingsSchema.some(f => f.key === "metallic"), "Geri Sayım: başlık/rakam için metalik YAZI seçeneği var (güçlendirme)");
+assert(SeozModuleRegistry.getModule("countdown").defaultSettings.metallic === "none", "Geri Sayım: metalik varsayılan KAPALI (eski görünüm değişmez)");
 
 
 // ANKET — yanıt yöntemi (geriye dönük uyum) ve otomatik yükseklik
@@ -455,5 +467,49 @@ assert(fbDef.validate({ sendMethod: "external-link", fbExternalUrl: "https://for
 assert(SeozModuleRegistry.getModule("location").autoHeight === undefined, "Diğer modüller sabit yükseklikte kalıyor");
 const fbLayer = SeozDocModel.createModuleLayer("feedback", fbDef.defaultSettings, { z: 1 });
 assert(fbLayer.moduleId === "feedback" && fbLayer.settings.sendMethod === "none", "Görüş Bildir katmanı varsayılanlarla oluşuyor");
+
+
+// GÜÇLENDİRME — Bakır metalik her buton modülünde ve renderer'da
+assert(!!SeozRenderer.METALLIC_GRADIENTS.copper, "Renderer'da Bakır gradyanı var");
+["calendar","celebration","feedback","guest-upload","location","music","rsvp","countdown","gift"].forEach(id => {
+  const f = SeozModuleRegistry.getModule(id).settingsSchema.find(x => x.key === "metallic");
+  assert(f && f.options.some(o => o.value === "copper") && f.options.some(o => o.value === "gold") && f.options.some(o => o.value === "silver"), `${id}: Altın, Gümüş, Bakır seçenekleri var`);
+});
+
+// GÜÇLENDİRME — Hediye modülü
+const giftDef = SeozModuleRegistry.getModule("gift");
+assert(giftDef && giftDef.label === "Hediye" && giftDef.autoHeight === true, "Hediye modülü kayıtlı");
+assert(giftDef.defaultSettings.giftMode === "kapali", "Hediye varsayılan olarak KAPALI");
+assert(giftDef.validate({ giftMode: "kapali" }) === null, "Kapalı hediye uyarı üretmiyor");
+assert(giftDef._iban.isValidIban("TR33 0006 1005 1978 6457 8413 26"), "Geçerli bir TR IBAN doğrulanıyor");
+assert(!giftDef._iban.isValidIban("TR33 0006 1005 1978 6457 8413 27"), "Hatalı kontrol haneli IBAN reddediliyor");
+assert(giftDef._iban.formatIban("tr330006100519786457841326") === "TR33 0006 1005 1978 6457 8413 26", "IBAN 4'lü gruplarla gösteriliyor");
+assert(giftDef._iban.compactIban("TR33 0006 1005 1978 6457 8413 26") === "TR330006100519786457841326", "IBAN boşluksuz kopyalanıyor");
+assert(giftDef.validate({ giftMode: "both", giftUrl: "", accountHolder: "Ayşe", iban: "TR330006100519786457841326" }).indexOf("hediye linki") !== -1, "Link modunda boş link uyarısı");
+assert(giftDef.validate({ giftMode: "iban", accountHolder: "Ayşe Yılmaz", iban: "TR330006100519786457841326" }) === null, "Dolu IBAN modunda uyarı YOK");
+const giftShow = k => giftDef.settingsSchema.find(f => f.key === k).showIf;
+assert(giftShow("giftUrl")({ giftMode: "link" }) && !giftShow("giftUrl")({ giftMode: "iban" }), "Link alanı yalnızca link modlarında görünür");
+assert(giftShow("iban")({ giftMode: "both" }) && !giftShow("iban")({ giftMode: "link" }), "IBAN alanı yalnızca IBAN modlarında görünür");
+
+// GÜÇLENDİRME — Görüş Bildir yöntemleri
+const fbDef2 = SeozModuleRegistry.getModule("feedback");
+const methods = fbDef2.settingsSchema.find(f => f.key === "sendMethod").options.map(o => o.value);
+["seoz", "external-link", "whatsapp", "google-form", "none"].forEach(m => assert(methods.includes(m), `Görüş Bildir yöntemi var: ${m}`));
+assert(fbDef2.defaultSettings.whatsappStyle === "form", "Eski WhatsApp kayıtları mevcut (form) davranışında kalıyor");
+assert(fbDef2.settingsSchema.find(f => f.key === "waButtonText").showIf({ sendMethod: "whatsapp", whatsappStyle: "button" }) === true, "WhatsApp buton yazısı düzenlenebilir");
+assert(fbDef2.validate({ sendMethod: "whatsapp", fbWhatsappNumber: "https://wa.me/905551112233" }) === null, "wa.me linki de numara olarak kabul ediliyor");
+assert(!Object.keys(fbDef2.defaultSettings).some(k => k.startsWith("poll")), "Görüş Bildir hâlâ anketten bağımsız");
+
+// GÜÇLENDİRME — Güvenlik: istemci kodunda gizli anahtar/parola yok
+const fs2 = require("fs"), path2 = require("path");
+function walk(d) { return fs2.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path2.join(d, e.name)) : [path2.join(d, e.name)]); }
+const clientFiles = walk(path2.join(__dirname, "..", "js")).concat([path2.join(__dirname, "..", "index.html"), path2.join(__dirname, "..", "view.html")]);
+clientFiles.forEach(f => {
+  const src = fs2.readFileSync(f, "utf8");
+  assert(!/sb_secret_[A-Za-z0-9]/.test(src), `${path2.basename(f)}: gizli (secret) anahtar yok`);
+  assert(!/service_role["']?\s*[:=]\s*["']ey/i.test(src), `${path2.basename(f)}: service_role anahtarı yok`);
+  assert(!/(password|parola|sifre|şifre)\s*[:=]\s*["'][^"']{3,}/i.test(src), `${path2.basename(f)}: sabit parola yok`);
+});
+assert(!/src="js\/editor\//.test(fs2.readFileSync(path2.join(__dirname, "..", "view.html"), "utf8")), "view.html editör kodu yüklemiyor");
 
 console.log("\n✅ TÜM TESTLER GEÇTİ (" + list.length + " belge örneği ile çalışıldı)");

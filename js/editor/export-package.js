@@ -53,7 +53,12 @@
     "js/modules/poll.js",
     "js/modules/qrcode.js",
     "js/modules/calendar.js",
-    "js/modules/feedback.js"
+    "js/modules/feedback.js",
+    "js/modules/gift.js",
+    // Görüş Bildir "davetiye içinde topla" yöntemi için (yalnızca anon
+    // anahtar — herkese açık olması tasarım gereğidir).
+    "js/supabase-config.js",
+    "js/core/cloud-store.js"
   ];
 
   const EXTENSION_BY_MIME = {
@@ -135,6 +140,8 @@
 <script src="js/core/document-model.js"></script>
 <script src="js/core/layout-engine.js"></script>
 <script src="js/core/blob-store.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/core/cloud-store.js"></script>
 <script src="js/core/renderer.js"></script>
 <script src="js/core/qr-encoder.js"></script>
 <script src="js/fonts-library.js"></script>
@@ -151,6 +158,7 @@
 <script src="js/modules/qrcode.js"></script>
 <script src="js/modules/calendar.js"></script>
 <script src="js/modules/feedback.js"></script>
+<script src="js/modules/gift.js"></script>
 <script>
 (function () {
   "use strict";

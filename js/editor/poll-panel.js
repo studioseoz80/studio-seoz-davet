@@ -129,6 +129,13 @@
         <input type="color" data-poll-btn-color value="${s.buttonColor || "#93703F"}" style="height:37px;padding:2px;">
       </div>
       <div class="field" style="margin-top:10px;">
+        <label>Buton Metalik Efekti (seçili şık ve Gönder)</label>
+        <select data-poll-metallic>
+          ${[["none","Yok"],["gold","Altın (Koyu Zemin)"],["silver","Gümüş (Koyu Zemin)"],["copper-gold","Bakır Altın (Açık Zemin)"],["dark-silver","Koyu Gümüş (Açık Zemin)"],["copper","Bakır"]]
+            .map(([v, l]) => `<option value="${v}" ${(s.metallic || "none") === v ? "selected" : ""}>${l}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field" style="margin-top:10px;">
         <label>Yazı Boyutu</label>
         <div class="numeric-with-unit">
           <input type="number" data-poll-font-size value="${s.fontSize || 16}" min="10" max="32">
@@ -180,6 +187,9 @@
     });
     containerEl.querySelector("[data-poll-text-color]").addEventListener("input", (e) => {
       s.textColor = e.target.value; cb.onSettingsChange();
+    });
+    containerEl.querySelector("[data-poll-metallic]").addEventListener("change", (e) => {
+      s.metallic = e.target.value; cb.onSettingsChange();
     });
     containerEl.querySelector("[data-poll-btn-color]").addEventListener("input", (e) => {
       s.buttonColor = e.target.value; cb.onSettingsChange();

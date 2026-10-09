@@ -20,7 +20,8 @@
    - "external-link" : buton, müşterinin kendi form sayfasını açar
                        (Google Forms, Microsoft Forms vb.).
    - "none"          : gönderim yok (yalnızca görünüm) — editörde uyarı.
-   - "seoz"          : Studio SEOZ / Supabase — sonraki aşamada eklenecek.
+   - "seoz"          : Davetiye içinde topla — Studio SEOZ Supabase'ine
+                       (feedback_submissions tablosu) kaydedilir.
    ========================================================================= */
 
 (function (global) {
@@ -45,6 +46,11 @@
     fbFormContactFieldId: "",
     fbExternalUrl: "",
     externalButtonText: "Görüş Formunu Aç",
+    // GÜÇLENDİRME: WhatsApp görünümü — "form" (mevcut: mesaj kutusu +
+    // Gönder, WhatsApp hazır mesajla açılır) | "button" (yalnızca buton,
+    // doğrudan WhatsApp sohbeti açılır). Eski kayıtlar "form" kalır.
+    whatsappStyle: "form",
+    waButtonText: "Bize Yaz",
     fontFamily: "Manrope",
     fontSize: 16,
     textColor: "#1E2A22",
@@ -53,7 +59,8 @@
   };
 
   const isMethod = (m) => (s) => s.sendMethod === m;
-  const isFormMethod = (s) => s.sendMethod !== "external-link";
+  const isWaButton = (s) => s.sendMethod === "whatsapp" && s.whatsappStyle === "button";
+  const isFormMethod = (s) => s.sendMethod !== "external-link" && !isWaButton(s);
   const COLLECT_OPTIONS = [
     { value: "off", label: "İstenmesin" },
     { value: "optional", label: "İsteğe bağlı" },
@@ -64,19 +71,28 @@
     {
       key: "sendMethod", type: "select", label: "Gönderim Yöntemi", reRenderPanel: true,
       options: [
+        { value: "seoz", label: "Davetiye içinde topla (Studio SEOZ)" },
+        { value: "external-link", label: "Google Form / harici form (buton formu açar)" },
         { value: "whatsapp", label: "WhatsApp" },
-        { value: "google-form", label: "Google Form (müşterinin kendi formu)" },
-        { value: "external-link", label: "Harici form bağlantısı" },
+        { value: "google-form", label: "Google Form — sayfa içinden gönder (alan kimlikleri gerekir)" },
         { value: "none", label: "Gönderim yok (yalnızca görünüm)" }
       ]
     },
-    { key: "fbWhatsappNumber", type: "tel", label: "WhatsApp Numarası (ülke koduyla, ör. 905551112233)", showIf: isMethod("whatsapp") },
+    {
+      key: "whatsappStyle", type: "select", label: "WhatsApp Görünümü", reRenderPanel: true, showIf: isMethod("whatsapp"),
+      options: [
+        { value: "button", label: "Yalnızca buton (WhatsApp sohbeti açılır)" },
+        { value: "form", label: "Mesaj kutusu + Gönder (hazır mesajla açılır)" }
+      ]
+    },
+    { key: "fbWhatsappNumber", type: "tel", label: "WhatsApp Numarası veya wa.me linki (ör. 905551112233)", showIf: isMethod("whatsapp") },
+    { key: "waButtonText", type: "text", label: "Buton Yazısı (ör. Bize Yaz, Önerini Paylaş)", showIf: isWaButton },
     { key: "fbFormUrl", type: "url", label: "Google Form Bağlantısı", showIf: isMethod("google-form") },
     { key: "fbFormMessageFieldId", type: "text", label: "Mesaj Alan Kimliği (entry.XXXXXXX)", showIf: isMethod("google-form") },
     { key: "fbFormNameFieldId", type: "text", label: "Ad Soyad Alan Kimliği (isteğe bağlı)", showIf: isMethod("google-form") },
     { key: "fbFormContactFieldId", type: "text", label: "İletişim Alan Kimliği (isteğe bağlı)", showIf: isMethod("google-form") },
-    { key: "fbExternalUrl", type: "url", label: "Form Sayfası Bağlantısı", showIf: isMethod("external-link") },
-    { key: "externalButtonText", type: "text", label: "Buton Yazısı", showIf: isMethod("external-link") },
+    { key: "fbExternalUrl", type: "url", label: "Form Bağlantısı (Google Form vb.)", showIf: isMethod("external-link") },
+    { key: "externalButtonText", type: "text", label: "Buton Yazısı (ör. Görüş Bildir, Önerini Paylaş)", showIf: isMethod("external-link") },
 
     { key: "title", type: "text", label: "Başlık" },
     { key: "description", type: "textarea", label: "Açıklama" },
@@ -85,8 +101,8 @@
     { key: "collectName", type: "select", label: "Ad Soyad", options: COLLECT_OPTIONS, showIf: isFormMethod },
     { key: "collectContact", type: "select", label: "İletişim (telefon veya e-posta)", options: COLLECT_OPTIONS, showIf: isFormMethod },
     { key: "consentText", type: "textarea", label: "Onay Metni (KVKK — doluysa işaretlenmesi zorunlu kutu gösterilir)", showIf: isFormMethod },
-    { key: "submitButtonText", type: "text", label: "Gönder Butonu Yazısı", showIf: isFormMethod },
-    { key: "successMessage", type: "text", label: "Teşekkür Mesajı", showIf: s => s.sendMethod === "google-form" || s.sendMethod === "none" },
+    { key: "submitButtonText", type: "text", label: "Gönder Butonu Yazısı (ör. Görüş Bildir, Bize Yaz)", showIf: isFormMethod },
+    { key: "successMessage", type: "text", label: "Teşekkür Mesajı", showIf: s => s.sendMethod === "google-form" || s.sendMethod === "none" || s.sendMethod === "seoz" },
 
     { key: "fontFamily", type: "font-select", label: "Font" },
     { key: "fontSize", type: "number", label: "Yazı Boyutu", unit: "px", min: 10 },
@@ -94,7 +110,7 @@
     { key: "buttonColor", type: "color", label: "Buton Rengi" },
     {
       key: "metallic", type: "select", label: "Buton Metalik Efekti",
-      options: [{ value: "none", label: "Yok" }, { value: "gold", label: "Altın (Koyu Zemin)" }, { value: "silver", label: "Gümüş (Koyu Zemin)" }, { value: "copper-gold", label: "Bakır Altın (Açık Zemin)" }, { value: "dark-silver", label: "Koyu Gümüş (Açık Zemin)" }]
+      options: [{ value: "none", label: "Yok" }, { value: "gold", label: "Altın (Koyu Zemin)" }, { value: "silver", label: "Gümüş (Koyu Zemin)" }, { value: "copper-gold", label: "Bakır Altın (Açık Zemin)" }, { value: "dark-silver", label: "Koyu Gümüş (Açık Zemin)" }, { value: "copper", label: "Bakır" }]
     }
   ];
 
@@ -152,7 +168,31 @@
     if (!win) global.location.href = url;
   }
 
-  function render(settings, mode) {
+  // Davetiye içinde topla: Studio SEOZ Supabase'ine kayıt (bkz.
+  // js/core/cloud-store.js → insertFeedback). Ziyaretçi yalnızca kayıt
+  // EKLEYEBİLİR, okuyamaz (RLS — bkz. SUPABASE-YAYIN-REHBERI.md).
+  function cloudAvailable() {
+    return !!(global.SeozCloudStore && global.SeozCloudStore.isConfigured());
+  }
+
+  function submitToSeoz(data, ctx) {
+    if (!cloudAvailable()) return Promise.resolve({ sent: false });
+    let slug = "";
+    try { slug = new URLSearchParams(global.location.search).get("slug") || ""; } catch (e) { /* yok */ }
+    return global.SeozCloudStore.insertFeedback({
+      invitation_slug: slug || null,
+      doc_id: (ctx && ctx.docId) || null,
+      layer_id: (ctx && ctx.layerId) || null,
+      name: data.name || null,
+      contact: data.contact || null,
+      message: data.message
+    }).then(() => ({ sent: true })).catch((err) => {
+      console.error("[Studio SEOZ] Görüş kaydedilemedi:", err);
+      return { sent: false };
+    });
+  }
+
+  function render(settings, mode, ctx) {
     const s = Object.assign({}, DEFAULTS, settings);
     const fs = Math.max(12, Number(s.fontSize) || 16);
     const accent = s.buttonColor || DEFAULTS.buttonColor;
@@ -229,6 +269,17 @@
         cursor: "pointer"
       });
       return b;
+    }
+
+    // WHATSAPP — yalnızca buton: doğrudan sohbet açılır.
+    if (isWaButton(s)) {
+      const b = primaryButton(s.waButtonText || DEFAULTS.waButtonText);
+      if (!digits(s.fbWhatsappNumber)) { b.style.opacity = ".5"; b.style.cursor = "not-allowed"; }
+      b.addEventListener("click", () => {
+        if (digits(s.fbWhatsappNumber)) openUrl(`https://wa.me/${digits(s.fbWhatsappNumber)}`);
+      });
+      wrap.appendChild(b);
+      return wrap;
     }
 
     // HARİCİ BAĞLANTI — yalnızca bir buton; form müşterinin kendi sayfasında.
@@ -371,9 +422,14 @@
       submitBtn.style.opacity = ".6";
       showStatus("Gönderiliyor...", false);
 
-      const job = s.sendMethod === "google-form" ? submitToGoogleForm(s, data) : Promise.resolve({ sent: false });
+      let job;
+      if (s.sendMethod === "google-form") job = submitToGoogleForm(s, data);
+      // Editörde deneme gönderimi veritabanına YAZILMAZ (gerçek görüşlerle
+      // karışmasın); yalnızca yayınlanan davetiyede kaydedilir.
+      else if (s.sendMethod === "seoz") job = mode === "edit" ? Promise.resolve({ sent: true }) : submitToSeoz(data, ctx);
+      else job = Promise.resolve({ sent: false });
       job.then((r) => {
-        if (s.sendMethod === "google-form" && !r.sent) {
+        if ((s.sendMethod === "google-form" || s.sendMethod === "seoz") && !r.sent) {
           submitted = false;
           submitBtn.disabled = false;
           submitBtn.style.opacity = "1";
@@ -395,6 +451,8 @@
         return (s.fbFormUrl && s.fbFormMessageFieldId) ? null : "Görüş Bildir: Google Form bağlantısı veya mesaj alan kimliği eksik.";
       case "external-link":
         return s.fbExternalUrl ? null : "Görüş Bildir: form sayfası bağlantısı girilmemiş.";
+      case "seoz":
+        return cloudAvailable() ? null : "Görüş Bildir: Supabase bağlantısı ayarlı değil (js/supabase-config.js) — görüşler kaydedilemez.";
       default:
         return "Görüş Bildir: gönderim yöntemi seçilmemiş — mesajlar hiçbir yere gönderilmeyecek.";
     }

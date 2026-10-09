@@ -47,10 +47,8 @@
           ${field.options.map(o => `<option value="${o.value}" ${o.value === value ? "selected" : ""}>${o.label}</option>`).join("")}
         </select></div>`;
       case "font-select":
-        return `<div class="field"><label>${field.label}</label><select data-mkey="${key}">
-          ${SeozFonts.FONT_CATEGORIES.map(cat => `<optgroup label="${cat.label}">
-            ${cat.fonts.map(f => `<option value="${f}" ${f === value ? "selected" : ""}>${f}</option>`).join("")}
-          </optgroup>`).join("")}
+        return `<div class="field"><label>${field.label}</label><select data-mkey="${key}" data-font-select>
+          ${SeozFonts.optionsHTML(value)}
         </select></div>`;
       case "date":
         return `<div class="field"><label>${field.label}</label><input type="date" data-mkey="${key}" value="${value || ""}"></div>`;
@@ -192,6 +190,7 @@
           val = input.value;
         }
         s[key] = val;
+        if (input.hasAttribute("data-font-select") && global.SeozFonts.markFontUsed) global.SeozFonts.markFontUsed(val);
         cb.onSettingsChange();
         // Bazı alanlar (ör. RSVP'nin "Tür" seçimi) hangi diğer alanların
         // görünür olacağını belirler — bu durumda formu yeniden kurmamız

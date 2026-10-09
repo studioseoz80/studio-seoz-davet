@@ -6,20 +6,51 @@
 (function (global) {
   "use strict";
 
+  // GÜÇLENDİRME: Son Kullanılan Fontlar üstte (bkz. fonts-library.js).
   function fontOptionsHTML(selected) {
-    return SeozFonts.FONT_CATEGORIES.map(cat => `
-      <optgroup label="${cat.label}">
-        ${cat.fonts.map(f => `<option value="${f}" ${f === selected ? "selected" : ""}>${f}</option>`).join("")}
-      </optgroup>
-    `).join("");
+    return SeozFonts.optionsHTML(selected);
+  }
+
+  /* STİLİ KOPYALA / YAPIŞTIR — metnin kendisi HARİÇ tüm görsel ayarlar
+     (font, boyut, renk, metalik, hizalama, kalınlık, italik, altı çizili,
+     harf/satır aralığı ve ileride eklenecek her yeni metin ayarı).
+     Belgeler arasında da kullanılabilsin diye bu tarayıcıda saklanır;
+     depolama kullanılamazsa yalnızca bu oturumda hafızada kalır. */
+  const STYLE_KEY = "seoz_editor_text_style_v1";
+  let memoryStyle = null;
+
+  function extractStyle(content) {
+    const style = {};
+    Object.keys(content).forEach(k => { if (k !== "text") style[k] = content[k]; });
+    return style;
+  }
+
+  function saveStyle(style) {
+    memoryStyle = style;
+    try { localStorage.setItem(STYLE_KEY, JSON.stringify(style)); } catch (e) { /* yok say */ }
+  }
+
+  function loadStyle() {
+    try {
+      const raw = localStorage.getItem(STYLE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* yok say */ }
+    return memoryStyle;
   }
 
   function render(containerEl, layer, cb) {
     const c = layer.content;
+    const hasStyle = !!loadStyle();
     containerEl.innerHTML = `
       <div class="field">
         <label>Metin</label>
         <textarea data-f="text" rows="2">${escapeHTML(c.text)}</textarea>
+      </div>
+
+      <div class="prop-actions" style="margin-top:0;">
+        <button type="button" class="btn btn-outline" data-action="duplicate" title="Çoğalt (Ctrl+D)">⧉ Çoğalt</button>
+        <button type="button" class="btn btn-outline" data-style-copy title="Metin hariç tüm stil ayarlarını kopyalar">Stili Kopyala</button>
+        <button type="button" class="btn btn-outline" data-style-paste ${hasStyle ? "" : "disabled"} title="Kopyalanan stili bu metne uygular (metin değişmez)">Stili Yapıştır</button>
       </div>
 
       <div class="field">
@@ -49,6 +80,7 @@
           <button type="button" data-metallic="silver" class="${c.metallic === "silver" ? "active" : ""}">Gümüş (Koyu Zemin)</button>
           <button type="button" data-metallic="copper-gold" class="${c.metallic === "copper-gold" ? "active" : ""}">Bakır Altın (Açık Zemin)</button>
           <button type="button" data-metallic="dark-silver" class="${c.metallic === "dark-silver" ? "active" : ""}">Koyu Gümüş (Açık Zemin)</button>
+          <button type="button" data-metallic="copper" class="${c.metallic === "copper" ? "active" : ""}">Bakır</button>
         </div>
       </div>
 
@@ -102,7 +134,6 @@
         <button type="button" class="btn btn-outline" data-action="send-back">En Arkaya Gönder</button>
       </div>
       <div class="prop-actions">
-        <button type="button" class="btn btn-outline" data-action="duplicate">Çoğalt</button>
         <button type="button" class="btn btn-danger-text" data-action="delete">Sil</button>
       </div>
     `;
@@ -114,6 +145,7 @@
         let val = input.value;
         if (input.type === "number") val = parseFloat(val) || 0;
         c[key] = val;
+        if (key === "fontFamily" && SeozFonts.markFontUsed) SeozFonts.markFontUsed(val);
         // EK ÖZELLİK: "Yazı Rengi"nden normal bir renk seçmek, açıksa
         // metalik efekti kapatır (aksi halde renk değişikliği görünmez
         // olur, çünkü metalik gradyan düz rengi geçersiz kılar).
@@ -160,6 +192,25 @@
       });
     });
 
+    containerEl.querySelector("[data-style-copy]").addEventListener("click", (e) => {
+      saveStyle(extractStyle(c));
+      const pasteBtn = containerEl.querySelector("[data-style-paste]");
+      if (pasteBtn) pasteBtn.disabled = false;
+      const btn = e.currentTarget;
+      const label = btn.textContent;
+      btn.textContent = "✓ Kopyalandı";
+      setTimeout(() => { btn.textContent = label; }, 1200);
+    });
+
+    containerEl.querySelector("[data-style-paste]").addEventListener("click", () => {
+      const style = loadStyle();
+      if (!style) return;
+      Object.keys(style).forEach(k => { if (k !== "text") c[k] = style[k]; });
+      if (c.fontFamily && SeozFonts.markFontUsed) SeozFonts.markFontUsed(c.fontFamily);
+      cb.onChange();
+      render(containerEl, layer, cb); // panel yeni değerleri göstersin
+    });
+
     const actionMap = {
       "bring-front": cb.onBringFront,
       "send-back": cb.onSendBack,
@@ -180,5 +231,5 @@
     })[s]);
   }
 
-  global.SeozTextPanel = { render };
+  global.SeozTextPanel = { render, extractStyle };
 })(window);

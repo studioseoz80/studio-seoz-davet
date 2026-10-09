@@ -36,8 +36,27 @@
     gold: "linear-gradient(115deg, #7c5a2e 0%, #d9b26a 22%, #fff3cf 42%, #b8863c 58%, #f4d998 76%, #6e4e26 100%)",
     silver: "linear-gradient(115deg, #6b6f73 0%, #d9dde0 22%, #ffffff 42%, #9aa0a6 58%, #eef1f3 76%, #5c6064 100%)",
     "copper-gold": "linear-gradient(115deg, #5e3c1c 0%, #a8763c 22%, #d9a55f 42%, #8a5f2e 58%, #c99a56 76%, #43290f 100%)",
-    "dark-silver": "linear-gradient(115deg, #303336 0%, #6e7378 22%, #9aa0a6 42%, #4b4f53 58%, #83898f 76%, #202224 100%)"
+    "dark-silver": "linear-gradient(115deg, #303336 0%, #6e7378 22%, #9aa0a6 42%, #4b4f53 58%, #83898f 76%, #202224 100%)",
+    // GÜÇLENDİRME: Bakır — sıcak, mat ve yumuşak geçişli; en açık tonu
+    // bile beyaz değil, böylece üzerindeki yazı okunabilir kalır.
+    copper: "linear-gradient(115deg, #5c2f18 0%, #9c5a33 24%, #d39a72 44%, #8f4f2b 60%, #b9764c 78%, #4e2714 100%)"
   };
+
+  /* Metin düğümüne metalik (gradyan dolgulu) yazı uygular; "none" ise düz
+     renk. applyTextStyle'daki ile birebir aynı teknik — modüllerdeki
+     başlık/rakam gibi metinler için ortak kullanılır. */
+  function applyMetallicText(node, metallic, color) {
+    const gradient = METALLIC_GRADIENTS[metallic || "none"];
+    if (gradient) {
+      node.style.backgroundImage = gradient;
+      node.style.webkitBackgroundClip = "text";
+      node.style.backgroundClip = "text";
+      node.style.color = "transparent";
+      node.style.webkitTextFillColor = "transparent";
+    } else {
+      node.style.color = color;
+    }
+  }
 
   function applyTextStyle(node, content) {
     node.textContent = content.text;
@@ -265,5 +284,5 @@
     SeozLayoutEngine.recalcCanvasHeight(canvasEl, doc.canvas.minHeight);
   }
 
-  global.SeozRenderer = { renderDocument, applyTextStyle, applyCanvasBackground, clearIntervalsWithin, METALLIC_GRADIENTS };
+  global.SeozRenderer = { renderDocument, applyTextStyle, applyCanvasBackground, clearIntervalsWithin, METALLIC_GRADIENTS, applyMetallicText };
 })(window);
