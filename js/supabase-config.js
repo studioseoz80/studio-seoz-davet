@@ -32,5 +32,5 @@ window.SEOZ_SUPABASE_CONFIG = {
   // tam adres. ör. "https://davet.studioseoz.com/view.html"
   // Boş bırakılırsa editörün açık olduğu adresteki view.html kullanılır
   // (bu, yalnızca editör de aynı sitede yayındaysa doğru olur).
-  publicViewUrl: ""
+ publicViewUrl: "https://seoz-davet.pages.dev/view.html"
 };
