@@ -55,6 +55,12 @@
     "js/modules/calendar.js",
     "js/modules/feedback.js",
     "js/modules/gift.js",
+    // İşletme modülleri (yeni)
+    "js/modules/appointment.js",
+    "js/modules/social-media.js",
+    "js/modules/services.js",
+    "js/modules/price-list.js",
+    "js/modules/before-after.js",
     // Görüş Bildir "davetiye içinde topla" yöntemi için (yalnızca anon
     // anahtar — herkese açık olması tasarım gereğidir).
     "js/supabase-config.js",
@@ -159,6 +165,11 @@
 <script src="js/modules/calendar.js"></script>
 <script src="js/modules/feedback.js"></script>
 <script src="js/modules/gift.js"></script>
+<script src="js/modules/appointment.js"></script>
+<script src="js/modules/social-media.js"></script>
+<script src="js/modules/services.js"></script>
+<script src="js/modules/price-list.js"></script>
+<script src="js/modules/before-after.js"></script>
 <script>
 (function () {
   "use strict";

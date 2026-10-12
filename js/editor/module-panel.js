@@ -80,6 +80,8 @@
           <input type="file" accept="image/png,image/jpeg,image/webp" multiple data-add-images-input="${key}" class="hidden">
         </div>`;
       }
+      case "item-list":
+        return itemListHTML(field, value);
       case "url":
         return `<div class="field"><label>${field.label}</label><input type="url" data-mkey="${key}" value="${escapeHTML(value)}"></div>`;
       case "checkbox":
@@ -90,6 +92,150 @@
       default:
         return `<div class="field"><label>${field.label}</label><input type="text" data-mkey="${key}" value="${escapeHTML(value)}"></div>`;
     }
+  }
+
+  /* ------------------------------------------------------------------
+     İŞLETME MODÜLLERİ EKİ — "item-list" alan tipi (YENİ, yalnızca ekleme)
+     -----------------------------------------------------------------
+     Hizmetlerimiz / Fiyat Listesi / Öncesi-Sonrası gibi "satır ekle/sil"
+     gerektiren modüller için. Değer bir DİZİDİR: [{alt1, alt2, ...}, ...].
+     Alan tanımı:
+       { key, type: "item-list", label, addLabel, itemLabel,
+         itemFields: [{ key, type: "text"|"textarea"|"image", label }] }
+     Mevcut hiçbir modül bu tipi KULLANMAZ — onların formu birebir aynıdır.
+     ------------------------------------------------------------------ */
+  function itemListHTML(field, value) {
+    const items = Array.isArray(value) ? value : [];
+    const itemLabel = field.itemLabel || "Öğe";
+    const rows = items.map((item, i) => {
+      const sub = field.itemFields.map(f => {
+        const v = item ? item[f.key] : "";
+        const attrs = `data-item-list="${field.key}" data-item-idx="${i}" data-item-key="${f.key}"`;
+        if (f.type === "image") {
+          return `<div class="field" style="margin-top:6px;"><label>${f.label}</label>
+            ${v ? `<div style="display:flex;gap:6px;align-items:center;">
+                     <img data-item-thumb="${escapeHTML(v)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:#eee;">
+                     <button type="button" class="btn btn-outline" data-item-image-btn ${attrs} style="flex:1;">Değiştir</button>
+                     <button type="button" class="btn btn-danger-text" data-item-image-clear ${attrs} title="Fotoğrafı kaldır">✕</button>
+                   </div>`
+                : `<button type="button" class="btn btn-outline" data-item-image-btn ${attrs} style="width:100%;">+ Fotoğraf Yükle</button>`}
+            <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" data-item-image-input ${attrs}>
+          </div>`;
+        }
+        if (f.type === "textarea") {
+          return `<div class="field" style="margin-top:6px;"><label>${f.label}</label><textarea rows="2" data-item-input ${attrs}>${escapeHTML(v)}</textarea></div>`;
+        }
+        return `<div class="field" style="margin-top:6px;"><label>${f.label}</label><input type="text" data-item-input ${attrs} value="${escapeHTML(v)}"></div>`;
+      }).join("");
+      return `<div style="border:1px dashed var(--line, #ccc);border-radius:8px;padding:8px;margin-top:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <strong style="font-size:.78rem;">${escapeHTML(itemLabel)} ${i + 1}</strong>
+          <span style="display:flex;gap:4px;">
+            <button type="button" class="btn btn-outline" data-item-move="${field.key}" data-item-idx="${i}" data-dir="-1" title="Yukarı taşı" style="padding:2px 8px;">↑</button>
+            <button type="button" class="btn btn-outline" data-item-move="${field.key}" data-item-idx="${i}" data-dir="1" title="Aşağı taşı" style="padding:2px 8px;">↓</button>
+            <button type="button" class="btn btn-danger-text" data-item-remove="${field.key}" data-item-idx="${i}" title="Sil">Sil</button>
+          </span>
+        </div>
+        ${sub}
+      </div>`;
+    }).join("");
+    return `<div class="field">
+      <label>${field.label}</label>
+      ${items.length ? rows : `<p class="sidebar-empty" style="margin:6px 0;">Henüz ${escapeHTML(itemLabel.toLowerCase())} eklenmedi.</p>`}
+      <button type="button" class="btn btn-outline" data-item-add="${field.key}" style="width:100%;margin-top:8px;">${escapeHTML(field.addLabel || "+ Ekle")}</button>
+    </div>`;
+  }
+
+  function bindItemLists(containerEl, layer, moduleDef, cb) {
+    const s = layer.settings;
+    const fieldOf = key => moduleDef.settingsSchema.find(f => f.key === key && f.type === "item-list");
+    const listOf = key => { if (!Array.isArray(s[key])) s[key] = []; return s[key]; };
+    const rerender = () => { cb.onSettingsChange(); render(containerEl, layer, cb); };
+
+    containerEl.querySelectorAll("[data-item-add]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const field = fieldOf(btn.getAttribute("data-item-add"));
+        if (!field) return;
+        const blank = {};
+        field.itemFields.forEach(f => { blank[f.key] = ""; });
+        listOf(field.key).push(blank);
+        rerender();
+      });
+    });
+
+    containerEl.querySelectorAll("[data-item-remove]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const arr = listOf(btn.getAttribute("data-item-remove"));
+        arr.splice(parseInt(btn.getAttribute("data-item-idx"), 10), 1);
+        rerender();
+      });
+    });
+
+    containerEl.querySelectorAll("[data-item-move]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const arr = listOf(btn.getAttribute("data-item-move"));
+        const idx = parseInt(btn.getAttribute("data-item-idx"), 10);
+        const to = idx + parseInt(btn.getAttribute("data-dir"), 10);
+        if (to < 0 || to >= arr.length) return;
+        const tmp = arr[idx]; arr[idx] = arr[to]; arr[to] = tmp;
+        rerender();
+      });
+    });
+
+    // Yazı alanları: formu YENİDEN KURMADAN günceller (yazarken odak kaybolmaz).
+    containerEl.querySelectorAll("[data-item-input]").forEach(input => {
+      input.addEventListener("input", () => {
+        const arr = listOf(input.getAttribute("data-item-list"));
+        const item = arr[parseInt(input.getAttribute("data-item-idx"), 10)];
+        if (!item) return;
+        item[input.getAttribute("data-item-key")] = input.value;
+        cb.onSettingsChange();
+      });
+    });
+
+    containerEl.querySelectorAll("[data-item-thumb]").forEach(imgEl => {
+      const ref = imgEl.getAttribute("data-item-thumb");
+      if (ref) SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) imgEl.src = url; });
+    });
+
+    function itemFor(el) {
+      const arr = listOf(el.getAttribute("data-item-list"));
+      return arr[parseInt(el.getAttribute("data-item-idx"), 10)];
+    }
+
+    containerEl.querySelectorAll("[data-item-image-btn]").forEach(btn => {
+      const sel = `[data-item-image-input][data-item-list="${btn.getAttribute("data-item-list")}"][data-item-idx="${btn.getAttribute("data-item-idx")}"][data-item-key="${btn.getAttribute("data-item-key")}"]`;
+      const input = containerEl.querySelector(sel);
+      if (!input) return;
+      btn.addEventListener("click", () => input.click());
+    });
+
+    containerEl.querySelectorAll("[data-item-image-input]").forEach(input => {
+      input.addEventListener("change", () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        // Galeri ile AYNI görsel işleme yolu: küçültülür, IndexedDB'ye
+        // "idb:..." referansı olarak kaydedilir. Yayın (Supabase) ve
+        // Yayın Paketi bu referansları zaten genel tarama ile buluyor.
+        SeozImageUtils.processImageFile(file)
+          .then(r => {
+            const item = itemFor(input);
+            if (!item) return;
+            item[input.getAttribute("data-item-key")] = r.ref;
+            rerender();
+          })
+          .catch(() => alert("Görsel yüklenemedi. Lütfen PNG, JPG veya WebP deneyin."));
+      });
+    });
+
+    containerEl.querySelectorAll("[data-item-image-clear]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const item = itemFor(btn);
+        if (!item) return;
+        item[btn.getAttribute("data-item-key")] = "";
+        rerender();
+      });
+    });
   }
 
   function render(containerEl, layer, cb) {
@@ -158,6 +304,9 @@
         });
       });
     });
+
+    // Yalnızca "item-list" alanı olan (yeni işletme) modüllerde iş yapar.
+    bindItemLists(containerEl, layer, moduleDef, cb);
 
     containerEl.querySelectorAll("[data-add-images]").forEach(btn => {
       const key = btn.getAttribute("data-add-images");
