@@ -440,6 +440,9 @@
   }
 
   global.SeozCloudStore = {
+    // KATILIM SİSTEMİ (event-store.js) sahip işlemleri için mevcut oturumu
+    // kullanır. Yalnızca dışarıya açıldı; davranışı değişmedi.
+    getAccessToken,
     insertFeedback,
     getSessionEmail,
     sendLoginLink,

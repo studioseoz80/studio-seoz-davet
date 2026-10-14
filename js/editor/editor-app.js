@@ -321,6 +321,16 @@
             onBringFront: () => reorderLayer(layer, "front"),
             onSendBack: () => reorderLayer(layer, "back")
           });
+        } else if (layer.moduleId === "attendance-form" && typeof SeozAttendanceFormPanel !== "undefined") {
+          // KATILIM FORMU: soru oluşturucu (attendance-form-panel.js). Yalnızca
+          // "attendance-form" katmanlarında devreye girer.
+          SeozAttendanceFormPanel.render(propPanelEl, layer, {
+            onSettingsChange: () => { updateLayerDOM(layer); renderLayersPanel(); scheduleAutosave(); },
+            onDuplicate: () => duplicateLayer(layer),
+            onDelete: () => deleteLayer(layer.id),
+            onBringFront: () => reorderLayer(layer, "front"),
+            onSendBack: () => reorderLayer(layer, "back")
+          });
         } else {
           SeozModulePanel.render(propPanelEl, layer, {
             onSettingsChange: () => { updateLayerDOM(layer); renderLayersPanel(); scheduleAutosave(); },
@@ -840,6 +850,27 @@
         btn.disabled = true;
         btn.textContent = "Yayınlanıyor...";
         SeozPublish.publishToCloud(doc.id, (msg) => { btn.textContent = msg; })
+          // KATILIM FORMU: yayın BAŞARILI olduktan sonra, davetiyede form
+          // varsa etkinlik kaydı güncellenir. Form yoksa hiçbir şey yapılmaz.
+          // Bu adım başarısız olsa bile yayın geçerlidir; yalnızca uyarı verilir.
+          .then(result => {
+            if (typeof SeozAttendanceSync === "undefined") return result;
+            btn.textContent = "Katılım formu kaydediliyor...";
+            return SeozAttendanceSync.afterPublish(doc, result.slug)
+              .then(sync => {
+                if (sync && sync.multiple) {
+                  alert("Not: Davetiyede birden fazla Katılım Formu var. Yanıtlar yalnızca ilk formdan alınır.");
+                }
+                return result;
+              })
+              .catch(err => {
+                console.error("[Studio SEOZ] Katılım formu senkronu başarısız:", err);
+                alert("Davetiye yayınlandı, ancak Katılım Formu kaydı yapılamadı:\n\n" +
+                      SeozAttendanceSync.errorText(err) +
+                      "\n\nSorunu giderip tekrar Yayına Hazırla'ya basabilirsiniz (link değişmez).");
+                return result;
+              });
+          })
           .then(result => {
             showToast("Yayınlandı. Müşteri bağlantısı: " + result.url);
             // prompt kutusu bağlantıyı seçilebilir/kopyalanabilir gösterir.

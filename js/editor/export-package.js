@@ -61,10 +61,13 @@
     "js/modules/services.js",
     "js/modules/price-list.js",
     "js/modules/before-after.js",
+    // Katılım sistemi (yeni)
+    "js/modules/attendance-form.js",
     // Görüş Bildir "davetiye içinde topla" yöntemi için (yalnızca anon
     // anahtar — herkese açık olması tasarım gereğidir).
     "js/supabase-config.js",
-    "js/core/cloud-store.js"
+    "js/core/cloud-store.js",
+    "js/core/event-store.js"
   ];
 
   const EXTENSION_BY_MIME = {
@@ -148,6 +151,7 @@
 <script src="js/core/blob-store.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/core/cloud-store.js"></script>
+<script src="js/core/event-store.js"></script>
 <script src="js/core/renderer.js"></script>
 <script src="js/core/qr-encoder.js"></script>
 <script src="js/fonts-library.js"></script>
@@ -170,6 +174,7 @@
 <script src="js/modules/services.js"></script>
 <script src="js/modules/price-list.js"></script>
 <script src="js/modules/before-after.js"></script>
+<script src="js/modules/attendance-form.js"></script>
 <script>
 (function () {
   "use strict";
