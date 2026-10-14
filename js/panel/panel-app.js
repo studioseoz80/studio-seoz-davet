@@ -1,5 +1,5 @@
 /* =============================================================================
-   STUDIO SEOZ — panel/panel-app.js  (MÜŞTERİ KATILIMCI PANELİ — FAZ B)
+   STUDIO SEOZ — panel/panel-app.js  (MÜŞTERİ KATILIMCI PANELİ — FAZ B/C/D)
    -----------------------------------------------------------------------------
    Adres: panel.html#k=GİZLİ_PANEL_ANAHTARI
    - Anahtar "#" işaretinden sonra durduğu için sunucuya/kayıtlara gitmez.
@@ -21,7 +21,9 @@
     token: "", pin: null, data: null, loadedAt: 0,
     tab: "responses", search: "", status: "all", filters: [],
     chartMode: "responses", chartViews: {},
-    editingLabels: false
+    editingLabels: false,
+    seating: null,                                   // FAZ D: {areas, assignments} | {error}
+    seatUi: { view: (global.innerWidth < 720 ? "list" : "plan"), sel: [] }
   };
 
   /* ---------------- yardımcılar ---------------- */
@@ -36,8 +38,9 @@
   }
   function norm(s) { return String(s || "").toLocaleLowerCase("tr-TR").replace(/\s+/g, " ").trim(); }
   function toast(msg) {
+    document.querySelectorAll(".pn-toast").forEach(x => x.remove());   // bildirimler üst üste binmesin
     const t = document.createElement("div");
-    t.className = "pn-toast"; t.textContent = msg;
+    t.className = "pn-toast"; t.textContent = msg; t.setAttribute("role", "status");
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 2600);
   }
@@ -64,7 +67,9 @@
     if (!res.ok) {
       let msg = text;
       try { msg = JSON.parse(text).message || text; } catch (e) { /* düz metin */ }
-      const er = new Error(msg); er.code = /invalid_panel/.test(msg) ? "invalid_panel" : /pin_required/.test(msg) ? "pin_required" : msg;
+      const er = new Error(msg);
+      er.code = /invalid_panel/.test(msg) ? "invalid_panel" : /pin_required/.test(msg) ? "pin_required"
+              : /Could not find the function|PGRST202/.test(msg) ? "not_installed" : msg;
       throw er;
     }
     return text ? JSON.parse(text) : null;
@@ -134,10 +139,10 @@
     if (typeof v === "boolean") return String(v) === f.value;
     return String(v) === f.value;
   }
-  function filtered() {
+  function filtered(ignoreStatus) {
     const term = norm(state.search);
     return responses().filter(r => {
-      if (state.status !== "all" && statusOf(r) !== state.status) return false;
+      if (!ignoreStatus && state.status !== "all" && statusOf(r) !== state.status) return false;
       if (!state.filters.every(f => matchFilter(r, f))) return false;
       if (term) {
         const hay = [r.name].concat(companions(r).map(a => a.name), Object.keys(r.answers || {}).map(k => r.answers[k].d)).map(norm).join(" | ");
@@ -194,6 +199,7 @@
         <div class="pn-card-value">${value}</div>
       </div>`;
 
+    root.classList.toggle("pn-tab-seating", state.tab === "seating");
     root.innerHTML = `
       <div class="pn-brand">STUDIO SEOZ · KATILIMCI PANELİ</div>
       <div class="pn-head">
@@ -224,20 +230,23 @@
         <button class="pn-tab" role="tab" data-tab="responses" aria-selected="${state.tab === "responses"}">Yanıtlar</button>
         <button class="pn-tab" role="tab" data-tab="people" aria-selected="${state.tab === "people"}">Kişi Listesi</button>
         <button class="pn-tab" role="tab" data-tab="charts" aria-selected="${state.tab === "charts"}">Grafikler</button>
+        <button class="pn-tab" role="tab" data-tab="seating" aria-selected="${state.tab === "seating"}">Yerleşim</button>
       </div>
       <div class="pn-toolbar">
         <input class="pn-search" type="search" placeholder="İsim veya cevap ara..." data-search value="${esc(state.search)}">
-        ${att ? `<div class="pn-seg" role="group" aria-label="Durum">
+        ${att && state.tab !== "seating" ? `<div class="pn-seg" role="group" aria-label="Durum">
           ${[["all", "Tümü"], ["yes", L.yes], ["no", L.no]].map(([v, t]) => `<button data-status="${v}" aria-pressed="${state.status === v}">${esc(t)}</button>`).join("")}
         </div>` : ""}
       </div>
       <div class="pn-filters" data-filters></div>
       <p class="pn-count" data-count></p>
       <div data-body></div>
-      <div class="pn-export">
+      <div class="pn-export">${state.tab === "seating" ? `
+        <button class="pn-btn" data-export="seating">⬇ Excel — Masa listesi</button>
+        <button class="pn-btn" data-print>🖨 Masa listesini yazdır / PDF</button>` : `
         <button class="pn-btn" data-export="responses">⬇ Excel — Yanıtlar</button>
         <button class="pn-btn" data-export="people">⬇ Excel — Kişi listesi</button>
-        <button class="pn-btn" data-print>🖨 Yazdır / PDF</button>
+        <button class="pn-btn" data-print>🖨 Yazdır / PDF</button>`}
       </div>
     `;
 
@@ -294,6 +303,7 @@
 
   function renderBody() {
     renderFilters();
+    if (state.tab === "seating") { renderSeating(root.querySelector("[data-body]")); return; }
     const list = filtered();
     const people = list.filter(r => r.attending !== false).reduce((n, r) => n + (r.party_size || 0), 0);
     const narrowed = list.length !== responses().length;
@@ -365,13 +375,50 @@
     });
   }
 
+  /* FAZ D: yerleşim (panel-seating.js). Arama/filtre yalnızca
+     "Yerleştirilmemiş" listesini süzer; masalar her zaman tam görünür. */
+  function seatingCtx() {
+    const visible = filtered(true);
+    return {
+      responses: responses(),
+      visibleRids: new Set(visible.map(r => r.id)),
+      narrowed: visible.length !== responses().length,
+      seating: state.seating,
+      ui: state.seatUi,
+      cols: columns(),
+      answerText: answerText,
+      title: state.data.event.title,
+      rpc: rpc, toast: toast, onError: handleActionError,
+      reload: async () => { state.seating = null; renderBody(); state.seating = await loadSeating(); renderBody(); }
+    };
+  }
+  function renderSeating(body) {
+    const c = seatingCtx();
+    root.querySelector("[data-count]").textContent = c.narrowed ? "Arama ve filtreler yalnızca Yerleştirilmemiş listesini süzer; masalar her zaman tam görünür." : "";
+    if (!global.SeozPanelSeating) { body.innerHTML = `<div class="pn-empty">Yerleşim yüklenemedi.</div>`; return; }
+    global.SeozPanelSeating.render(body, c);
+  }
+  function seatOf(attendeeId) {
+    return global.SeozPanelSeating ? global.SeozPanelSeating.areaNameOf(state.seating, attendeeId) : "";
+  }
+  async function loadSeating() {
+    try {
+      const d = await rpc("rsvp_panel_seating_get", {});
+      return { areas: (d.areas || []).map(global.SeozPanelSeating.normArea), assignments: d.assignments || {} };
+    } catch (e) {
+      if (e.code !== "not_installed") console.warn("[Studio SEOZ] Yerleşim yüklenemedi:", e);
+      return { error: e.code === "not_installed" ? "not_installed" : "failed" };
+    }
+  }
+
   function renderPeople(body, list) {
     const groups = list.filter(r => r.attending !== false);
     if (!groups.length) { body.innerHTML = `<div class="pn-empty">Bu süzgeçte gelecek kişi yok.</div>`; return; }
     body.innerHTML = `<div class="pn-people">${groups.map(r => {
       const ppl = (r.attendees || []).length ? r.attendees : [{ position: 0, name: r.name }];
       return `<div class="pn-group"><h4>${esc(r.name)} <span class="pn-muted">· ${esc(r.party_size)} kişi</span></h4>
-        <ol>${ppl.map(a => `<li>${esc(a.name || "İsimsiz katılımcı")}${a.position === 0 ? ' <span class="pn-muted">(yanıtlayan)</span>' : ""}</li>`).join("")}</ol></div>`;
+        <ol>${ppl.map(a => { const t = a.id ? seatOf(a.id) : "";
+          return `<li>${esc(a.name || "İsimsiz katılımcı")}${a.position === 0 ? ' <span class="pn-muted">(yanıtlayan)</span>' : ""}${t ? ` <span class="pn-seat-tag">${esc(t)}</span>` : ""}</li>`; }).join("")}</ol></div>`;
     }).join("")}</div>`;
   }
 
@@ -447,17 +494,23 @@
     const cols = columns();
     const stamp = new Date().toISOString().slice(0, 10);
     const base = SeozPanelExport.safeName(ev.title);
+    if (kind === "seating") {
+      const n = global.SeozPanelSeating ? global.SeozPanelSeating.exportCsv(seatingCtx()) : 0;
+      toast(`Excel dosyası indirildi (${n} kişi).`);
+      return;
+    }
     if (kind === "responses") {
       const rows = [["Ad Soyad", "Durum", "Kişi sayısı"].concat(cols.map(c => c.label), ["Diğer katılımcılar", "İlk yanıt", "Son güncelleme", "Güncelleme sayısı"])];
       list.forEach(r => rows.push([r.name, statusText(r), r.attending === false ? 0 : r.party_size]
         .concat(cols.map(c => answerText(r, c.id)), [companions(r).map(a => a.name || "İsimsiz").join(", "), fmtDate(r.created_at), fmtDate(r.updated_at), r.update_count])));
       SeozPanelExport.download(`${base}-yanitlar-${stamp}.csv`, rows);
     } else {
-      const rows = [["Sıra", "Ad Soyad", "Grup (yanıtlayan)", "Gruptaki sıra"].concat(cols.map(c => c.label))];
+      const withSeat = state.seating && !state.seating.error && state.seating.areas.length > 0;
+      const rows = [["Sıra", "Ad Soyad", "Grup (yanıtlayan)", "Gruptaki sıra"].concat(withSeat ? ["Masa / Alan"] : [], cols.map(c => c.label))];
       let n = 0;
       list.filter(r => r.attending !== false).forEach(r => {
         const ppl = (r.attendees || []).length ? r.attendees : [{ position: 0, name: r.name }];
-        ppl.forEach(a => { n++; rows.push([n, a.name || "İsimsiz katılımcı", r.name, a.position + 1].concat(cols.map(c => answerText(r, c.id)))); });
+        ppl.forEach(a => { n++; rows.push([n, a.name || "İsimsiz katılımcı", r.name, a.position + 1].concat(withSeat ? [(a.id && seatOf(a.id)) || "Yerleştirilmemiş"] : [], cols.map(c => answerText(r, c.id)))); });
       });
       SeozPanelExport.download(`${base}-kisi-listesi-${stamp}.csv`, rows);
     }
@@ -474,8 +527,9 @@
   async function load(firstTime) {
     if (firstTime && !state.data) root.innerHTML = `<div class="pn-loading">Panel yükleniyor...</div>`;
     try {
-      const d = await rpc("rsvp_panel_get", {});
+      const [d, seating] = await Promise.all([rpc("rsvp_panel_get", {}), loadSeating()]);
       state.data = d;
+      state.seating = seating;
       state.loadedAt = Date.now();
       // Filtrelerde artık var olmayan soru kalmasın
       state.filters = state.filters.filter(f => questions().some(q => q.id === f.qid));
@@ -502,12 +556,13 @@
       const t = tokenFromHash();
       if (t === state.token) return;
       state.token = t; state.pin = null; state.data = null; state.filters = []; state.search = ""; state.status = "all";
+      state.seating = null; state.seatUi.sel = [];
       if (!t) return showMissing();
       load(true);
     });
     // Sekmeye geri dönüldüğünde (en az 30 sn sonra) veriler kendiliğinden yenilenir.
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && state.data && Date.now() - state.loadedAt > 30000 && !document.querySelector(".pn-modal-bg")) load(false);
+      if (document.visibilityState === "visible" && state.data && Date.now() - state.loadedAt > 30000 && !document.querySelector(".pn-modal-bg") && !document.body.classList.contains("pn-dragging")) load(false);
     });
 
     state.token = tokenFromHash();

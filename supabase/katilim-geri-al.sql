@@ -6,6 +6,14 @@
 -- ETKİLENMEZ.
 -- =============================================================================
 begin;
+-- Faz D (yerleşim planı)
+drop function if exists public.rsvp_panel_seating_get(text, text);
+drop function if exists public.rsvp_panel_area_save(text, jsonb, text);
+drop function if exists public.rsvp_panel_area_delete(text, uuid, text);
+drop function if exists public.rsvp_panel_assign(text, uuid[], uuid, text);
+drop function if exists public.rsvp_panel_swap(text, uuid, uuid, text);
+drop table if exists public.seating_assignments;
+drop table if exists public.seating_areas;
 -- Faz B (müşteri paneli)
 drop function if exists public.rsvp_panel_get(text, text);
 drop function if exists public.rsvp_panel_save_settings(text, jsonb, text);
