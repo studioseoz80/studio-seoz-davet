@@ -173,16 +173,9 @@
         ${hasCount ? "" : `<p ${SMALL}>Kişi sayısı sorusu yoksa her yanıt 1 kişi sayılır.</p>`}
         <div class="field" style="margin-top:6px;"><label>Bir yanıtta en fazla kişi sayısı</label>
           <input type="number" min="1" max="100" data-s-num="maxPartySize" value="${esc(s.maxPartySize)}"></div>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.78rem;">
-          <input type="checkbox" data-s-flag="askCompanionNames" ${s.askCompanionNames ? "checked" : ""} style="width:auto;">
-          Diğer katılımcıların isimlerini sor (kişi sayısı 1'den fazlaysa)</label>
-        ${s.askCompanionNames ? `
-          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.78rem;">
-            <input type="checkbox" data-s-flag="companionNamesRequired" ${s.companionNamesRequired ? "checked" : ""} style="width:auto;">
-            İsimler zorunlu olsun</label>
-          <div class="field" style="margin-top:6px;"><label>İsim alanı başlığı ({n} = kişinin sırası)</label>
-            <input type="text" data-s-text="companionLabel" value="${esc(s.companionLabel)}"></div>
-          <p ${SMALL}>Her kişi ayrı katılımcı olarak kaydedilir; yerleşim planında tek tek veya grup olarak taşınabilir.</p>` : ""}
+        <p ${SMALL}>Kişi sayısı 2 veya daha fazla seçilince diğer kişilerin Ad Soyad alanları kendiliğinden açılır. Bu alanlar <b>isteğe bağlıdır</b>; yazılan isimler panelde ve yerleşim planında kullanılır, boş bırakılanlar "İsimsiz katılımcı" olarak görünür.</p>
+        <div class="field" style="margin-top:6px;"><label>İsim alanı başlığı ({n} = kişinin sırası)</label>
+          <input type="text" data-s-text="companionLabel" value="${esc(s.companionLabel)}"></div>
       </div>
 
       <div ${SECTION}>

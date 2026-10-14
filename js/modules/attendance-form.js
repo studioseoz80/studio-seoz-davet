@@ -24,6 +24,17 @@
    yanıtıyla dolu gelir ve "Yanıtımı Güncelle" yeni kayıt AÇMAZ.
 
    Mevcut RSVP modülünden (rsvp.js) TAMAMEN bağımsızdır; ona dokunulmadı.
+
+   GÖRÜNÜM (buton + açılır pencere): Davetiyede form doğrudan görünmez;
+   yerine "Katılım Bildir" butonu çıkar. Misafir butona dokununca form
+   ekranın üstünde açılır (telefonda alttan kayan sayfa, bilgisayarda
+   ortada pencere); gönderip kapatabilir. Form içeriği, kayıt ve güncelleme
+   davranışı aynıdır. Editörde önizleme için butona çift tıklanır.
+
+   EK KATILIMCI İSİMLERİ: Kişi sayısı 2 veya daha fazla olunca diğer
+   kişilerin Ad Soyad alanları kendiliğinden açılır ve ZORUNLU DEĞİLDİR.
+   Yazılan isimler panelde ve yerleşim planında kullanılır; boş bırakılanlar
+   "İsimsiz katılımcı" olarak kalır.
    ========================================================================= */
 
 (function (global) {
@@ -55,12 +66,13 @@
   }
 
   const DEFAULTS = {
+    launcherText: "Katılım Bildir",
     formTitle: "Katılım Formu",
     formDescription: "",
     nameLabel: "Adınız Soyadınız",
     questions: null,                 // ilk eklemede defaultQuestions() ile doldurulur
-    askCompanionNames: false,
-    companionNamesRequired: false,
+    askCompanionNames: true,         // her zaman açık (bkz. buildServerForm)
+    companionNamesRequired: false,   // her zaman isteğe bağlı
     companionLabel: "{n}. kişinin adı soyadı",
     maxPartySize: 10,
     consentText: "",
@@ -89,6 +101,7 @@
   /* Genel panelde (module-panel.js) gösterilecek alanlar. Sorular ve
      katılımcı ayarları editördeki özel soru oluşturucuda yönetilir. */
   const SETTINGS_SCHEMA = [
+    { key: "launcherText", type: "text", label: "Davetiyedeki Buton Yazısı" },
     { key: "formTitle", type: "text", label: "Form Başlığı (boşsa gösterilmez)" },
     { key: "formDescription", type: "textarea", label: "Açıklama (isteğe bağlı)" },
     { key: "submitButtonText", type: "text", label: "Gönder Butonu Yazısı" },
@@ -143,8 +156,9 @@
     return {
       version: 1,
       nameLabel: String(s.nameLabel || DEFAULTS.nameLabel),
-      askCompanionNames: bool(s.askCompanionNames, false),
-      companionNamesRequired: bool(s.companionNamesRequired, false),
+      // Ek katılımcı isim alanları her formda açıktır ve isteğe bağlıdır.
+      askCompanionNames: true,
+      companionNamesRequired: false,
       maxPartySize: Math.max(1, Math.min(100, parseInt(s.maxPartySize, 10) || 10)),
       consentText: String(s.consentText || "").trim(),
       questions: getQuestions(s)
@@ -214,7 +228,30 @@
       ".seoz-af-done{text-align:center;padding:10px 4px;}",
       ".seoz-af-check{width:52px;height:52px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;background:var(--af-btn);color:var(--af-btn-ink);font-size:26px;}",
       ".seoz-af-link{font:inherit;background:none;border:none;color:var(--af-accent);text-decoration:underline;cursor:pointer;margin-top:10px;font-weight:700;}",
-      ".seoz-af-hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden;}"
+      ".seoz-af-hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden;}",
+      /* Davetiyedeki buton */
+      ".seoz-af-launcher{display:flex;flex-direction:column;align-items:center;padding:6px 0;}",
+      ".seoz-af-launch{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:220px;max-width:100%;font:inherit;font-weight:700;font-size:1.08em;letter-spacing:.02em;padding:14px 30px;border:none;border-radius:999px;background:var(--af-btn-bg);color:var(--af-btn-ink);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.14);transition:transform .15s ease,box-shadow .15s ease;}",
+      ".seoz-af-launch:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(0,0,0,.18);}",
+      ".seoz-af-launch:active{transform:translateY(0);}",
+      ".seoz-af-launch:focus-visible{outline:2px solid var(--af-accent);outline-offset:3px;}",
+      ".seoz-af-launch-note{font-size:.84em;margin-top:8px;text-align:center;opacity:.85;}",
+      /* Açılır pencere: telefonda alttan kayan sayfa, geniş ekranda ortada pencere */
+      ".seoz-af-modal{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:flex-end;justify-content:center;background:rgba(18,20,18,.52);animation:seozAfFade .2s ease;}",
+      ".seoz-af-sheet{position:relative;width:100%;max-width:520px;max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;background:var(--af-card);color:var(--af-ink);border-radius:20px 20px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.22);animation:seozAfUp .28s cubic-bezier(.2,.8,.2,1);outline:none;}",
+      ".seoz-af-sheet-head{flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center;padding:8px 8px 0;position:relative;}",
+      ".seoz-af-sheet-head:before{content:'';position:absolute;left:50%;top:8px;width:40px;height:4px;margin-left:-20px;border-radius:4px;background:rgba(0,0,0,.15);}",
+      ".seoz-af-x{width:44px;height:44px;border:none;border-radius:50%;background:rgba(0,0,0,.06);color:inherit;font:inherit;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}",
+      ".seoz-af-x:hover{background:rgba(0,0,0,.1);}",
+      ".seoz-af-sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 0 calc(10px + env(safe-area-inset-bottom));}",
+      ".seoz-af-sheet .seoz-af-card{box-shadow:none;border-radius:0;background:transparent;padding:0 20px 18px;}",
+      ".seoz-af-sheet input[type=text],.seoz-af-sheet input[type=number],.seoz-af-sheet textarea,.seoz-af-sheet select{font-size:max(16px,1em);}",
+      ".seoz-af-done-close{margin-top:14px;}",
+      "@media (min-width:600px){.seoz-af-modal{align-items:center;padding:24px;}.seoz-af-sheet{border-radius:20px;max-height:88vh;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:seozAfPop .22s ease;}.seoz-af-sheet-head:before{display:none;}}",
+      "@keyframes seozAfFade{from{opacity:0}to{opacity:1}}",
+      "@keyframes seozAfUp{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}",
+      "@keyframes seozAfPop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}",
+      "@media (prefers-reduced-motion:reduce){.seoz-af-modal,.seoz-af-sheet{animation:none;}}"
     ].join("\n");
     document.head.appendChild(st);
   }
@@ -475,6 +512,12 @@
       d.appendChild(el("div", "seoz-af-check", "✓"));
       d.appendChild(el("p", null, st.wasUpdate ? (s.updatedMessage || DEFAULTS.updatedMessage) : (s.successMessage || DEFAULTS.successMessage)));
       if (mode === "edit") d.appendChild(el("p", "seoz-af-note", "Editör önizlemesi — yanıt kaydedilmedi."));
+      if (st.closeModal) {
+        const closeBtn = el("button", "seoz-af-submit seoz-af-done-close", "Kapat");
+        closeBtn.type = "button";
+        closeBtn.addEventListener("click", () => st.closeModal());
+        d.appendChild(closeBtn);
+      }
       const again = el("button", "seoz-af-link", s.editAgainText || DEFAULTS.editAgainText);
       again.type = "button";
       again.addEventListener("click", () => { st.phase = "form"; st.status = ""; paint(root, s, mode, ctx, st); });
@@ -513,7 +556,7 @@
       for (let i = 1; i < ps; i++) {
         const key = "__comp" + i;
         const label = String(s.companionLabel || DEFAULTS.companionLabel).replace("{n}", String(i + 1));
-        const w = fieldWrap(st, key, label, form.companionNamesRequired, "");
+        const w = fieldWrap(st, key, label, form.companionNamesRequired, form.companionNamesRequired ? "" : "İsteğe bağlı");
         const inp = el("input");
         inp.type = "text"; inp.maxLength = 120;
         inp.value = st.companions[i - 1] || "";
@@ -587,6 +630,7 @@
           st.own = { updated_at: (r && r.saved_at) || new Date().toISOString() };
           st.phase = "done"; st.status = "";
           repaint();
+          if (st.refreshLauncher) st.refreshLauncher();
         })
         .catch(err => {
           st.busy = false;
@@ -619,28 +663,105 @@
       .catch(() => { st.ownLoaded = true; });
   }
 
+  function applyVars(node, s) {
+    node.style.setProperty("--af-ink", s.textColor);
+    node.style.setProperty("--af-card", s.cardColor);
+    node.style.setProperty("--af-accent", s.buttonColor);
+    node.style.setProperty("--af-btn", s.buttonColor);
+    node.style.setProperty("--af-btn-bg", buttonBg(s));
+    node.style.setProperty("--af-btn-ink", s.buttonTextColor);
+    node.style.setProperty("--af-font", `"${s.fontFamily}", sans-serif`);
+    node.style.setProperty("--af-title", `"${s.titleFont}", serif`);
+    node.style.setProperty("--af-fs", Math.max(11, Number(s.fontSize) || 15) + "px");
+  }
+
+  /* Formu açılır pencerede gösterir. Pencere sayfanın (body) en üstüne
+     eklenir; davetiyenin ölçeklenmesinden etkilenmez. Aynı anda bir tane açık olur. */
+  function openModal(s, mode, ctx, st) {
+    if (st.modal && st.modal.isConnected) return;
+    const overlay = el("div", "seoz-af-modal");
+    applyVars(overlay, s);
+    const sheet = el("div", "seoz-af-sheet");
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    sheet.setAttribute("aria-label", String(s.formTitle || "").trim() || String(s.launcherText || DEFAULTS.launcherText));
+    sheet.tabIndex = -1;
+    const head = el("div", "seoz-af-sheet-head");
+    const x = el("button", "seoz-af-x", "✕");
+    x.type = "button";
+    x.setAttribute("aria-label", "Kapat");
+    head.appendChild(x);
+    const body = el("div", "seoz-af-sheet-body");
+    const inner = el("div", "seoz-af");
+    applyVars(inner, s);
+    body.appendChild(inner);
+    sheet.appendChild(head);
+    sheet.appendChild(body);
+    overlay.appendChild(sheet);
+
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow, prevBody = document.body.style.overflow;
+    const prevFocus = document.activeElement;
+    function onKey(e) { if (e.key === "Escape") close(); }
+    function close() {
+      if (!overlay.isConnected) return;
+      overlay.remove();
+      html.style.overflow = prevHtml; document.body.style.overflow = prevBody;
+      document.removeEventListener("keydown", onKey);
+      st.modal = null; st.closeModal = null;
+      if (st.root === inner) st.root = null;
+      // Gönderildiyse bir sonraki açılışta form (dolu olarak) gelir.
+      if (st.phase === "done") { st.phase = "form"; }
+      if (st.refreshLauncher) st.refreshLauncher();
+      if (prevFocus && prevFocus.focus && prevFocus.isConnected) { try { prevFocus.focus({ preventScroll: true }); } catch (e) { /* önemsiz */ } }
+    }
+    x.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.addEventListener("keydown", onKey);
+
+    st.modal = overlay;
+    st.closeModal = close;
+    st.root = inner;
+    html.style.overflow = "hidden"; document.body.style.overflow = "hidden";
+    document.body.appendChild(overlay);
+    paint(inner, s, mode, ctx, st);
+    // Telefonda klavye kendiliğinden açılmasın: odak yalnızca pencereye verilir.
+    try { sheet.focus({ preventScroll: true }); } catch (e) { sheet.focus(); }
+  }
+
   function render(settings, mode, ctx) {
     injectStyles();
     const s = Object.assign({}, DEFAULTS, settings);
-    const root = el("div", "seoz-af");
-    root.style.setProperty("--af-ink", s.textColor);
-    root.style.setProperty("--af-card", s.cardColor);
-    root.style.setProperty("--af-accent", s.buttonColor);
-    root.style.setProperty("--af-btn", s.buttonColor);
-    root.style.setProperty("--af-btn-bg", buttonBg(s));
-    root.style.setProperty("--af-btn-ink", s.buttonTextColor);
-    root.style.setProperty("--af-font", `"${s.fontFamily}", sans-serif`);
-    root.style.setProperty("--af-title", `"${s.titleFont}", serif`);
-    root.style.setProperty("--af-fs", Math.max(11, Number(s.fontSize) || 15) + "px");
+    const root = el("div", "seoz-af seoz-af-launcher");
+    applyVars(root, s);
 
     const key = (mode === "edit" ? "edit:" : "view:") + ((ctx && ctx.docId) || "") + ":" + ((ctx && ctx.layerId) || "");
     const st = stateFor(key);
-    st.root = root;
-    paint(root, s, mode, ctx, st);
+
+    const btn = el("button", "seoz-af-launch", String(s.launcherText || "").trim() || DEFAULTS.launcherText);
+    btn.type = "button";
+    btn.setAttribute("aria-haspopup", "dialog");
+    const note = el("div", "seoz-af-launch-note");
+    root.appendChild(btn);
+    root.appendChild(note);
+
+    st.refreshLauncher = () => {
+      if (!note.isConnected && !root.isConnected) return;
+      if (mode === "edit") { note.textContent = "Editör: formu önizlemek için butona çift tıklayın."; return; }
+      note.textContent = st.closed ? (s.closedMessage || DEFAULTS.closedMessage) : st.own ? "✓ Yanıtınız alındı · değiştirmek için tekrar dokunun" : "";
+      note.hidden = !note.textContent;
+    };
+    st.refreshLauncher();
+
+    // Editörde tek tıklama katmanı seçer; önizleme çift tıklamayla açılır.
+    btn.addEventListener(mode === "edit" ? "dblclick" : "click", () => openModal(s, mode, ctx, st));
 
     if (mode !== "edit") {
       const slug = currentSlug();
-      if (slug) loadOwn(st, slug, ctx, () => { if (st.root && st.root.isConnected && st.phase === "form") paint(st.root, s, mode, ctx, st); });
+      if (slug) loadOwn(st, slug, ctx, () => {
+        if (st.refreshLauncher) st.refreshLauncher();
+        if (st.root && st.root.isConnected && st.phase === "form") paint(st.root, s, mode, ctx, st);
+      });
     }
     return root;
   }
