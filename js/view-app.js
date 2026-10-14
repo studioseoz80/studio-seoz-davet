@@ -100,7 +100,16 @@
 
     SeozEntryScene.initEntryScene(doc, () => {
       renderAndScale();
-      window.addEventListener("resize", renderAndScale);
+      // DÜZELTME (telefonda yazı yazılamıyordu): Telefon klavyesi açılınca
+      // yalnızca ekran YÜKSEKLİĞİ değişir; sayfa yeniden çizilirse yazı kutusu
+      // kaybolur ve klavye kapanır. Artık yalnızca GENİŞLİK değişince
+      // (telefonu yan çevirme, pencere boyutu) yeniden çizilir.
+      let lastWidth = window.innerWidth;
+      window.addEventListener("resize", () => {
+        if (window.innerWidth === lastWidth) return;
+        lastWidth = window.innerWidth;
+        renderAndScale();
+      });
       if (doc.entry && doc.entry.allowReplayForGuest && SeozEntryScene.hasUsableEntry(doc.entry)) {
         addReplayButton(doc);
       }

@@ -193,7 +193,14 @@
   }
   SeozEntryScene.initEntryScene(doc, function () {
     renderAndScale();
-    window.addEventListener("resize", renderAndScale);
+    // Telefon klavyesi açılınca (yalnızca yükseklik değişir) yeniden çizme —
+    // aksi halde yazı kutusu kaybolur. Yalnızca genişlik değişince çiz.
+    var lastWidth = window.innerWidth;
+    window.addEventListener("resize", function () {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      renderAndScale();
+    });
     if (doc.entry && doc.entry.allowReplayForGuest && SeozEntryScene.hasUsableEntry(doc.entry)) {
       var btn = document.createElement("button");
       btn.type = "button";
