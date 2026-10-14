@@ -20,6 +20,7 @@
   const state = {
     token: "", pin: null, data: null, loadedAt: 0,
     tab: "responses", search: "", status: "all", filters: [],
+    chartMode: "responses", chartViews: {},
     editingLabels: false
   };
 
@@ -222,6 +223,7 @@
       <div class="pn-tabs" role="tablist">
         <button class="pn-tab" role="tab" data-tab="responses" aria-selected="${state.tab === "responses"}">Yanıtlar</button>
         <button class="pn-tab" role="tab" data-tab="people" aria-selected="${state.tab === "people"}">Kişi Listesi</button>
+        <button class="pn-tab" role="tab" data-tab="charts" aria-selected="${state.tab === "charts"}">Grafikler</button>
       </div>
       <div class="pn-toolbar">
         <input class="pn-search" type="search" placeholder="İsim veya cevap ara..." data-search value="${esc(state.search)}">
@@ -308,6 +310,7 @@
       return;
     }
     if (state.tab === "people") { renderPeople(body, list); return; }
+    if (state.tab === "charts") { renderCharts(body, list); return; }
 
     const cols = columns();
     const dup = duplicates();
@@ -341,6 +344,25 @@
         </div>`).join("")}
       </div>`;
     body.querySelectorAll("[data-rid]").forEach(el => el.addEventListener("click", () => openDetail(el.getAttribute("data-rid"))));
+  }
+
+  /* FAZ C: grafikler (panel-charts.js). Arama ve filtrelere uyar. */
+  function renderCharts(body, list) {
+    if (!global.SeozPanelCharts) { body.innerHTML = `<div class="pn-empty">Grafikler yüklenemedi.</div>`; return; }
+    global.SeozPanelCharts.render(body, {
+      questions: questions(),
+      list: list,
+      total: responses().length,
+      narrowed: list.length !== responses().length,
+      hasAttendance: hasAttendanceQ(),
+      attendanceQ: questions().find(q => q.role === "attendance"),
+      mode: state.chartMode,
+      views: state.chartViews
+    }, (change) => {
+      if (change.mode) state.chartMode = change.mode;
+      if (change.view) state.chartViews[change.view.id] = change.view.value;
+      renderBody();
+    });
   }
 
   function renderPeople(body, list) {
