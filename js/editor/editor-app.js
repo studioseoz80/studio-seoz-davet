@@ -861,6 +861,7 @@
                 if (sync && sync.multiple) {
                   alert("Not: Davetiyede birden fazla Katılım Formu var. Yanıtlar yalnızca ilk formdan alınır.");
                 }
+                result.attendanceSynced = !!sync;
                 return result;
               })
               .catch(err => {
@@ -875,6 +876,15 @@
             showToast("Yayınlandı. Müşteri bağlantısı: " + result.url);
             // prompt kutusu bağlantıyı seçilebilir/kopyalanabilir gösterir.
             prompt("Yayınlandı. Müşteri bağlantısı:", result.url);
+            // KATILIM FORMU (Faz B): müşteriye özel panel linki ayrıca gösterilir.
+            if (result.attendanceSynced && typeof SeozEventStore !== "undefined") {
+              const panelLink = SeozEventStore.panelUrl(result.slug);
+              if (panelLink) {
+                prompt("Müşteri paneli linki (yalnızca etkinlik sahibine verin — davetlilerle paylaşmayın):", panelLink);
+              } else {
+                alert("Müşteri paneli linki bu tarayıcıda kayıtlı değil (davetiye başka bir tarayıcıdan yayınlanmış olabilir).\n\nKatılım Formu ayarlarındaki \"Yeni panel linki üret\" ile yeni bir link oluşturabilirsiniz.");
+              }
+            }
           })
           .catch(err => {
             console.error("[Studio SEOZ] Supabase yayını başarısız:", err);

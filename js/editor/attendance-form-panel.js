@@ -81,6 +81,59 @@
     </div>`;
   }
 
+  /* ------------------------------------------------------------------
+     MÜŞTERİ PANELİ LİNKİ (Faz B) — yalnızca Studio SEOZ editöründe görünür.
+     Link, davetiye yayınlandıktan sonra oluşur; yenilenince eskisi anında
+     geçersiz olur (Supabase: rsvp_owner_rotate_panel_token).
+     ------------------------------------------------------------------ */
+  function currentDocId() {
+    const m = String(global.location.hash || "").match(/^#\/edit\/(.+)$/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  function renderPanelLinkBox(box) {
+    const store = global.SeozEventStore;
+    const slug = global.SeozCloudStore && global.SeozCloudStore.getSlug ? global.SeozCloudStore.getSlug(currentDocId()) : null;
+    if (!store || !store.isConfigured()) {
+      box.innerHTML = `<label style="font-weight:700;">Müşteri Paneli</label><p ${SMALL}>Supabase bağlantısı ayarlı değil.</p>`;
+      return;
+    }
+    if (!slug) {
+      box.innerHTML = `<label style="font-weight:700;">Müşteri Paneli</label>
+        <p ${SMALL}>Davetiyeyi "Yayına Hazırla" ile yayınladığınızda müşteriye özel panel linki burada görünür.</p>`;
+      return;
+    }
+    const link = store.panelUrl(slug);
+    box.innerHTML = `<label style="font-weight:700;">Müşteri Paneli</label>
+      <p ${SMALL}>Müşteri yanıtları bu linkten görür. Yalnızca etkinlik sahibine verin; davetlilerle paylaşmayın.</p>
+      ${link
+        ? `<div class="field"><input type="text" readonly data-panel-link value="${esc(link)}"></div>
+           <button type="button" class="btn btn-outline" data-panel-copy style="width:100%;margin-top:6px;">Panel linkini kopyala</button>`
+        : `<p ${SMALL}>Bu tarayıcıda kayıtlı panel linki yok (davetiye başka bir tarayıcıdan yayınlanmış olabilir). Aşağıdan yeni link üretebilirsiniz.</p>`}
+      <button type="button" class="btn btn-danger-text" data-panel-rotate style="width:100%;margin-top:6px;">Yeni panel linki üret (eskisi iptal olur)</button>`;
+
+    const copy = box.querySelector("[data-panel-copy]");
+    if (copy) copy.addEventListener("click", () => {
+      const inp = box.querySelector("[data-panel-link]");
+      inp.select();
+      const done = () => { copy.textContent = "Kopyalandı ✓"; setTimeout(() => { copy.textContent = "Panel linkini kopyala"; }, 1800); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inp.value).then(done, () => { document.execCommand("copy"); done(); });
+      else { document.execCommand("copy"); done(); }
+    });
+    box.querySelector("[data-panel-rotate]").addEventListener("click", () => {
+      if (!confirm("Yeni panel linki üretilsin mi?\n\nEski panel linki ANINDA çalışmaz hale gelir. Müşteriye yeni linki göndermeniz gerekir.\n(Davetli linki ve yanıtlar değişmez.)")) return;
+      const btn = box.querySelector("[data-panel-rotate]");
+      btn.disabled = true; btn.textContent = "Üretiliyor...";
+      store.ownerRotatePanelToken(slug)
+        .then(() => { renderPanelLinkBox(box); prompt("Yeni müşteri paneli linki:", store.panelUrl(slug)); })
+        .catch(err => {
+          btn.disabled = false; btn.textContent = "Yeni panel linki üret (eskisi iptal olur)";
+          const msg = global.SeozAttendanceSync ? global.SeozAttendanceSync.errorText(err) : (err && err.message);
+          alert("Yeni link üretilemedi:\n\n" + (/event_not_found/.test(String(err && err.message)) ? "Bu davetiye için etkinlik kaydı yok. Önce Yayına Hazırla'ya basın." : msg));
+        });
+    });
+  }
+
   function render(containerEl, layer, cb) {
     const def = global.SeozModuleRegistry.getModule("attendance-form");
     const s = layer.settings;
@@ -138,8 +191,12 @@
         <div class="field"><textarea rows="3" data-s-text="consentText">${esc(s.consentText)}</textarea></div>
       </div>
 
+      <div ${SECTION} data-panel-link-box></div>
+
       <div ${SECTION}></div>
     `;
+
+    renderPanelLinkBox(top.querySelector("[data-panel-link-box]"));
 
     const rerender = () => { cb.onSettingsChange(); render(containerEl, layer, cb); };
     const light = () => cb.onSettingsChange();   // yazarken: yalnızca önizleme yenilenir, odak kaybolmaz

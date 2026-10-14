@@ -104,8 +104,24 @@
     return rpc("rsvp_owner_set_open", { p_slug: slug, p_open: !!open }, true);
   }
 
-  /* Bu tarayıcıda saklı panel anahtarı (Faz B'de panel linki için). */
+  /* Bu tarayıcıda saklı panel anahtarı. */
   function getStoredPanelToken(slug) { return safeGet(PANEL_KEY_PREFIX + slug); }
+
+  /* Müşteri paneli linki: davetli linkiyle AYNI sitede panel.html#k=ANAHTAR.
+     Anahtar "#" sonrasında olduğu için sunucuya/kayıtlara gönderilmez. */
+  function panelUrl(slug, token) {
+    token = token || getStoredPanelToken(slug);
+    if (!slug || !token) return "";
+    let base;
+    try {
+      base = new URL(global.SeozCloudStore.customerUrl(slug));
+    } catch (e) {
+      base = new URL("view.html", global.location.href);
+    }
+    const u = new URL("panel.html", base);
+    u.hash = "k=" + token;
+    return u.href;
+  }
 
   global.SeozEventStore = {
     isConfigured,
@@ -115,6 +131,7 @@
     ownerSyncEvent,
     ownerRotatePanelToken,
     ownerSetOpen,
-    getStoredPanelToken
+    getStoredPanelToken,
+    panelUrl
   };
 })(window);

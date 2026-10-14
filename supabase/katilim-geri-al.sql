@@ -6,6 +6,12 @@
 -- ETKİLENMEZ.
 -- =============================================================================
 begin;
+-- Faz B (müşteri paneli)
+drop function if exists public.rsvp_panel_get(text, text);
+drop function if exists public.rsvp_panel_save_settings(text, jsonb, text);
+drop function if exists public.rsvp_panel_set_open(text, boolean, text);
+drop function if exists public.rsvp_panel_delete_response(text, uuid, text);
+-- Faz A
 drop function if exists public.rsvp_submit(text, jsonb, text);
 drop function if exists public.rsvp_get_own(text, text);
 drop function if exists public.rsvp_owner_sync_event(text, text, text, jsonb);

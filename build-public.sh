@@ -31,6 +31,12 @@ cp -R js/core "$OUT/js/core"
 cp -R js/modules "$OUT/js/modules"
 cp js/*.js "$OUT/js/"
 
+# Müşteri katılımcı paneli (panel.html#k=...). Veriye erişim gizli panel
+# anahtarıyla Supabase tarafında denetlenir; editör kodu içermez.
+cp panel.html "$OUT/panel.html"
+cp css/panel.css "$OUT/css/panel.css"
+cp -R js/panel "$OUT/js/panel"
+
 if [ -d assets ]; then cp -R assets "$OUT/assets"; fi
 cp _headers.public "$OUT/_headers"
 
