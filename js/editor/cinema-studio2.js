@@ -253,7 +253,7 @@
           <h3>Hareketler</h3>
           ${presetOn() ? `<p class="cs-hint cs-note">Hazır kurgu seçili; buradaki hareketler kurgu kapatılınca oynar.</p>` : ""}
           <select data-cs-addmove aria-label="Hareket ekle"><option value="">+ Hareket ekle…</option>
-            ${F.movesByGroup().map(g => `<optgroup label="${esc(g.label)}">${g.moves.map(m => `<option value="${m.id}">${esc(m.label)}</option>`).join("")}</optgroup>`).join("")}</select>
+            ${F.movesByGroup().map(g => `<optgroup label="${esc(g.label)}">${g.moves.map(m => { const av = F.availability(m.id, cin.layers.length); return `<option value="${m.id}" ${av.ok ? "" : "disabled"}>${esc(m.label)}${av.ok ? "" : " — " + esc(av.why)}</option>`; }).join("")}</optgroup>`).join("")}</select>
           <div class="cs-acts">${acts.map(actionHTML).join("") || `<p class="cs-hint">Bu katmanın henüz hareketi yok.</p>`}</div>
         </section>
         ${l.backdrop ? "" : `<section class="cs-sec">
