@@ -16,7 +16,8 @@
   "use strict";
 
   const BUDGET_MB = 15, MAX_LAYERS_WARN = 12;
-  const START_LABELS = [["tap", "Dokununca"], ["with", "Öncekiyle birlikte"], ["after", "Öncekinden sonra"]];
+  const START_LABELS = [["tap", "Dokununca"], ["with", "Öncekiyle birlikte"], ["after", "Öncekinden sonra"], ["at", "Belirli saniyede"]];
+  const SPEEDS = [[0.5, "0,5× (yavaş)"], [0.75, "0,75×"], [1, "1× (normal)"], [1.5, "1,5×"], [2, "2× (hızlı)"]];
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
   function r1(n) { return Math.round(n * 10) / 10; }
@@ -56,7 +57,8 @@
     const wasV2 = !!(entry.cinema && entry.cinema.v === 2);
     const cin = ensureV2(entry);
     if (!wasV2 && cb.onChange) setTimeout(() => cb.onChange(), 0);   // A1 kaydından taşındıysa hemen kaydet
-    const state = { sel: cin.layers.length ? cin.layers[cin.layers.length - 1].id : null, view: "phone", handle: null, previewing: false };
+    const state = { sel: cin.layers.length ? cin.layers[cin.layers.length - 1].id : null, view: "phone", handle: null, previewing: false,
+      selAct: null, clip: null, time: 0, playing: false, tl: null, zoom: 70 };
 
     const root = document.createElement("div");
     root.className = "cs-root cs2";
@@ -79,6 +81,7 @@
           </div>
           <div class="cs-stage-area" data-cs-area><div class="cs-stage" data-cs-stage></div></div>
           <p class="cs-stage-tip" data-cs-tip></p>
+          <section class="cs-tl" data-cs-tl aria-label="Zaman çizelgesi"></section>
         </main>
         <aside class="cs-right" data-cs-right></aside>
       </div>`;
@@ -159,6 +162,12 @@
             <option value="auto" ${n.cardMode === "auto" ? "selected" : ""}>Otomatik</option><option value="image" ${n.cardMode === "image" ? "selected" : ""}>Yüklenen görsel</option>
             <option value="title" ${n.cardMode === "title" ? "selected" : ""}>Yazılı kart</option><option value="none" ${n.cardMode === "none" ? "selected" : ""}>Kart yok</option></select></label>
           <label class="cs-row cs-row-col"><span>Yazılı kart başlığı</span><input type="text" maxlength="60" data-cs-opt="cardTitle" placeholder="${esc((doc.meta && doc.meta.title) || "")}" value="${esc(n.cardTitle)}"></label>
+          <label class="cs-row"><span>Ekranda kalma</span><select data-cs-hold>
+            ${[["3", "3 sn"], ["5", "5 sn"], ["8", "8 sn"], ["10", "10 sn"], ["15", "15 sn"], ["tap", "Dokunana kadar"]].map(([v, l]) => `<option value="${v}" ${String(entry.cardDisplayDuration != null ? entry.cardDisplayDuration : 10) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="cs-row"><span>Davetiyeye geçiş</span><select data-cs-opt="exitStyle">
+            ${[["zoom", "Yakınlaşarak çözülme"], ["fade", "Solarak"], ["up", "Yukarı kayarak"]].map(([v, l]) => `<option value="${v}" ${(cin.exitStyle || "zoom") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="cs-row"><span>Geçiş süresi</span><select data-cs-opt="exitDuration">
+            ${[[0.6, "0,6 sn"], [1, "1 sn"], [1.5, "1,5 sn"], [2, "2 sn"]].map(([v, l]) => `<option value="${v}" ${Number(cin.exitDuration || 1) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         </section>`;
       fillThumbs(); renderBudget();
     }
@@ -168,7 +177,7 @@
           ${cin.actions.length ? `<ol class="cs-seq">${cin.actions.map((a, i) => {
             const m = F.move(a.move), l = layerById(a.layer);
             const st = (START_LABELS.find(s => s[0] === a.start) || START_LABELS[2])[1];
-            return `<li class="${l && l.id === state.sel ? "is-on" : ""}"><button type="button" class="cs-seq-t" data-cs-sel="${a.layer}">
+            return `<li class="${l && l.id === state.sel ? "is-on" : ""}" draggable="true" data-seq="${a.id}" title="Sürükleyerek sıralayın"><span class="cs-grip" aria-hidden="true">⋮⋮</span><button type="button" class="cs-seq-t" data-cs-sel="${a.layer}" data-cs-selact="${a.id}">
                 <strong>${esc(m ? m.label : a.move)}</strong><small>${esc(m && m.scene ? "tüm sahne · " : "")}${esc(l ? l.name : "")} · ${i === 0 ? "Başlangıç" : st}</small></button>
               <span class="cs-row-btns"><button type="button" class="cs-ico" data-cs-aup="${a.id}" aria-label="Yukarı">▲</button><button type="button" class="cs-ico" data-cs-adown="${a.id}" aria-label="Aşağı">▼</button></span></li>`;
           }).join("")}</ol>` : `<p class="cs-hint">Bir katman seçip sağdaki "Hareket ekle" menüsünden hareket verin.</p>`}
@@ -211,17 +220,19 @@
     function actionHTML(a) {
       const m = F.move(a.move); if (!m) return "";
       const idx = cin.actions.indexOf(a);
-      return `<div class="cs-act" data-act="${a.id}">
+      return `<div class="cs-act${state.selAct === a.id ? " is-on" : ""}" data-act="${a.id}">
         <div class="cs-act-h"><strong>${idx + 1}. ${esc(m.label)}</strong>
-          <span class="cs-row-btns"><button type="button" class="cs-ico" data-cs-acopy="${a.id}" title="Başka katmana kopyala" aria-label="Kopyala">⧉</button>
+          <span class="cs-row-btns"><button type="button" class="cs-ico" data-cs-acopy="${a.id}" title="Kopyala (sonra başka katmanı seçip Yapıştır)" aria-label="Kopyala">⧉</button>
           <button type="button" class="cs-ico cs-del" data-cs-adel="${a.id}" aria-label="Hareketi sil">✕</button></span></div>
         ${m.note ? `<p class="cs-hint">${esc(m.note)}</p>` : ""}
         <label class="cs-row"><span>Başlat</span><select data-cs-af="${a.id}" data-key="start">
           ${START_LABELS.map(([v, l]) => `<option value="${v}" ${a.start === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <div class="cs-grid2">
-          <label>Gecikme (sn)<input type="number" min="0" max="20" step="0.1" data-cs-af="${a.id}" data-key="delay" value="${a.delay || 0}"></label>
+          <label>${a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)"}<input type="number" min="0" max="60" step="0.1" data-cs-af="${a.id}" data-key="delay" value="${a.delay || 0}"></label>
           <label>Süre (sn)<input type="number" min="0.1" max="20" step="0.1" data-cs-af="${a.id}" data-key="duration" value="${a.duration}"></label>
         </div>
+        <label class="cs-row"><span>Hız</span><select data-cs-af="${a.id}" data-key="speed">
+          ${SPEEDS.map(([v, l]) => `<option value="${v}" ${Number(a.speed || 1) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="cs-row"><span>Yumuşaklık</span><select data-cs-af="${a.id}" data-key="easing">
           ${F.EASE_LABELS.map(([v, l]) => `<option value="${v}" ${(a.easing || m.easing) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         ${m.loop ? `<label class="cs-row"><span>Tekrar</span><select data-cs-af="${a.id}" data-key="repeat">
@@ -250,7 +261,7 @@
           <label class="cs-check"><input type="checkbox" data-cs-l="hidden" ${l.hidden ? "checked" : ""}> Gizle</label>
         </section>
         <section class="cs-sec">
-          <h3>Hareketler</h3>
+          <h3>Hareketler ${state.clip ? `<button type="button" class="cs-mini" data-cs-paste>Yapıştır: ${esc((F.move(state.clip.move) || {}).label || "")}</button>` : ""}</h3>
           ${presetOn() ? `<p class="cs-hint cs-note">Hazır kurgu seçili; buradaki hareketler kurgu kapatılınca oynar.</p>` : ""}
           <select data-cs-addmove aria-label="Hareket ekle"><option value="">+ Hareket ekle…</option>
             ${F.movesByGroup().map(g => `<optgroup label="${esc(g.label)}">${g.moves.map(m => { const av = F.availability(m.id, cin.layers.length); return `<option value="${m.id}" ${av.ok ? "" : "disabled"}>${esc(m.label)}${av.ok ? "" : " — " + esc(av.why)}</option>`; }).join("")}</optgroup>`).join("")}</select>
@@ -281,6 +292,7 @@
     let token = 0, hEls = null;
     function rebuildStage() {
       const my = ++token;
+      if (state.tl) { state.tl.stop(); state.tl = null; state.playing = false; }
       if (state.handle) { state.handle.destroy(); state.handle = null; }
       if (hEls) { hEls.box.remove(); hEls = null; }
       stageEl.innerHTML = ""; sizeStage();
@@ -438,19 +450,179 @@
       const t = cin.actions[i]; cin.actions[i] = cin.actions[j]; cin.actions[j] = t;
       save(); renderLeft(); renderRight(); renderSub();
     }
+    function toast(text) {
+      let t = root.querySelector(".cs-toast"); if (!t) { t = document.createElement("div"); t.className = "cs-toast"; t.setAttribute("role", "status"); root.appendChild(t); }
+      t.textContent = text; clearTimeout(t._h); t._h = setTimeout(() => t.remove(), 2600);
+    }
     function copyAction(id) {
       const a = cin.actions.find(x => x.id === id); if (!a) return;
-      const targets = cin.layers.filter(l => l.id !== a.layer);
-      if (!targets.length) { alert("Kopyalamak için başka bir katman ekleyin."); return; }
-      const names = targets.map((l, i) => `${i + 1}) ${l.name}`).join("\n");
-      const ans = prompt(`Hareket hangi katmana kopyalansın?\n${names}\nNumara yazın:`, "1");
-      const t = targets[Number(ans) - 1]; if (!t) return;
-      const c = JSON.parse(JSON.stringify(a)); c.id = uid("A"); c.layer = t.id; c.start = "with";
-      cin.actions.splice(cin.actions.indexOf(a) + 1, 0, c);
-      save(); refreshAll();
+      state.clip = JSON.parse(JSON.stringify(a)); state.selAct = a.id;
+      toast("Kopyalandı · bir katman seçip “Yapıştır”a basın"); renderRight(); renderTimeline();
     }
+    function pasteAction() {
+      if (!state.clip || !layerById(state.sel)) return;
+      const c = JSON.parse(JSON.stringify(state.clip)); c.id = uid("A"); c.layer = state.sel;
+      const srcIdx = cin.actions.findIndex(x => x.id === state.clip.id);
+      if (c.start === "tap" && cin.actions.some(x => x.start === "tap")) c.start = "with";
+      cin.actions.splice(srcIdx >= 0 ? srcIdx + 1 : cin.actions.length, 0, c);
+      if (c.start !== "at" && srcIdx >= 0) c.start = "with";
+      state.selAct = c.id; save(); refreshAll(); toast("Yapıştırıldı");
+    }
+    /* =================== A2.3 · ZAMAN ÇİZELGESİ =================== */
+    const tlEl = root.querySelector("[data-cs-tl]");
+    function fmt(t) { return (Math.round(t * 10) / 10).toFixed(1).replace(".", ","); }
+    function tlPlan() { const n = norm(); return { n, p: n.__free ? F.plan(n, entry) : null, k: 1 / (n.speed || 1) }; }
+    function renderTimeline() {
+      const { p, k } = tlPlan();
+      if (!p) { tlEl.innerHTML = `<p class="cs-hint cs-tl-empty">Hazır kurgu seçiliyken zaman çizelgesi kullanılmaz; kurgu kendi zamanlamasıyla oynar.</p>`; return; }
+      const pps = state.zoom, sec = ms => ms * k / 1000, total = sec(p.total);
+      const W = Math.max(600, Math.ceil(total + 1) * pps);
+      const rows = cin.layers.slice().reverse();
+      const LANE = 24;
+      const bar = it => {
+        const m = it.def, l = layerById(it.a.layer);
+        const left = it._l, width = it._w;
+        const startLab = (START_LABELS.find(x => x[0] === it.a.start) || [0, ""])[1];
+        return `<div class="cs-bar g-${m.group}${it.loopForever ? " is-loop" : ""}${state.selAct === it.a.id ? " is-on" : ""}" data-bar="${it.a.id}" style="left:${left}px;width:${width}px;top:${4 + it._lane * LANE}px;height:${LANE - 4}px"
+          title="${esc(m.label)} · ${esc(l ? l.name : "")} · ${fmt(sec(it.begin))}–${it.loopForever ? "dokunuşa kadar" : fmt(sec(it.end)) + " sn"} · ${esc(startLab)}">
+          <span>${esc(m.label)}</span>${it.loopForever ? "" : `<i class="cs-bar-r" data-resize="${it.a.id}" title="Süreyi değiştir"></i>`}</div>`;
+      };
+      function lanes(list) {
+        const ends = [];
+        return list.map(it => {
+          const l = sec(it.begin) * pps, w = it.loopForever ? Math.max(30, sec(p.firstTap - it.begin) * pps) : Math.max(16, sec(it.end - it.begin) * pps);
+          let ln = ends.findIndex(e => e <= l + 1); if (ln < 0) { ln = ends.length; ends.push(0); }
+          ends[ln] = l + w; return Object.assign({}, it, { _l: l, _w: w, _lane: ln });
+        });
+      }
+      const ticks = [];
+      for (let t = 0; t <= Math.ceil(total); t++) ticks.push(`<span class="cs-tick" style="left:${t * pps}px">${t}</span>`);
+      const taps = p.taps.map((tp, i) => `<div class="cs-tap" style="left:${sec(tp.time) * pps}px" title="${i === 0 ? "Misafirin ilk dokunuşu (açılış başlar)" : "Yeni dokunuş bekler"}"><span>👆 ${i === 0 ? "Dokunuş" : "Dokunuş " + (i + 1)}</span></div>`).join("");
+      const cardRow = p.hasCard ? `<div class="cs-tl-row"><div class="cs-tl-name">İç kart</div><div class="cs-tl-track" style="width:${W}px">
+          <div class="cs-bar g-kart is-fixed" style="left:${sec(p.cardStart) * pps}px;width:${Math.max(20, sec(p.exitAt - p.cardStart) * pps)}px" title="İç kart görünür; ${p.holdTap ? "misafir dokunana kadar" : "ayarlanan süre kadar"} ekranda kalır"><span>İç kart${p.holdTap ? " · dokunana kadar" : ` · ${fmt(sec(p.exitAt - p.cardShown))} sn ekranda`}</span></div>
+          <div class="cs-bar g-exit is-fixed" style="left:${sec(p.exitAt) * pps}px;width:${Math.max(16, sec(p.exitMs) * pps)}px" title="Davetiyeye geçiş"><span>Geçiş</span></div>
+        </div></div>` : "";
+      tlEl.innerHTML = `
+        <div class="cs-tl-bar">
+          <button type="button" class="cs-ico cs-tl-btn" data-tl="rewind" title="Başa sar" aria-label="Başa sar">⏮</button>
+          <button type="button" class="btn btn-gold cs-tl-play" data-tl="play">${state.playing ? "❚❚ Durdur" : "▶ Oynat"}</button>
+          <span class="cs-tl-time" data-tl-time>${fmt(state.time)} / ${fmt(total)} sn</span>
+          <label class="cs-tl-go">Saniyeye git <input type="number" min="0" step="0.1" value="${fmt(state.time).replace(",", ".")}" data-tl-go aria-label="Saniye"></label>
+          <span class="cs-tl-sp"></span>
+          <button type="button" class="cs-mini" data-tl="copy" ${state.selAct ? "" : "disabled"}>Kopyala</button>
+          <button type="button" class="cs-mini" data-tl="paste" ${state.clip && state.sel ? "" : "disabled"}>Yapıştır</button>
+          <button type="button" class="cs-ico cs-tl-btn" data-tl="zout" title="Uzaklaştır" aria-label="Uzaklaştır">−</button>
+          <button type="button" class="cs-ico cs-tl-btn" data-tl="zin" title="Yakınlaştır" aria-label="Yakınlaştır">+</button>
+        </div>
+        <div class="cs-tl-scroll" data-tl-scroll>
+          <div class="cs-tl-inner" style="width:${W + 120}px">
+            <div class="cs-tl-row cs-tl-ruler"><div class="cs-tl-name">sn</div><div class="cs-tl-track" data-tl-ruler style="width:${W}px">${ticks.join("")}</div></div>
+            ${rows.map(l => { const its = lanes(p.items.filter(it => it.a.layer === l.id)); const n = its.reduce((m, it) => Math.max(m, it._lane + 1), 1);
+              return `<div class="cs-tl-row${state.sel === l.id ? " is-on" : ""}" data-tl-layer="${l.id}" style="height:${n * LANE + 6}px"><div class="cs-tl-name" data-cs-sel="${l.id}" title="${esc(l.name)}">${esc(l.name)}</div>
+              <div class="cs-tl-track" style="width:${W}px">${its.map(bar).join("")}</div></div>`; }).join("")}
+            ${cardRow}
+            <div class="cs-tl-overlay" style="width:${W}px">${taps}<div class="cs-phead" data-tl-head style="left:${state.time * pps}px"></div></div>
+          </div>
+        </div>
+        <p class="cs-hint cs-tl-help">Çubuğu sürükleyerek başlangıcını, sağ kenarından çekerek süresini değiştirin. Cetvele tıklayınca sahne o saniyede donar.</p>`;
+    }
+    function updateHead(t) {
+      const { p, k } = tlPlan(); if (!p) return;
+      const head = tlEl.querySelector("[data-tl-head]"), lab = tlEl.querySelector("[data-tl-time]");
+      if (head) head.style.left = (t * state.zoom) + "px";
+      if (lab) lab.textContent = `${fmt(t)} / ${fmt(p.total * k / 1000)} sn`;
+    }
+    function hideHandles() { if (hEls) { hEls.box.remove(); hEls = null; } }
+    function tlStart(from, paused) {
+      if (state.previewing) return;
+      if (state.tl) { state.tl.stop(); state.tl = null; }
+      token++;
+      if (state.handle) { state.handle.destroy(); state.handle = null; }
+      hideHandles(); stageEl.innerHTML = "";
+      state.playing = !paused;
+      $("[data-cs-tip]").textContent = paused ? `Zaman çizelgesi · ${fmt(from)}. saniye` : "Zaman çizelgesi oynuyor";
+      const n = norm();
+      state.tl = F.runTimeline(doc, stageEl, { from, paused, sound: !paused && n.sound,
+        onTick: t => { state.time = t; updateHead(t); },
+        onEnd: () => { state.playing = false; state.time = 0; rebuildStage(); renderTimeline(); } });
+      renderTimeline();
+    }
+    function tlPause() { const t = state.tl && state.tl.time ? state.tl.time() : state.time; state.time = t; tlStart(t, true); }
+    function seek(t) { const { p, k } = tlPlan(); if (!p) return; state.time = clamp(t, 0, p.total * k / 1000); tlStart(state.time, true); }
 
-    function refreshAll() { renderSub(); renderLeft(); renderRight(); rebuildStage(); }
+    tlEl.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-tl]");
+      if (b) {
+        const a = b.dataset.tl;
+        if (a === "play") { if (state.playing) tlPause(); else { const { p, k } = tlPlan(); if (p && state.time >= p.total * k / 1000 - 0.05) state.time = 0; tlStart(state.time, false); } }
+        else if (a === "rewind") { state.time = 0; rebuildStage(); renderTimeline(); }
+        else if (a === "zin") { state.zoom = Math.min(200, state.zoom * 1.4); renderTimeline(); }
+        else if (a === "zout") { state.zoom = Math.max(25, state.zoom / 1.4); renderTimeline(); }
+        else if (a === "copy" && state.selAct) copyAction(state.selAct);
+        else if (a === "paste") pasteAction();
+        return;
+      }
+      const nm = e.target.closest(".cs-tl-name[data-cs-sel]"); if (nm) return;   // genel tıklama işleyicisi seçer
+      const ruler = e.target.closest("[data-tl-ruler], .cs-tl-track");
+      if (ruler && !e.target.closest(".cs-bar")) {
+        const r = ruler.getBoundingClientRect(); seek((e.clientX - r.left) / state.zoom);
+      }
+    });
+    tlEl.addEventListener("change", (e) => { if (e.target.matches("[data-tl-go]")) seek(Number(String(e.target.value).replace(",", ".")) || 0); });
+    // çubuk sürükleme: taşı (başlangıç) / sağ kenar (süre)
+    tlEl.addEventListener("pointerdown", (e) => {
+      const barEl = e.target.closest(".cs-bar[data-bar]"); if (!barEl) return;
+      const id = barEl.dataset.bar, a = cin.actions.find(x => x.id === id); if (!a) return;
+      const { p, k } = tlPlan(); const it = p.items.find(x => x.a.id === id); if (!it) return;
+      e.preventDefault();
+      const resize = !!e.target.closest("[data-resize]"), x0 = e.clientX, left0 = barEl.offsetLeft, w0 = barEl.offsetWidth;
+      const chunkStart = it.chunk === 0 ? 0 : p.taps[it.chunk - 1].time;
+      let moved = false;
+      try { barEl.setPointerCapture(e.pointerId); } catch (err) { /* önemsiz */ }
+      const mv = ev => {
+        const dx = ev.clientX - x0; if (Math.abs(dx) > 3) moved = true; if (!moved) return;
+        if (resize) barEl.style.width = Math.max(16, w0 + dx) + "px"; else barEl.style.left = Math.max(chunkStart * k / 1000 * state.zoom, left0 + dx) + "px";
+      };
+      const up = () => {
+        barEl.removeEventListener("pointermove", mv); barEl.removeEventListener("pointerup", up); barEl.removeEventListener("pointercancel", up);
+        if (!moved) { state.selAct = id; state.sel = a.layer; renderLeft(); renderRight(); drawHandles(); renderTimeline();
+          const card = rightEl.querySelector(`[data-act="${id}"]`); if (card && card.scrollIntoView) card.scrollIntoView({ block: "nearest" }); return; }
+        if (resize) {
+          const vis = barEl.offsetWidth / state.zoom;                       // görünen saniye
+          a.duration = Math.max(0.1, Math.round(vis / k * (a.speed || 1) * 10) / 10);
+        } else {
+          const beginU = barEl.offsetLeft / state.zoom * 1000 / k;           // hız uygulanmamış ms
+          const rel = Math.max(0, Math.round((beginU - chunkStart) / 100) / 10);
+          if (a.start !== "tap") a.start = "at";
+          a.delay = rel;
+        }
+        const relayer = state.sel !== a.layer; state.selAct = id; state.sel = a.layer; save();
+        if (relayer) { renderLeft(); drawHandles(); } else renderSeq();
+        renderRight(); renderTimeline();
+      };
+      barEl.addEventListener("pointermove", mv); barEl.addEventListener("pointerup", up); barEl.addEventListener("pointercancel", up);
+    });
+    // hareket sırası: sürükle-bırak ile sıralama
+    leftEl.addEventListener("dragstart", (e) => { const li = e.target.closest("[data-seq]"); if (!li) return; e.dataTransfer.setData("text/plain", li.dataset.seq); e.dataTransfer.effectAllowed = "move"; li.classList.add("is-drag"); });
+    leftEl.addEventListener("dragend", (e) => { const li = e.target.closest("[data-seq]"); if (li) li.classList.remove("is-drag"); });
+    leftEl.addEventListener("dragover", (e) => { if (e.target.closest("[data-seq]")) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } });
+    leftEl.addEventListener("drop", (e) => {
+      const li = e.target.closest("[data-seq]"); if (!li) return; e.preventDefault();
+      const from = e.dataTransfer.getData("text/plain"), to = li.dataset.seq; if (!from || from === to) return;
+      const i = cin.actions.findIndex(a => a.id === from); const item = cin.actions.splice(i, 1)[0];
+      const r = li.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+      const j = cin.actions.findIndex(a => a.id === to); cin.actions.splice(after ? j + 1 : j, 0, item);
+      save(); renderSeq(); renderRight(); renderTimeline(); renderSub();
+    });
+    // klavye: Ctrl/Cmd + C / V (yazı alanlarında değil)
+    function onCopyKeys(e) {
+      if (!(e.ctrlKey || e.metaKey) || /^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName || "")) return;
+      if (e.key === "c" && state.selAct) { e.preventDefault(); copyAction(state.selAct); }
+      else if (e.key === "v" && state.clip) { e.preventDefault(); pasteAction(); }
+    }
+    document.addEventListener("keydown", onCopyKeys);
+
+    function refreshAll() { renderSub(); renderLeft(); renderRight(); rebuildStage(); renderTimeline(); }
 
     /* ---------- olaylar ---------- */
     root.addEventListener("click", (e) => {
@@ -463,9 +635,11 @@
       if (d.csLdel) { e.stopPropagation(); return deleteLayer(d.csLdel); }
       if (d.csAup) return moveAction(d.csAup, -1);
       if (d.csAdown) return moveAction(d.csAdown, +1);
-      if (d.csAdel) { cin.actions = cin.actions.filter(a => a.id !== d.csAdel); save(); return refreshAll(); }
+      if (d.csAdel) { cin.actions = cin.actions.filter(a => a.id !== d.csAdel); if (state.selAct === d.csAdel) state.selAct = null; save(); return refreshAll(); }
       if (d.csAcopy) return copyAction(d.csAcopy);
-      if (d.csSel) { state.sel = d.csSel; renderLeft(); renderRight(); drawHandles(); return; }
+      if (d.csPaste != null) return pasteAction();
+      if (d.csSelact) { state.selAct = d.csSelact; }
+      if (d.csSel) { state.sel = d.csSel; renderLeft(); renderRight(); drawHandles(); renderTimeline(); return; }
       if (d.csView) { state.view = d.csView; return rebuildStage(); }
       if (d.csPlay != null) return togglePreview();
       if (d.csUp != null) return replaceImage(state.sel, false);
@@ -488,10 +662,11 @@
         save(); return refreshAll();
       }
       if (tg.matches("[data-cs-role]")) { cin.preset.roles = cin.preset.roles || {}; if (tg.value) cin.preset.roles[tg.dataset.csRole] = tg.value; else delete cin.preset.roles[tg.dataset.csRole]; save(); return rebuildStage(); }
+      if (tg.matches("[data-cs-hold]")) { entry.cardDisplayDuration = tg.value === "tap" ? "tap" : Number(tg.value); save(); return renderTimeline(); }
       if (tg.matches("[data-cs-artfill]")) { cin.preset.artFill = tg.checked; save(); return rebuildStage(); }
       const k = tg.dataset.csOpt; if (!k) return;
       cin[k] = tg.type === "checkbox" ? tg.checked : tg.type === "range" ? Number(tg.value) : tg.value;
-      save(); renderSub();
+      save(); renderSub(); renderTimeline();
       if (["depth", "cardMode", "cardTitle", "lite"].includes(k)) rebuildStage();
     });
     function readOrigin() {
@@ -519,14 +694,17 @@
       if (tg.matches("[data-cs-parent]")) { if (tg.value) l.parent = tg.value; else delete l.parent; save(); renderLeft(); return rebuildStage(); }
       if (tg.dataset.csAf) {
         const a = cin.actions.find(x => x.id === tg.dataset.csAf), key = tg.dataset.key;
-        a[key] = key === "delay" || key === "duration" || key === "repeat" ? Math.max(0, Number(tg.value) || 0) : tg.value;
+        a[key] = key === "delay" || key === "duration" || key === "repeat" || key === "speed" ? Math.max(0, Number(tg.value) || 0) : tg.value;
         if (key === "duration" && !a.duration) a.duration = 0.1;
-        save(); renderSeq(); renderSub(); return;
+        if (key === "speed" && !a.speed) a.speed = 1;
+        save(); renderSeq(); renderSub(); renderTimeline();
+        if (key === "start") { const lab = tg.closest(".cs-act").querySelector('[data-key="delay"]').parentNode; lab.firstChild.textContent = a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)"; }
+        return;
       }
       if (tg.dataset.csAp) {
         const a = cin.actions.find(x => x.id === tg.dataset.csAp); a.params = a.params || {};
         const raw = tg.value; a.params[tg.dataset.key] = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
-        save(); return rebuildStage();
+        save(); renderTimeline(); return rebuildStage();
       }
       const k = tg.dataset.csL; if (!k || !l) return;
       if (k === "hidden" || k === "backdrop") {
@@ -543,6 +721,7 @@
     function togglePreview() {
       const btn = $("[data-cs-play]");
       if (state.previewing) { if (prev) prev.finish(true); return; }
+      if (state.tl) { state.tl.stop(); state.tl = null; state.playing = false; renderTimeline(); }
       state.previewing = true; btn.textContent = "■ Durdur";
       if (hEls) { hEls.box.remove(); hEls = null; }
       if (state.handle) { state.handle.destroy(); state.handle = null; }
@@ -559,12 +738,14 @@
       if (state.handle) state.handle.destroy();
       C.stop();
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onCopyKeys);
+      if (state.tl) { state.tl.stop(); state.tl = null; }
       global.removeEventListener("resize", onResize);
       root.remove(); document.body.classList.remove("cs-open");
       if (cb.onClose) cb.onClose();
     }
 
-    renderSub(); renderLeft(); renderRight();
+    renderSub(); renderLeft(); renderRight(); renderTimeline();
     requestAnimationFrame(() => rebuildStage());
     return { close, root, state };
   }

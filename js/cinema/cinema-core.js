@@ -376,8 +376,10 @@
       emitters.push(em);
       return { stop() { em.alive = false; } };
     }
+    let paused = false;
     function step(t) {
       if (dead) return;
+      if (paused) { last = t; raf = requestAnimationFrame(step); return; }
       const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
       emitters.forEach(em => {
         if (!em.alive) return;
@@ -404,6 +406,7 @@
     }
     const api = { burst, ambient, stream, resize, count: () => list.length, _W: () => W, _H: () => H,
              stopAll() { emitters.forEach(e => { e.alive = false; }); },
+             pause() { paused = true; }, resume() { paused = false; },   // A2.3 zaman çizelgesi (belirli saniyeye git)
              destroy() { dead = true; cancelAnimationFrame(raf); list.length = 0; } };
     raf = requestAnimationFrame(step);
     return api;
@@ -866,9 +869,14 @@
       const ctx = st.ctx;
       const end = () => { if (active === st) stop(); else overlay.remove(); };
       if (!ctx) { end(); return; }
-      const d = fast ? 260 : (reduced ? 500 : 1000);
-      const out = ctx.anim(overlay, [{ opacity: 1 }, { opacity: 1, offset: fast ? 0 : 0.25 }, { opacity: 0 }], { d, e: E.inOut });
-      if (!reduced) {
+      // A2.3: davetiyeye geçiş biçimi ve süresi ayarlanabilir (varsayılan = A1'deki yakınlaşarak çözülme)
+      const exitStyle = cfg.exitStyle === "fade" || cfg.exitStyle === "up" ? cfg.exitStyle : "zoom";
+      const exitMs = Math.max(200, Math.min(4000, (Number(cfg.exitDuration) || 1) * 1000));
+      const d = fast ? 260 : (reduced ? 500 : exitMs);
+      const out = ctx.anim(overlay, exitStyle === "up" && !fast && !reduced
+        ? [{ transform: "translateY(0)", opacity: 1 }, { transform: "translateY(-100%)", opacity: 1 }]
+        : [{ opacity: 1 }, { opacity: 1, offset: fast ? 0 : 0.25 }, { opacity: 0 }], { d, e: E.inOut });
+      if (!reduced && exitStyle === "zoom") {
         const cur = getComputedStyle(st.cam).transform;
         ctx.anim(st.cam, [{ transform: cur === "none" ? "none" : cur }, { transform: `${cur === "none" ? "" : cur} translateZ(${ctx.Z(220) + 40}px)` }], { d, e: E.in, fill: "forwards" });
         if (ctx.hasCard && ctx.cardEl && !fast) ctx.anim(ctx.cardEl, [{ filter: "brightness(1)" }, { filter: "brightness(1.08)" }], { d, e: E.out });
@@ -900,6 +908,8 @@
       global.addEventListener("resize", st.onResize);
       ctx.fx = Particles(fxCanvas, { lite: cfg.lite, intensity: cfg.intensity });
       st.fx = ctx.fx;
+      // A2.3: "manual" = sahne ve parçacıklar hazır, oynatmayı zaman çizelgesi yönetir
+      if (opts.manual) { setPhase("manual"); const ui = overlay.querySelector(".sc-ui"); if (ui) ui.style.display = "none"; return handle; }
       if (cfg.start !== "auto") hint.style.display = "";
       startPlayback(ctx);
       return handle;

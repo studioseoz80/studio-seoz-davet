@@ -38,7 +38,9 @@
 
   function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
   function timing(a, def) {
-    const dur = Math.max(50, num(a.duration, def.duration || 1) * 1000);
+    // A2.3: harekete özel hız (0,5× yavaş … 2× hızlı) süreyi böler
+    const sp = Math.max(0.25, Math.min(4, num(a.speed, 1)));
+    const dur = Math.max(50, num(a.duration, def.duration || 1) * 1000 / sp);
     const rep = a.repeat === 0 || a.repeat === "0" ? Infinity : Math.max(1, Math.round(num(a.repeat, 1)));
     return { dur, it: def.loop ? rep : 1, e: EASE[a.easing] || EASE[def.easing] || EASE.yavaslayarak };
   }
@@ -618,7 +620,7 @@
     return { items: list.map((a, i) => {
       const def = MOVES[a.move], t = timing(a, def), delay = Math.max(0, num(a.delay, 0) * 1000);
       let begin;
-      if (i === 0 || a.start === "tap") begin = delay;
+      if (i === 0 || a.start === "tap" || a.start === "at") begin = delay;   // "at" = bölüm başından itibaren belirli saniye
       else if (a.start === "with") begin = prevBegin + delay;
       else begin = prevEnd + delay;
       const end = begin + (t.it === Infinity ? 0 : t.dur * (def.loop ? t.it : 1));
@@ -757,6 +759,91 @@
     return { ok: true };
   }
 
+  /* =================== A2.3 ZAMAN ÇİZELGESİ =================== */
+  /* Planı düz bir zamana yayar. Gerçek açılışta "Dokununca" adımları misafiri
+     bekler; çizelgede bu bekleme sabit bir "dokunuş" aralığı olarak gösterilir.
+     Bütün değerler motorun hızı uygulanmadan (ms) verilir; ekranda k ile çarpılır. */
+  const TAP_GAP = 600, ATTENTION_MIN = 1500, CARD_AUTO = 1300;
+  function plan(ncfg, entry) {
+    const model = ncfg.__free, acts = model ? (ncfg.actions || []) : [];
+    const firstTap = acts.findIndex(a => a.start === "tap");
+    const pre = firstTap > 0 ? acts.slice(0, firstTap) : [];
+    const rest = firstTap >= 0 ? acts.slice(firstTap) : acts;
+    const items = [], taps = [];
+    let t = 0;
+    if (pre.length) {
+      const sp = schedule(pre);
+      sp.items.forEach(it => items.push(Object.assign({}, it, { begin: it.begin, end: it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: 0 })));
+      t = Math.max(ATTENTION_MIN, sp.end);
+    } else t = ncfg.start === "auto" ? 1600 : 900;
+    taps.push({ time: t, first: true });
+    const parts = rest.length ? chunks(rest) : [];
+    parts.forEach((list, ci) => {
+      if (ci > 0) { t += TAP_GAP; taps.push({ time: t }); }
+      const sp = schedule(list);
+      sp.items.forEach(it => items.push(Object.assign({}, it, { begin: t + it.begin, end: t + it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: ci + 1 })));
+      t += sp.end;
+    });
+    const cardItem = items.find(it => it.def.isCard);
+    const hasCard = !!(entry && (entry.cardSrc || ncfg.cardMode === "title")) && ncfg.cardMode !== "none";
+    const cardStart = cardItem ? cardItem.begin : t;
+    const cardShown = cardItem ? cardItem.end : (hasCard ? t + CARD_AUTO : t);
+    const dd = entry && entry.cardDisplayDuration;
+    const hold = dd === "tap" ? 3000 : Math.max(1, num(dd, 10)) * 1000;
+    const end = Math.max(t, cardShown);
+    const exitMs = Math.max(200, Math.min(4000, num(ncfg.exitDuration, 1) * 1000));
+    return { items, taps, firstTap: taps[0].time, cardStart, cardShown, hasCard, autoCard: !cardItem && hasCard, holdTap: dd === "tap",
+      exitAt: end + (hasCard ? hold : 0), exitMs, total: end + (hasCard ? hold : 0) + exitMs };
+  }
+
+  /* Zaman çizelgesi oynatıcısı: sahneyi "manual" kurar ve hareketleri negatif gecikmeyle
+     başlatır → herhangi bir saniyeden oynatılabilir veya o anda dondurulabilir. */
+  function runTimeline(doc, container, o) {
+    o = o || {};
+    const d2 = JSON.parse(JSON.stringify(doc)); d2.entry.cinema = Object.assign({}, d2.entry.cinema, { sound: !!o.sound });
+    const hd = C.play(d2, null, { container, manual: true, reduced: false });
+    const ctl = { hd, dead: false, timers: [], raf: 0, plan: null };
+    ctl.stop = () => { ctl.dead = true; cancelAnimationFrame(ctl.raf); ctl.timers.forEach(clearTimeout); hd.destroy(); };
+    ctl.ready = hd.ready.then(() => {
+      const ctx = hd.ctx; if (!ctx || ctl.dead) return ctl;
+      const p = plan(ctx.cfg, d2.entry); ctl.plan = p;
+      const k = ctx.k, Tu = Math.max(0, Math.min(p.paused ? p.total : p.total, (o.from || 0) * 1000 / k));
+      ctx.later = (ms, fn) => {   // geçmişte kalan ses/parçacık anlarını atla, gerisini bu oynatıcıya bağla
+        if (ms < -1200) return;
+        ctl.timers.push(setTimeout(() => { if (!ctx.dead && !ctl.dead) fn(); }, Math.max(0, ms) * k));
+      };
+      const pastTap = Tu >= p.firstTap;
+      p.items.forEach(it => {
+        if (pastTap && it.loopForever) return;   // bekleme döngüleri ilk dokunuşta durur
+        try { it.def.run(ctx, it.a, it.def, it.begin - Tu); } catch (e) { console.error(e); }
+      });
+      if (!pastTap) ctx.later(p.firstTap - Tu, () => {
+        hd.overlay.getAnimations({ subtree: true }).forEach(an => { if (an.effect && an.effect.getTiming().iterations === Infinity) an.cancel(); });
+      });
+      if (p.autoCard) revealCard(ctx, "yuksel", { dur: CARD_AUTO, e: EASE.yavaslayarak }, p.cardStart - Tu);
+      const t0 = performance.now();
+      const now = () => Math.min(p.total, Tu + (performance.now() - t0) / k) * k / 1000;
+      ctl.time = now;
+      if (o.paused) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (ctl.dead) return;
+          hd.overlay.getAnimations({ subtree: true }).forEach(an => { try { an.pause(); } catch (e) { /* önemsiz */ } });
+          if (ctx.fx) ctx.fx.pause();
+          ctl.timers.forEach(clearTimeout); ctl.timers = [];
+          ctl.time = () => Tu * k / 1000;
+          if (o.onTick) o.onTick(Tu * k / 1000);
+        }));
+        return ctl;
+      }
+      ctl.timers.push(setTimeout(() => { if (!ctl.dead) hd.finish(false); }, Math.max(0, p.exitAt - Tu) * k));
+      ctl.timers.push(setTimeout(() => { if (!ctl.dead && o.onEnd) o.onEnd(); }, Math.max(0, p.total - Tu) * k + 80));
+      const tick = () => { if (ctl.dead) return; if (o.onTick) o.onTick(now()); ctl.raf = requestAnimationFrame(tick); };
+      tick();
+      return ctl;
+    });
+    return ctl;
+  }
+
   global.SeozCinemaFree = { registerMove, moves: () => ORDER.map(id => MOVES[id]), move: id => MOVES[id], movesByGroup, availability, EASE_LABELS,
-    PRESETS, presetOf, rolesOf, schedule, chunks };
+    PRESETS, presetOf, rolesOf, schedule, chunks, plan, runTimeline };
 })(window);
