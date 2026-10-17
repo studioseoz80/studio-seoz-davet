@@ -48,6 +48,7 @@
     "js/cinema/cinema-art.js",
     "js/cinema/concepts.js",
     "js/cinema/models/door.js",
+    "js/cinema/free.js",
     "js/modules/module-registry.js",
     "js/modules/location.js",
     "js/modules/music.js",
@@ -167,6 +168,7 @@
 <script src="js/cinema/cinema-art.js"></script>
 <script src="js/cinema/concepts.js"></script>
 <script src="js/cinema/models/door.js"></script>
+<script src="js/cinema/free.js"></script>
 <script src="js/modules/module-registry.js"></script>
 <script src="js/modules/location.js"></script>
 <script src="js/modules/music.js"></script>

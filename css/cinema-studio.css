@@ -103,3 +103,24 @@ body.cs-open{ overflow:hidden; }
   .cs-left, .cs-right{ overflow:visible; border:none; }
   .cs-head-actions .btn-outline{ display:none; }
 }
+
+/* ---------- A2.1 Animasyon Stüdyosu ---------- */
+.cs-sec h3 small{ font-weight:500; text-transform:none; letter-spacing:0; }
+.cs-wide{ width:100%; margin-bottom:8px; }
+.cs-layer2{ position:relative; }
+.cs-row-btns{ display:inline-flex; gap:2px; flex-shrink:0; }
+.cs-ico{ width:28px; height:28px; border:1px solid var(--line, #DCD5C6); background:#fff; border-radius:4px; cursor:pointer; font-size:11px; color:var(--ink, #23261F); padding:0; }
+.cs-ico:hover{ background:var(--paper-alt, #F0ECE2); }
+.cs-del{ color:var(--danger, #A3503F); }
+.cs-seq{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; counter-reset:seq; }
+.cs-seq li{ display:flex; align-items:center; gap:6px; padding:4px 6px; border-radius:6px; border:1px solid transparent; counter-increment:seq; }
+.cs-seq li::before{ content:counter(seq); width:18px; font-size:11px; font-weight:700; color:var(--ink-soft, #6B6A5E); text-align:center; }
+.cs-seq li.is-on{ border-color:var(--gold, #93703F); background:#FBF6EC; }
+.cs-seq-t{ flex:1; min-width:0; display:flex; flex-direction:column; text-align:left; background:none; border:none; padding:2px; cursor:pointer; font-family:inherit; color:inherit; }
+.cs-seq-t strong{ font-size:12.5px; }
+.cs-seq-t small{ font-size:11px; color:var(--ink-soft, #6B6A5E); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cs-note{ color:var(--gold, #93703F); font-weight:600; }
+.cs2 select[data-cs-addmove]{ margin-bottom:10px; font-weight:700; }
+.cs-acts{ display:flex; flex-direction:column; gap:10px; }
+.cs-act{ border:1px solid var(--line, #DCD5C6); border-radius:8px; padding:10px; background:#FDFBF7; }
+.cs-act-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12.5px; }

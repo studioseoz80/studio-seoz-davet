@@ -296,7 +296,7 @@
           ctx.fx.burst({ type: "confetti", x: p.x, y: p.y, count: 90, speed: 900, spread: 0.55, angle: -Math.PI / 2 + 0.5, size: 10, colors: ["#E94F6B", "#F7C548", "#4FB0E9", "#7BD389", "#FFFFFF"] });
           ctx.celebrate(200, 380, 1);
           ctx.retire(ctx.anim(ctx.L.decor, [{ opacity: 1 }, { opacity: 0, transform: "scale(1.4)" }], { d: 500 }), ctx.S.decor);
-          ctx.anim(ctx.S.frame, [{ transform: getComputedStyle(ctx.S.frame).transform }, { transform: getComputedStyle(ctx.S.frame).transform + " translateY(-4px)" }, { transform: getComputedStyle(ctx.S.frame).transform }], { d: 240, delay: 80 });
+          if (ctx.S.frame) ctx.anim(ctx.S.frame, [{ transform: getComputedStyle(ctx.S.frame).transform }, { transform: getComputedStyle(ctx.S.frame).transform + " translateY(-4px)" }, { transform: getComputedStyle(ctx.S.frame).transform }], { d: 240, delay: 80 });
           ctx.anim(ctx.cardWrap, [{ opacity: 0, transform: "translateZ(-40px) scale(.15) rotate(-8deg)" }, { opacity: 1, transform: "translateZ(60px) scale(1.12) rotate(3deg)", offset: 0.6 },
             { opacity: 1, transform: "translateZ(40px) scale(1) rotate(0)" }], { d: 900, delay: 150, e: ctx.E.out });
           await ctx.wait(1200);

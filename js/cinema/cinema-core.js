@@ -66,12 +66,20 @@
 
   /* ---------------- ayarlar ---------------- */
   function num(v, def, min, max) { v = Number(v); if (!isFinite(v)) v = def; return Math.max(min, Math.min(max, v)); }
+  /* A2 (serbest stüdyo): v:2 kayıtları bir uyarlayıcıdan geçer. Uyarlayıcı
+     ya hazır kurguyu (ör. kapı) A1 biçimine çevirir ya da kullanıcının
+     katmanlarından o kayda özel bir "serbest model" kurar (__free). */
+  let V2_ADAPTER = null;
+  function setV2Adapter(fn) { V2_ADAPTER = fn; }
+  function modelOf(c) { return (c && c.__free) || MODELS[c.model]; }
   function normalize(cfg) {
+    if (cfg && cfg.v === 2 && !cfg.__free && V2_ADAPTER) cfg = V2_ADAPTER(cfg);
     const c = Object.assign({}, DEFAULTS, cfg || {});
     c.brand = Object.assign({}, DEFAULTS.brand, (cfg && cfg.brand) || {});
     c.layers = Object.assign({}, (cfg && cfg.layers) || {});
-    if (!MODELS[c.model]) c.model = MODEL_ORDER[0] || "door";
-    const m = MODELS[c.model];
+    if (c.__free) { c.model = c.__free.id; c.scenario = c.__free.scenarios[0].id; }
+    else if (!MODELS[c.model]) c.model = MODEL_ORDER[0] || "door";
+    const m = modelOf(c);
     if (m && !m.scenarios.some(s => s.id === c.scenario)) c.scenario = m.scenarios[0].id;
     if (m && m.skins && !m.skins[c.skin]) c.skin = Object.keys(m.skins)[0];
     c.speed = num(c.speed, 1, 0.5, 2);
@@ -84,10 +92,10 @@
     if (c.accessory !== "none" && !ACCESSORIES[c.accessory]) c.accessory = "none";
     return c;
   }
-  function scenarioOf(c) { const m = MODELS[c.model]; return m.scenarios.find(s => s.id === c.scenario) || m.scenarios[0]; }
+  function scenarioOf(c) { const m = modelOf(c); return m.scenarios.find(s => s.id === c.scenario) || m.scenarios[0]; }
   function conceptOf(c) {
     if (c.concept === "none") return null;
-    if (c.concept === "auto") return CONCEPTS[scenarioOf(c).concept || MODELS[c.model].concept || "zarif"] || null;
+    if (c.concept === "auto") return CONCEPTS[scenarioOf(c).concept || modelOf(c).concept || "zarif"] || null;
     return CONCEPTS[c.concept] || null;
   }
 
@@ -206,7 +214,7 @@
     });
   }
   function prepareDark(cfg, failed) {
-    const m = MODELS[cfg.model], jobs = [];
+    const m = modelOf(cfg), jobs = [];
     if (m) m.slots.forEach(s => {
       const u = cfg.layers[s.id];
       if (!u || u.hidden || !u.src || failed[u.src]) return;
@@ -217,7 +225,7 @@
   }
 
   function sourcesOf(cfg, entry) {
-    const m = MODELS[cfg.model], out = [];
+    const m = modelOf(cfg), out = [];
     if (m) m.slots.forEach(s => {
       const u = cfg.layers[s.id];
       if (!u || u.hidden) return;
@@ -646,7 +654,7 @@
   }
 
   function makeCtx(doc, entry, cfg, overlay, st) {
-    const m = MODELS[cfg.model];
+    const m = modelOf(cfg);
     const skin = (m.skins && m.skins[cfg.skin]) || {};
     const pal = Object.assign({}, skin);
     if (cfg.brand.useColors) {
@@ -694,6 +702,8 @@
         const b = ctx.box[slotId], c = ctx.C[slotId];
         if (b && c) c.style.transformOrigin = `${fx - b.x}px ${fy - b.y}px`;
       },
+      // A2: açılış sırasında yeni bir dokunuş bekle ("Dokununca" adımları)
+      waitTap() { return new Promise(r => { st.tapWait = r; }); },
       // parçanın kendi şeklinde gölge (0 = yok, 1 = tam koyu); ışık tepkisi ayarıyla ölçeklenir
       shade(slotId, to, o) {
         const l = ctx.lit[slotId];
@@ -797,7 +807,7 @@
     const inBox = !!opts.container;
     const reduced = !opts.freeze && (opts.reduced != null ? opts.reduced : !!(global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches));
 
-    const overlay = h("div", "sc-overlay" + (inBox ? " sc-inbox" : "") + (cfg.lite ? " sc-lite" : ""));
+    const overlay = h("div", "sc-overlay" + (inBox ? " sc-inbox" : "") + (cfg.lite ? " sc-lite" : "") + (opts.freeze ? " sc-freeze" : ""));
     overlay.dataset.scModel = cfg.model; overlay.dataset.scScenario = cfg.scenario; overlay.dataset.scPhase = "loading";
     overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-label", "Davetiye açılışı");
     const backdrop = h("div", "sc-backdrop");
@@ -901,6 +911,7 @@
         Sound.unlock();
         if (phase === "attention" && tapResolve) { const r = tapResolve; tapResolve = null; r(); }
         else if (phase === "card") finish(false);
+        else if (phase === "opening" && st.tapWait) { const r = st.tapWait; st.tapWait = null; r(); }
         else if (phase === "opening" && st.skipToCard) st.skipToCard();
       });
       st.onKey = (e) => { if (e.key === "Escape") finish(true); };
@@ -1019,7 +1030,7 @@
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
     normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active,
-    preload, sourcesOf, layoutOf,
+    preload, sourcesOf, layoutOf, setV2Adapter, modelOf, applyLayout,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }
   };

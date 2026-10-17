@@ -78,3 +78,9 @@
 .sc-spin{ width:34px; height:34px; border-radius:50%; border:2px solid rgba(255,255,255,.18); border-top-color:rgba(255,255,255,.85); animation:scSpin 1s linear infinite; }
 @keyframes scSpin{ to{ transform:rotate(360deg) } }
 @media (prefers-reduced-motion: reduce){ .sc-spin{ animation-duration:2.4s; } }
+
+/* ---------- A2.1 serbest stüdyo ---------- */
+.sc-ph{ display:none; position:absolute; inset:0; align-items:center; justify-content:center; text-align:center; padding:8px; box-sizing:border-box;
+  border:2px dashed rgba(255,255,255,.55); border-radius:8px; color:rgba(255,255,255,.8); font:600 13px "Manrope",system-ui,sans-serif; background:rgba(255,255,255,.06); }
+.sc-freeze .sc-ph{ display:flex; }
+.sc-half, .sc-leak{ pointer-events:none; }
