@@ -44,6 +44,7 @@
           <option value="png" ${entry.type === "png" ? "selected" : ""}>3) Üstten Açılan Zarf + İç Kart</option>
           <option value="dual-wing" ${entry.type === "dual-wing" ? "selected" : ""}>4) Çift Kanat / Ortadan Açılan Zarf + İç Kart</option>
           <option value="video" ${entry.type === "video" ? "selected" : ""}>5) MP4 / WebM Video Giriş</option>
+          ${global.SeozCinema ? `<option value="cinema" ${entry.type === "cinema" ? "selected" : ""}>6) Sinematik Açılış (Açılış Stüdyosu)</option>` : ""}
         </select>
       </div>
 
@@ -335,6 +336,34 @@
           bodyEl,
           "Aynı zarf görseli otomatik olarak iki kanada bölünür; tıklanınca sol kanat sola, sağ kanat sağa doğru açılır ve kart ortada belirir. Ayrı bir sol/sağ görsel yüklemenize gerek yoktur."
         );
+        return;
+      }
+
+      // AÇILIŞ STÜDYOSU (A1): bütün ayarlar tam ekran stüdyoda yapılır;
+      // burada yalnızca özet, stüdyoyu açan düğme ve kart süresi durur.
+      if (entry.type === "cinema") {
+        const C = global.SeozCinema;
+        if (!entry.cinema || typeof entry.cinema !== "object") entry.cinema = { model: "door", layers: {} };
+        const n = C.normalize(entry.cinema), m = C.model(n.model), sc = C.scenarioOf(n);
+        const layers = entry.cinema.layers || {};
+        const up = m.slots.filter(sl => layers[sl.id] && layers[sl.id].src).length;
+        const warn = m.slots.filter(sl => layers[sl.id] && layers[sl.id].check && (layers[sl.id].check.warnings || []).length).length;
+        bodyEl.innerHTML = `
+          <div class="field" style="padding:12px;border:1px solid var(--line);background:#FBF6EC;">
+            <div style="font-weight:700;">${m.icon || "🎬"} ${m.label}</div>
+            <div style="font-size:.78rem;color:var(--ink-soft);margin-top:2px;" data-cinema-summary>${sc.label} · ${up}/${m.slots.length} katman PNG${warn ? ` · <span style="color:var(--danger);font-weight:700;">${warn} uyarı</span>` : ""}</div>
+          </div>
+          <button type="button" class="btn btn-gold" data-open-cinema-studio style="width:100%;">🎬 Açılış Stüdyosu'nu Aç</button>
+          <p style="font-size:.72rem;color:var(--ink-soft);margin-top:8px;">
+            Model, senaryo, katman PNG'leri, hizalama ve iç kart stüdyoda ayarlanır.
+            Yüklenmeyen katmanlarda kodla çizilmiş görünüm kullanılır.
+          </p>
+          ${durationFieldHTML()}
+        `;
+        bodyEl.querySelector("[data-open-cinema-studio]").addEventListener("click", () => {
+          global.SeozCinemaStudio.open(doc, { onChange: cb.onChange, onClose: () => renderBody() });
+        });
+        wireDurationAndSizeFields(bodyEl);
         return;
       }
 

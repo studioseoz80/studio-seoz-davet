@@ -42,6 +42,12 @@
     "js/core/qr-encoder.js",
     "js/fonts-library.js",
     "js/entry-scene.js",
+    // Açılış Stüdyosu (sinematik açılış)
+    "css/cinema.css",
+    "js/cinema/cinema-core.js",
+    "js/cinema/cinema-art.js",
+    "js/cinema/concepts.js",
+    "js/cinema/models/door.js",
     "js/modules/module-registry.js",
     "js/modules/location.js",
     "js/modules/music.js",
@@ -140,6 +146,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>${title} — Studio SEOZ</title>
 <link rel="stylesheet" href="css/canvas.css">
+<link rel="stylesheet" href="css/cinema.css">
 <style>html, body{ margin:0; min-height:100vh; background:#E9E4D8; }
 .seoz-view-outer{ min-height:100vh; min-height:100dvh; }</style>
 </head>
@@ -156,6 +163,10 @@
 <script src="js/core/qr-encoder.js"></script>
 <script src="js/fonts-library.js"></script>
 <script src="js/entry-scene.js"></script>
+<script src="js/cinema/cinema-core.js"></script>
+<script src="js/cinema/cinema-art.js"></script>
+<script src="js/cinema/concepts.js"></script>
+<script src="js/cinema/models/door.js"></script>
 <script src="js/modules/module-registry.js"></script>
 <script src="js/modules/location.js"></script>
 <script src="js/modules/music.js"></script>

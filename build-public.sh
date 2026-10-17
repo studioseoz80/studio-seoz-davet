@@ -24,12 +24,15 @@ cp view.html "$OUT/view.html"
 cp view.html "$OUT/index.html"
 
 cp css/canvas.css "$OUT/css/canvas.css"
+# Açılış Stüdyosu: sinematik açılış motoru (yalnızca görüntüleme kodu)
+cp css/cinema.css "$OUT/css/cinema.css"
 
 # Görüntüleme kodu: çekirdek, modüller ve üst düzey yardımcılar.
 # js/editor/ BİLEREK kopyalanmaz.
 cp -R js/core "$OUT/js/core"
 cp -R js/modules "$OUT/js/modules"
 cp js/*.js "$OUT/js/"
+cp -R js/cinema "$OUT/js/cinema"
 
 # Müşteri katılımcı paneli (panel.html#k=...). Veriye erişim gizli panel
 # anahtarıyla Supabase tarafında denetlenir; editör kodu içermez.

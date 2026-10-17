@@ -47,6 +47,9 @@
     // yalnızca animasyonu farklıdır, yükleme alanları ortaktır.
     if (entry.type === "dual-wing") return !!entry.pngSrc;
     if (entry.type === "video") return !!entry.videoSrc;
+    // AÇILIŞ STÜDYOSU (A1): Sinematik Açılış görsel yüklenmeden de çalışır —
+    // yüklenmeyen katmanlarda kodla çizilmiş görünüm kullanılır.
+    if (entry.type === "cinema") return !!(global.SeozCinema && global.SeozCinema.models().length);
     return false;
   }
 
@@ -375,11 +378,19 @@
 
   function play(doc, onFinish) {
     removeOverlay();
+    if (global.SeozCinema) global.SeozCinema.stop();
     const entry = doc.entry || { type: "none" };
     const done = onFinish || function () {};
 
     if (!hasUsableEntry(entry)) {
       done();
+      return;
+    }
+
+    // Sinematik Açılış kendi motoruyla oynar (js/cinema/). Diğer 5 giriş
+    // türü aşağıda, eskisiyle birebir aynı kodla çalışmaya devam eder.
+    if (entry.type === "cinema") {
+      global.SeozCinema.play(doc, done);
       return;
     }
 
