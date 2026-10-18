@@ -480,10 +480,12 @@
       const ov = document.createElement("div");
       ov.className = "cs-lib"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Kurgu kütüphanesi");
       const layersTxt = () => cin.layers.filter(l => !l.backdrop).length;
+      const favOf = k => !!(doc.theme && Array.isArray(doc.theme.kurgu) && doc.theme.kurgu.includes(k.id));
       function card(k) {
         const need = L5.needCount(k), opt = k.roles.length - need, ok = layersTxt() >= need;
-        return `<article class="cs-lib-card${ok ? "" : " is-off"}">
-          <header><strong>${esc(k.label)}</strong><span class="cs-lib-tag">${esc(k.group)}</span></header>
+        const fav = doc.theme && Array.isArray(doc.theme.kurgu) && doc.theme.kurgu.includes(k.id);
+        return `<article class="cs-lib-card${ok ? "" : " is-off"}${fav ? " is-fav" : ""}">
+          <header><strong>${esc(k.label)}</strong><span class="cs-lib-tag">${fav ? "★ Paketinize uygun" : esc(k.group)}</span></header>
           <p>${esc(k.desc)}</p>
           <small>${need} görsel${opt ? ` + ${opt} isteğe bağlı` : ""} · ${k.acts.length} adım</small>
           <button type="button" class="btn ${ok ? "btn-gold" : "btn-outline"}" data-lib-pick="${k.id}" ${ok ? "" : "disabled"}>${ok ? "Seç" : `En az ${need} görsel ekleyin`}</button>
@@ -514,7 +516,7 @@
           <div class="cs-seg" role="tablist"><button type="button" class="${cur === "hazir" ? "is-on" : ""}" data-lib-tab="hazir">Hazır kurgular (${L5.BUILTIN.length})</button>
             <button type="button" class="${cur === "kayitli" ? "is-on" : ""}" data-lib-tab="kayitli">Kayıtlarım (${saved.length})</button></div>
           <div class="cs-lib-body">${pending ? roleStep(pending.k)
-            : cur === "hazir" ? `<div class="cs-lib-grid">${L5.BUILTIN.map(card).join("")}</div>`
+            : cur === "hazir" ? `<div class="cs-lib-grid">${L5.BUILTIN.slice().sort((a, b) => (favOf(b) ? 1 : 0) - (favOf(a) ? 1 : 0)).map(card).join("")}</div>`
             : (saved.length ? saved.map(savedRow).join("") : `<p class="cs-hint">Henüz kayıtlı kurgunuz yok. Bir açılış kurduktan sonra “Kaydet” ile buraya ekleyebilir, “İçe aktar” ile başka bilgisayardan getirebilirsiniz.</p>`)}
           </div></div>`;
       }

@@ -270,6 +270,18 @@
     const hint = el("div", "ix-hint", null, esc(s.title || HINT[kind]));
     try { BUILD[kind](root, s, live); } catch (e) { console.error("[Studio SEOZ] Etkileşim hatası:", e); }
     if (kind !== "konfeti") root.appendChild(hint);
+    // klavye: Enter / Boşluk ile aynı sonuç (kazı-kazan ve mum için kısayol)
+    if (live && ["konfeti", "dilek", "balon"].indexOf(kind) < 0) {
+      root.tabIndex = 0; root.setAttribute("role", "button"); root.setAttribute("aria-label", s.title || HINT[kind]);
+      root.addEventListener("keydown", e => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault(); if (root.classList.contains("is-done")) return;
+        if (kind === "kazi-kazan") { const cv = root.querySelector(".ix-scratch"); if (cv) cv.classList.add("is-gone"); reveal(root, s); }
+        else if (kind === "mum") { const c = root.querySelector(".ix-cake"); if (c) c.classList.add("is-out"); setTimeout(() => reveal(root, s), 400); }
+        else if (kind === "kapi-cal") { for (let i = 0; i < 3; i++) setTimeout(() => root.click(), i * 260); }
+        else root.click();
+      });
+    }
     if (!live) root.appendChild(el("span", "ix-edit-badge", null, "✦ " + (KINDS.find(k => k[0] === kind) || [0, ""])[1]));
     return root;
   }

@@ -393,6 +393,8 @@
             <label class="ts-row">Açı <input type="range" min="0" max="360" step="5" data-ts-b="angle" value="${num(b.angle, 180)}"></label>` : ""}
           ${bt === "radial" ? `<div class="ts-grid2"><label class="ts-color">Orta<input type="color" data-ts-b="inner" value="${esc(b.inner || "#FFFFFF")}"></label><label class="ts-color">Kenar<input type="color" data-ts-b="outer" value="${esc(b.outer || "#DDDDDD")}"></label></div>` : ""}
         </section>
+        <section class="ts-sec"><label class="ts-check"><input type="checkbox" data-ts-tilt ${t.bg.tilt ? "checked" : ""}> Telefon eğimiyle derinlik (derinliği olan katmanlar telefonu eğince kayar)</label>
+          <p class="ts-hint">iPhone'da misafir köşedeki “Eğerek derinlik” düğmesine bir kez dokunarak izin verir; varsayılan derinlik kaydırmaya bağlıdır.</p></section>
         <section class="ts-sec"><h4>Sahne katmanları <small>(${t.bg.layers.length})</small></h4>
           <div class="ts-apply"><button type="button" class="btn btn-gold" data-ts-artpick>+ Süsleme ekle</button><button type="button" class="btn btn-outline" data-ts-upload>+ PNG yükle</button></div>
           <div class="ts-bls">${t.bg.layers.map(bgLayerRow).join("") || `<p class="ts-hint">Henüz katman yok. Dal, bulut, balon gibi süslemeler ya da kendi PNG'nizi ekleyin.</p>`}</div>
@@ -547,6 +549,7 @@
     panel.addEventListener("change", (e) => {
       const tg = e.target;
       if (tg.dataset.tsOpt) { state.opts[tg.dataset.tsOpt] = tg.dataset.tsOpt === "noInteractive" ? !tg.checked : tg.checked; return; }
+      if (tg.matches("[data-ts-tilt]")) { ensure().bg.tilt = tg.checked; return save(); }
       if (tg.dataset.tsFont) { ensure().fonts[tg.dataset.tsFont] = tg.value; if (global.SeozFonts) SeozFonts.markFontUsed(tg.value); return save(); }
       const t = th(); if (!t) return;
       if (tg.matches("[data-ts-base]")) {

@@ -67,6 +67,7 @@
     img.alt = ""; img.draggable = false;
     if (L.art) img.src = artURL(L.art, L.color, L.color2);
     else if (L.src) {
+      img.loading = "lazy"; img.decoding = "async";      // sayfanın altındaki zemin görselleri ekrana yaklaşınca yüklenir
       img.dataset.srcRef = L.src;
       if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(L.src).then(u => { if (u) img.src = u; });
       else img.src = L.src;
@@ -223,7 +224,7 @@
       }
       // derinlik (kaydırınca farklı hızda kayma) + parçacık tuvalini görünen bölgeye taşıma
       const deep = bls.filter(n => Number(n.dataset.depth) > 0);
-      let ticking = false;
+      let ticking = false, tiltX = 0, tiltY = 0;
       function update() {
         ticking = false;
         const r = canvasEl.getBoundingClientRect();
@@ -232,7 +233,7 @@
         const top = Math.max(0, -r.top / scale), hgt = Math.min(canvasEl.offsetHeight - top, vh / scale);
         if (!rm) deep.forEach(n => {
           const d = Number(n.dataset.depth), cy = n.offsetTop + n.offsetHeight / 2, mid = top + (vh / scale) / 2;
-          n.style.transform = `translate3d(0, ${((cy - mid) * d * 0.35).toFixed(1)}px, 0)`;
+          n.style.transform = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
         });
         if (pc && hgt > 0) {
           pc.style.top = top + "px"; pc.style.height = Math.max(1, hgt) + "px";
@@ -248,6 +249,17 @@
         requestAnimationFrame(update); setTimeout(update, 300);
       }
       if (parts) st.cleanups.push(() => parts.destroy());
+      // telefon eğimiyle derinlik (isteğe bağlı): iPhone izin istediği için bir dokunuşla açılır
+      if (bg.tilt && deep.length && mode === "view" && !rm && global.DeviceOrientationEvent) {
+        const onTilt = e => { tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 30)); tiltY = Math.max(-1, Math.min(1, ((e.beta || 0) - 40) / 30)); onScroll(); };
+        const start = () => { global.addEventListener("deviceorientation", onTilt); st.cleanups.push(() => global.removeEventListener("deviceorientation", onTilt)); };
+        if (typeof DeviceOrientationEvent.requestPermission === "function") {
+          const btn = el("button", "th-tilt-btn"); btn.type = "button"; btn.textContent = "📱 Eğerek derinlik";
+          btn.addEventListener("click", () => { DeviceOrientationEvent.requestPermission().then(r => { if (r === "granted") start(); }).catch(() => {}).finally(() => btn.remove()); });
+          document.body.appendChild(btn); st.cleanups.push(() => btn.remove());
+        } else start();
+        if (!(deep.length || pc)) { global.addEventListener("scroll", onScroll, { passive: true, capture: true }); }
+      }
       st.particles = parts;
     }
 
