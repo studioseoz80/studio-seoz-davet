@@ -168,7 +168,7 @@
     try { const v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
   }
   function writeSaved(list) { localStorage.setItem(KEY, JSON.stringify(list)); }
-  const SETTING_KEYS = ["speed", "depth", "intensity", "sound", "start", "lite", "hintText", "cardMode", "cardTitle", "cardSubtitle", "concept", "brand", "exitStyle", "exitDuration"];
+  const SETTING_KEYS = ["speed", "depth", "intensity", "sound", "start", "lite", "hintText", "cardMode", "cardTitle", "cardSubtitle", "cardSize", "concept", "brand", "exitStyle", "exitDuration"];
   function snapshot(cin, name) {
     const settings = {}; SETTING_KEYS.forEach(k => { if (cin[k] !== undefined) settings[k] = clone(cin[k]); });
     return { id: uid("K"), name: name || "Kurgum", createdAt: new Date().toISOString(),

@@ -47,7 +47,7 @@
       });
     }
     const keep = {};
-    ["speed", "depth", "intensity", "sound", "start", "lite", "hintText", "cardMode", "cardTitle", "cardSubtitle", "cardCheck", "skin", "brand"].forEach(k => { if (old[k] !== undefined) keep[k] = old[k]; });
+    ["speed", "depth", "intensity", "sound", "start", "lite", "hintText", "cardMode", "cardTitle", "cardSubtitle", "cardSize", "cardCheck", "skin", "brand"].forEach(k => { if (old[k] !== undefined) keep[k] = old[k]; });
     entry.cinema = Object.assign(keep, { v: 2, layers, actions: [],
       preset: old.model === "door" && old.scenario && layers.length ? { id: "door:" + old.scenario, roles, artFill: false } : null });
     return entry.cinema;
@@ -194,6 +194,7 @@
           <label class="cs-row"><span>Kart</span><select data-cs-opt="cardMode">
             <option value="auto" ${n.cardMode === "auto" ? "selected" : ""}>Otomatik</option><option value="image" ${n.cardMode === "image" ? "selected" : ""}>Yüklenen görsel</option>
             <option value="title" ${n.cardMode === "title" ? "selected" : ""}>Yazılı kart</option><option value="none" ${n.cardMode === "none" ? "selected" : ""}>Kart yok</option></select></label>
+          <label class="cs-row"><span>Kart boyutu</span><input type="range" min="60" max="133" step="1" data-cs-opt="cardSize" value="${Number(n.cardSize) || 100}" aria-label="Kart boyutu"><b data-cs-cardsize>%${Number(n.cardSize) || 100}</b></label>
           <label class="cs-row cs-row-col"><span>Yazılı kart başlığı</span><input type="text" maxlength="60" data-cs-opt="cardTitle" placeholder="${esc((doc.meta && doc.meta.title) || "")}" value="${esc(n.cardTitle)}"></label>
           <label class="cs-row"><span>Ekranda kalma</span><select data-cs-hold>
             ${[["3", "3 sn"], ["5", "5 sn"], ["8", "8 sn"], ["10", "10 sn"], ["15", "15 sn"], ["tap", "Dokunana kadar"]].map(([v, l]) => `<option value="${v}" ${String(entry.cardDisplayDuration != null ? entry.cardDisplayDuration : 10) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
@@ -811,6 +812,7 @@
     leftEl.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-cs-sel][role=button]")) { e.preventDefault(); e.target.click(); } });
     leftEl.addEventListener("input", (e) => {
       const k = e.target.dataset.csOpt;
+      if (k === "cardSize") { const o = leftEl.querySelector("[data-cs-cardsize]"); if (o) o.textContent = "%" + e.target.value; return; }
       if (k && e.target.type === "range") { cin[k] = Number(e.target.value); const o = leftEl.querySelector(`[data-cs-out="${k}"]`); if (o) o.textContent = r1(cin[k]) + "×"; }
     });
     leftEl.addEventListener("change", (e) => {
@@ -831,7 +833,7 @@
       const k = tg.dataset.csOpt; if (!k) return;
       cin[k] = tg.type === "checkbox" ? tg.checked : tg.type === "range" ? Number(tg.value) : tg.value;
       save(); renderSub(); renderTimeline();
-      if (["depth", "cardMode", "cardTitle", "lite"].includes(k)) rebuildStage();
+      if (["depth", "cardMode", "cardTitle", "cardSize", "lite"].includes(k)) rebuildStage();
     });
     function readOrigin() {
       const ox = Number(rightEl.querySelector('[data-cs-l="ox"]').value), oy = Number(rightEl.querySelector('[data-cs-l="oy"]').value);

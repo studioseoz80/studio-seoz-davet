@@ -41,7 +41,7 @@
     v: 1,
     model: "door", scenario: "", skin: "", concept: "auto", accessory: "none", business: "",
     speed: 1, depth: 1, intensity: 1, sound: true, start: "tap", lite: false,
-    cardMode: "auto", cardTitle: "", cardSubtitle: "",
+    cardMode: "auto", cardTitle: "", cardSubtitle: "", cardSize: 100,
     hintText: "Açmak için dokunun",
     brand: { useColors: false, primary: "#7A1F2B", secondary: "#C9A45C", logo: "", text: "" },
     layers: {}
@@ -76,6 +76,7 @@
     if (cfg && cfg.v === 2 && !cfg.__free && V2_ADAPTER) cfg = V2_ADAPTER(cfg);
     const c = Object.assign({}, DEFAULTS, cfg || {});
     c.brand = Object.assign({}, DEFAULTS.brand, (cfg && cfg.brand) || {});
+    c.cardSize = num(c.cardSize, 100, 60, 133);           // iç kart boyutu (% · 100 = 300×520)
     c.layers = Object.assign({}, (cfg && cfg.layers) || {});
     if (c.__free) { c.model = c.__free.id; c.scenario = c.__free.scenarios[0].id; }
     else if (!MODELS[c.model]) c.model = MODEL_ORDER[0] || "door";
@@ -517,6 +518,7 @@
     }
     wrap.appendChild(card);
     ctx.cardEl = card;
+    if (c.cardSize && c.cardSize !== 100) wrap.style.scale = String(c.cardSize / 100);
     return wrap;
   }
 
