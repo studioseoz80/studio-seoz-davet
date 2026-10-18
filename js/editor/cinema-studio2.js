@@ -94,6 +94,7 @@
     const leftEl = $("[data-cs-left]"), rightEl = $("[data-cs-right]"), stageEl = $("[data-cs-stage]"), areaEl = $("[data-cs-area]");
 
     const layerById = id => cin.layers.find(l => l.id === id) || null;
+    const L5 = global.SeozCinemaLibrary || null;
     const presetOn = () => !!(cin.preset && F.presetOf(cin.preset.id));
     function save() { if (cb.onChange) cb.onChange(); }
     function norm() { return C.normalize(cin); }
@@ -134,8 +135,17 @@
           <p class="cs-budget" data-cs-budget></p>
         </section>
         <section class="cs-sec" data-cs-seqsec>${seqHTML()}</section>
+        <section class="cs-sec cs-libsec">
+          <h3>Kurgu kütüphanesi</h3>
+          ${cin.kurgu && L5 && L5.builtin(cin.kurgu) ? `<p class="cs-hint">Uygulanan: <strong>${esc(L5.builtin(cin.kurgu).label)}</strong> — hareketleri dilediğiniz gibi değiştirebilirsiniz.</p>` : ""}
+          <button type="button" class="btn btn-gold cs-wide" data-cs-lib>📚 Hazır kurgular ve kayıtlarım</button>
+          <div class="cs-grid2">
+            <button type="button" class="btn btn-outline" data-cs-lib-save ${cin.actions.length || cin.preset ? "" : "disabled"}>💾 Kaydet</button>
+            <button type="button" class="btn btn-outline" data-cs-lib-import>⬆ İçe aktar</button>
+          </div>
+        </section>
         <section class="cs-sec">
-          <h3>Hazır kurgu (isteğe bağlı)</h3>
+          <h3>Kapı kurgusu (A1, rollerle)</h3>
           <select data-cs-preset>
             <option value="">Yok — kendi hareketlerim</option>
             ${F.PRESETS.map(p => `<option value="${p.id}" ${pre && pre.id === p.id ? "selected" : ""}>${esc(p.label)}</option>`).join("")}
@@ -155,6 +165,26 @@
           <label class="cs-check"><input type="checkbox" data-cs-opt="sound" ${n.sound ? "checked" : ""}> Ses efektleri (dokunuştan sonra çalar)</label>
           <label class="cs-check"><input type="checkbox" data-cs-opt="lite" ${n.lite ? "checked" : ""}> Hafif mod</label>
           <label class="cs-row cs-row-col"><span>İpucu yazısı</span><input type="text" maxlength="40" data-cs-opt="hintText" value="${esc(n.hintText)}"></label>
+        </section>
+        <section class="cs-sec">
+          <h3>Özel gün konsepti</h3>
+          <select data-cs-opt="concept" aria-label="Özel gün konsepti">
+            <option value="none" ${!cin.concept || cin.concept === "none" || cin.concept === "auto" ? "selected" : ""}>Yok</option>
+            ${["Atmosfer", "Özel Gün"].map(g => `<optgroup label="${g}">${C.concepts().filter(c => c.group === g).map(c => `<option value="${c.id}" ${cin.concept === c.id ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</optgroup>`).join("")}
+          </select>
+          <p class="cs-hint">Bekleme sırasında sahnede süzülen ortam efekti (kar, yaprak, ışıltı…). Hareketlerinize ek olarak oynar.</p>
+        </section>
+        <section class="cs-sec">
+          <h3>Marka</h3>
+          <label class="cs-check"><input type="checkbox" data-cs-brand="useColors" ${cin.brand && cin.brand.useColors ? "checked" : ""}> Marka renklerini kullan</label>
+          <div class="cs-grid2">
+            <label>Ana renk<input type="color" data-cs-brand="primary" value="${esc((cin.brand && cin.brand.primary) || "#7A1F2B")}"></label>
+            <label>Vurgu rengi<input type="color" data-cs-brand="secondary" value="${esc((cin.brand && cin.brand.secondary) || "#C9A45C")}"></label>
+          </div>
+          <label class="cs-row cs-row-col"><span>İşletme / çift adı (monogram)</span><input type="text" maxlength="40" data-cs-brand="text" value="${esc((cin.brand && cin.brand.text) || "")}"></label>
+          <div class="cs-up"><button type="button" class="btn btn-outline" data-cs-logo>${cin.brand && cin.brand.logo ? "Logoyu değiştir" : "Logo yükle"}</button>
+            ${cin.brand && cin.brand.logo ? `<button type="button" class="btn-danger-text" data-cs-logo-del>Kaldır</button>` : ""}</div>
+          <p class="cs-hint">Logo ve renkler yazılı iç kartta kullanılır.</p>
         </section>
         <section class="cs-sec">
           <h3>İç kart</h3>
@@ -413,6 +443,120 @@
         } catch (err) { alert(err.message || "Görsel yüklenemedi."); } finally { busy(false); }
       });
     }
+    async function uploadLogo(f) {
+      busy(true);
+      try { const res = await process(f); cin.brand = Object.assign({ useColors: false, primary: "#7A1F2B", secondary: "#C9A45C", text: "" }, cin.brand || {}, { logo: res.ref }); save(); refreshAll(); }
+      catch (err) { alert(err.message || "Logo yüklenemedi."); } finally { busy(false); }
+    }
+
+    /* ---------- A2.5 · KURGU KÜTÜPHANESİ ---------- */
+    function download(blob, name) {
+      const url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+    const fname = s => String(s || "kurgu").replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ\-_]+/gi, "-").replace(/^-+|-+$/g, "") || "kurgu";
+    function saveKurgu() {
+      if (!L5) return;
+      const name = prompt("Kurgunun adı:", (doc.meta && doc.meta.title ? doc.meta.title + " açılışı" : "Kurgum"));
+      if (name == null) return;
+      try { L5.save(cin, name.trim() || "Kurgum"); toast("Kurgu bu bilgisayara kaydedildi"); }
+      catch (err) { alert("Kaydedilemedi (tarayıcı depolama alanı dolu olabilir)."); }
+    }
+    function importKurgu() {
+      if (!L5) return;
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = ".json,.zip,application/json,application/zip"; inp.style.display = "none";
+      inp.addEventListener("change", async () => {
+        const f = inp.files && inp.files[0]; inp.remove(); if (!f) return;
+        busy(true, "Kurgu içe aktarılıyor…");
+        try { const k = await L5.importFile(f); busy(false); toast("İçe aktarıldı: " + k.name); openLibrary("kayitli"); }
+        catch (err) { busy(false); alert(err.message || "İçe aktarılamadı."); }
+      });
+      root.appendChild(inp); inp.click();
+    }
+    function openLibrary(tab) {
+      if (!L5) return;
+      let cur = tab || "hazir", pending = null;
+      const ov = document.createElement("div");
+      ov.className = "cs-lib"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Kurgu kütüphanesi");
+      const layersTxt = () => cin.layers.filter(l => !l.backdrop).length;
+      function card(k) {
+        const need = L5.needCount(k), opt = k.roles.length - need, ok = layersTxt() >= need;
+        return `<article class="cs-lib-card${ok ? "" : " is-off"}">
+          <header><strong>${esc(k.label)}</strong><span class="cs-lib-tag">${esc(k.group)}</span></header>
+          <p>${esc(k.desc)}</p>
+          <small>${need} görsel${opt ? ` + ${opt} isteğe bağlı` : ""} · ${k.acts.length} adım</small>
+          <button type="button" class="btn ${ok ? "btn-gold" : "btn-outline"}" data-lib-pick="${k.id}" ${ok ? "" : "disabled"}>${ok ? "Seç" : `En az ${need} görsel ekleyin`}</button>
+        </article>`;
+      }
+      function savedRow(k) {
+        const d = new Date(k.createdAt);
+        return `<div class="cs-lib-row"><div><strong>${esc(k.name)}</strong><small>${(k.data.layers || []).length} katman · ${(k.data.actions || []).length} hareket · ${isNaN(d) ? "" : d.toLocaleDateString("tr-TR")}</small></div>
+          <span class="cs-lib-acts"><button type="button" class="btn btn-gold" data-lib-use="${k.id}">Uygula</button>
+          <button type="button" class="btn btn-outline" data-lib-json="${k.id}" title="Yalnız kurgu (.json)">JSON</button>
+          <button type="button" class="btn btn-outline" data-lib-zip="${k.id}" title="Görsellerle birlikte (.zip)">ZIP</button>
+          <button type="button" class="cs-ico cs-del" data-lib-del="${k.id}" aria-label="${esc(k.name)} sil">✕</button></span></div>`;
+      }
+      function roleStep(k) {
+        const map = pending.map;
+        const opts = sel => `<option value="">— Kullanma —</option>${cin.layers.filter(l => !l.backdrop).map(l => `<option value="${l.id}" ${sel === l.id ? "selected" : ""}>${esc(l.name)}</option>`).join("")}`;
+        const miss = L5.missing(k, map);
+        return `<div class="cs-lib-roles"><h4>${esc(k.label)} · roller</h4><p class="cs-hint">Her role katmanlarınızdan birini seçin. Yıldızlı roller gerekli.</p>
+          ${k.roles.map(r => `<label class="cs-row cs-row-col"><span>${esc(r.label)}${r.need ? " *" : ""}${r.hint ? ` <small>· ${esc(r.hint)}</small>` : ""}</span><select data-lib-role="${r.key}">${opts(map[r.key])}</select></label>`).join("")}
+          ${cin.actions.length || cin.preset ? `<p class="cs-hint cs-note">Mevcut ${cin.actions.length} hareket bu kurguyla değiştirilecek. Katmanlarınız ve yerleşimleri olduğu gibi kalır.</p>` : ""}
+          <div class="cs-grid2"><button type="button" class="btn btn-outline" data-lib-back>← Geri</button>
+          <button type="button" class="btn btn-gold" data-lib-apply ${miss.length ? "disabled" : ""}>Uygula</button></div></div>`;
+      }
+      function draw() {
+        const saved = L5.readSaved();
+        ov.innerHTML = `<div class="cs-lib-box">
+          <header class="cs-lib-head"><h3>Kurgu kütüphanesi</h3><button type="button" class="cs-ico" data-lib-close aria-label="Kapat">✕</button></header>
+          <div class="cs-seg" role="tablist"><button type="button" class="${cur === "hazir" ? "is-on" : ""}" data-lib-tab="hazir">Hazır kurgular (${L5.BUILTIN.length})</button>
+            <button type="button" class="${cur === "kayitli" ? "is-on" : ""}" data-lib-tab="kayitli">Kayıtlarım (${saved.length})</button></div>
+          <div class="cs-lib-body">${pending ? roleStep(pending.k)
+            : cur === "hazir" ? `<div class="cs-lib-grid">${L5.BUILTIN.map(card).join("")}</div>`
+            : (saved.length ? saved.map(savedRow).join("") : `<p class="cs-hint">Henüz kayıtlı kurgunuz yok. Bir açılış kurduktan sonra “Kaydet” ile buraya ekleyebilir, “İçe aktar” ile başka bilgisayardan getirebilirsiniz.</p>`)}
+          </div></div>`;
+      }
+      function closeLib() { ov.remove(); }
+      ov.addEventListener("click", async (e) => {
+        if (e.target === ov) return closeLib();
+        const b = e.target.closest("button"); if (!b) return;
+        const d = b.dataset;
+        if (d.libClose != null) return closeLib();
+        if (d.libTab) { cur = d.libTab; pending = null; return draw(); }
+        if (d.libBack != null) { pending = null; return draw(); }
+        if (d.libPick) { const k = L5.builtin(d.libPick); pending = { k, map: L5.autoRoles(k, cin.layers) }; return draw(); }
+        if (d.libApply != null) {
+          L5.applyBuiltin(cin, pending.k, pending.map);
+          state.selAct = null; save(); closeLib(); refreshAll(); toast("Kurgu uygulandı: " + pending.k.label); return;
+        }
+        const saved = L5.readSaved();
+        const k = saved.find(x => x.id === (d.libUse || d.libJson || d.libZip || d.libDel));
+        if (!k) return;
+        if (d.libUse) {
+          if ((cin.layers.length || cin.actions.length) && !confirm(`“${k.name}” uygulanınca bu açılıştaki katmanlar ve hareketler kayıttakilerle değiştirilecek. Devam edilsin mi?`)) return;
+          L5.applySaved(cin, k); state.sel = cin.layers.length ? cin.layers[cin.layers.length - 1].id : null; state.selAct = null;
+          save(); closeLib(); refreshAll(); toast("Kayıtlı kurgu uygulandı"); return;
+        }
+        if (d.libDel) { if (confirm(`“${k.name}” silinsin mi?`)) { L5.remove(k.id); draw(); } return; }
+        try {
+          busy(true, "Hazırlanıyor…");
+          const r = await L5.exportBlob(k, !!d.libZip);
+          download(r.blob, fname(k.name) + "." + r.ext);
+          toast(d.libZip ? `ZIP indirildi (${r.images} görsel)` : "Kurgu dosyası indirildi");
+        } catch (err) { alert(err.message || "Dışa aktarılamadı."); } finally { busy(false); }
+      });
+      ov.addEventListener("change", (e) => {
+        if (e.target.dataset.libRole && pending) {
+          if (e.target.value) pending.map[e.target.dataset.libRole] = e.target.value; else delete pending.map[e.target.dataset.libRole];
+          draw();
+        }
+      });
+      draw(); root.appendChild(ov);
+      const first = ov.querySelector("button"); if (first) first.focus();
+    }
+
     async function uploadCard(f) {
       busy(true);
       try { const res = await S1.processLayerFile(f, null, { id: "card", backdrop: true, guide: { alpha: "no" } }, { guideSize: [1, 1] }); entry.cardSrc = res.ref; cin.cardCheck = { warnings: res.warnings, notes: res.notes }; save(); refreshAll(); }
@@ -637,6 +781,11 @@
       const t = e.target.closest("button, [data-cs-sel]"); if (!t || !root.contains(t)) return;
       const d = t.dataset;
       if (d.csClose != null) return close();
+      if (d.csLib != null) return openLibrary();
+      if (d.csLibSave != null) return saveKurgu();
+      if (d.csLibImport != null) return importKurgu();
+      if (d.csLogo != null) return pick(false, ([f]) => uploadLogo(f));
+      if (d.csLogoDel != null) { cin.brand = Object.assign({}, cin.brand, { logo: "" }); save(); return refreshAll(); }
       if (d.csAdd != null) return pick(true, addFiles);
       if (d.csLup) { e.stopPropagation(); return moveLayer(d.csLup, +1); }
       if (d.csLdown) { e.stopPropagation(); return moveLayer(d.csLdown, -1); }
@@ -672,6 +821,11 @@
       if (tg.matches("[data-cs-role]")) { cin.preset.roles = cin.preset.roles || {}; if (tg.value) cin.preset.roles[tg.dataset.csRole] = tg.value; else delete cin.preset.roles[tg.dataset.csRole]; save(); return rebuildStage(); }
       if (tg.matches("[data-cs-hold]")) { entry.cardDisplayDuration = tg.value === "tap" ? "tap" : Number(tg.value); save(); return renderTimeline(); }
       if (tg.matches("[data-cs-artfill]")) { cin.preset.artFill = tg.checked; save(); return rebuildStage(); }
+      if (tg.dataset.csBrand) {
+        cin.brand = Object.assign({ useColors: false, primary: "#7A1F2B", secondary: "#C9A45C", logo: "", text: "" }, cin.brand || {});
+        cin.brand[tg.dataset.csBrand] = tg.type === "checkbox" ? tg.checked : tg.value;
+        save(); renderSub(); return;
+      }
       const k = tg.dataset.csOpt; if (!k) return;
       cin[k] = tg.type === "checkbox" ? tg.checked : tg.type === "range" ? Number(tg.value) : tg.value;
       save(); renderSub(); renderTimeline();
