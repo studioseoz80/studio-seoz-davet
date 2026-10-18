@@ -431,6 +431,8 @@
           <p class="ts-hint">İçerik korunur; yalnızca konumlar değişir: yazılar ve modüller bölümlere göre (giriş, hikâye, detaylar, program, konum, katılım, galeri, kapanış) alt alta, ortalanmış dizilir. Masaüstüne özel konumlar sıfırlanır. “Paketi geri al” ile geri alınır.</p></section>
         <section class="ts-sec"><h4>Kaydırınca canlanma</h4>
           <p class="ts-hint">${withRv} / ${doc.layers.length} katmanda açık. Tek tek ayar için editörde katmanı seçip “Görünüm” bölümünü kullanın.</p>
+          <label class="ts-row">Süre (sn) <input type="number" min="0.3" max="4" step="0.1" data-ts-rvdur value="${(() => { const l = doc.layers.find(x => x.reveal && x.reveal.type); return l ? (Number(l.reveal.duration) || 0.9) : 0.9; })()}"></label>
+          <small class="ts-hint" style="display:block;margin:-4px 0 6px;">Sayı büyüdükçe katmanlar daha yavaş belirir (ör. 1.5–2).</small>
           <label class="ts-row">Biçim <select data-ts-rvtype>${T.REVEALS.filter(r => r[0]).map(([a, b]) => `<option value="${a}">${b}</option>`).join("")}</select></label>
           <div class="ts-apply"><button type="button" class="btn btn-outline" data-ts-rvall>Bütün katmanlara uygula</button><button type="button" class="btn btn-outline" data-ts-rvnone>Hepsinden kaldır</button></div></section>
         <section class="ts-sec"><h4>İç zemini kaldır</h4><button type="button" class="btn btn-outline ts-del" data-ts-clear ${doc.theme ? "" : "disabled"}>İç zemin ayarlarını sil</button>
@@ -513,7 +515,7 @@
         const tpl = P.TEMPLATES[panel.querySelector("[data-ts-tpl]").value];
         layoutExisting(doc, tpl, measure); save(); return toast("Katmanlar şablona göre dizildi");
       }
-      if (d.tsRvall != null) { const ty = panel.querySelector("[data-ts-rvtype]").value; doc.layers.forEach(l => { l.reveal = { type: ty, delay: 0, duration: 0.9 }; }); renderPanel(); save(); return toast("Kaydırınca canlanma eklendi"); }
+      if (d.tsRvall != null) { const ty = panel.querySelector("[data-ts-rvtype]").value, du = Math.max(0.3, Math.min(4, Number(panel.querySelector("[data-ts-rvdur]").value) || 0.9)); doc.layers.forEach(l => { l.reveal = { type: ty, delay: (l.reveal && l.reveal.delay) || 0, duration: du }; }); renderPanel(); save(); return toast("Kaydırınca canlanma eklendi"); }
       if (d.tsRvnone != null) { doc.layers.forEach(l => { delete l.reveal; }); renderPanel(); save(); return toast("Kaydırınca canlanma kaldırıldı"); }
       if (d.tsClear != null) { if (!confirm("İç zemin ayarları silinsin mi?")) return; snapshot(); delete doc.theme; state.selBg = null; renderPanel(); return save(); }
     });
