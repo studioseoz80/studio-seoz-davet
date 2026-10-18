@@ -151,6 +151,10 @@
       wrap.appendChild(host);
     }
 
+    // İÇ ZEMİN STÜDYOSU: kaydırınca canlanma ve sunum biçimi — yalnızca katmanda
+    // bu alanlar VARSA çalışır; eski katmanlar birebir aynı çizilir.
+    if (global.SeozTheme && (layer.reveal || layer.present)) global.SeozTheme.decorateLayer(wrap, layer, mode);
+
     if (mode === "edit") {
       wrap.classList.add("seoz-editable");
       wrap.setAttribute("tabindex", "0");
@@ -270,6 +274,7 @@
     // — bu, FAZ 8 öncesi davranışın birebir aynısıdır.
     const bp = breakpoint === "desktop" ? "desktop" : "mobile";
     clearIntervalsWithin(canvasEl);
+    if (global.SeozTheme) global.SeozTheme.teardown(canvasEl);
     canvasEl.innerHTML = "";
     canvasEl.style.position = "relative";
     canvasEl.style.width = doc.canvas.baseWidth + "px";
@@ -280,6 +285,10 @@
     sorted.forEach(layer => {
       canvasEl.appendChild(renderLayer(layer, mode, doc.id, bp));
     });
+
+    // İÇ ZEMİN STÜDYOSU: animasyonlu zemin, tasarım dili, kaydırınca canlanma.
+    // Belgede "theme" yoksa ve hiçbir katmanda canlanma ayarı yoksa çağrılmaz.
+    if (global.SeozTheme && (doc.theme || canvasEl.querySelector(".th-rv"))) global.SeozTheme.applyDocument(doc, canvasEl, mode, bp);
 
     SeozLayoutEngine.recalcCanvasHeight(canvasEl, doc.canvas.minHeight);
   }

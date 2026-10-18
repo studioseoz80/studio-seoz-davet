@@ -49,6 +49,11 @@
     "js/cinema/concepts.js",
     "js/cinema/models/door.js",
     "js/cinema/free.js",
+    // İç Zemin Tasarım Stüdyosu
+    "css/theme.css",
+    "js/theme/theme-art.js",
+    "js/theme/theme-core.js",
+    "js/theme/theme-present.js",
     "js/modules/module-registry.js",
     "js/modules/location.js",
     "js/modules/music.js",
@@ -70,6 +75,10 @@
     "js/modules/before-after.js",
     // Katılım sistemi (yeni)
     "js/modules/attendance-form.js",
+    // Yeni modüller
+    "js/modules/campaign.js",
+    "js/modules/hours.js",
+    "js/modules/interactive.js",
     // Görüş Bildir "davetiye içinde topla" yöntemi için (yalnızca anon
     // anahtar — herkese açık olması tasarım gereğidir).
     "js/supabase-config.js",
@@ -148,6 +157,7 @@
 <title>${title} — Studio SEOZ</title>
 <link rel="stylesheet" href="css/canvas.css">
 <link rel="stylesheet" href="css/cinema.css">
+<link rel="stylesheet" href="css/theme.css">
 <style>html, body{ margin:0; min-height:100vh; background:#E9E4D8; }
 .seoz-view-outer{ min-height:100vh; min-height:100dvh; }</style>
 </head>
@@ -169,6 +179,9 @@
 <script src="js/cinema/concepts.js"></script>
 <script src="js/cinema/models/door.js"></script>
 <script src="js/cinema/free.js"></script>
+<script src="js/theme/theme-art.js"></script>
+<script src="js/theme/theme-core.js"></script>
+<script src="js/theme/theme-present.js"></script>
 <script src="js/modules/module-registry.js"></script>
 <script src="js/modules/location.js"></script>
 <script src="js/modules/music.js"></script>
@@ -188,6 +201,9 @@
 <script src="js/modules/price-list.js"></script>
 <script src="js/modules/before-after.js"></script>
 <script src="js/modules/attendance-form.js"></script>
+<script src="js/modules/campaign.js"></script>
+<script src="js/modules/hours.js"></script>
+<script src="js/modules/interactive.js"></script>
 <script>
 (function () {
   "use strict";

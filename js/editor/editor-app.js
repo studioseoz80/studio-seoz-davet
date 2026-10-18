@@ -79,6 +79,10 @@
           <select data-add-module>
             <option value="">+ Modül Ekle...</option>
           </select>
+          <select data-add-interactive title="Misafirin dokunarak oynadığı sürprizler">
+            <option value="">✦ Etkileşim Ekle...</option>
+          </select>
+          <button class="btn btn-outline" data-open-theme-studio title="Animasyonlu zemin, paketler, sunum biçimleri">🎨 İç Zemin Stüdyosu</button>
           <div class="spacer"></div>
           <button class="btn btn-outline" data-change-bg>Zemin Görseli Yükle</button>
           <input type="file" accept="image/png,image/jpeg,image/webp" data-change-bg-input class="hidden">
@@ -115,6 +119,10 @@
               <h4>Özellikler</h4>
               <div data-prop-panel><p class="sidebar-empty">Düzenlemek için bir katman seçin.</p></div>
             </div>
+            <div class="sidebar-section" data-look-section style="display:none;">
+              <h4>Görünüm (İç Zemin)</h4>
+              <div data-look-panel></div>
+            </div>
           </aside>
         </div>
       </div>
@@ -128,6 +136,8 @@
     const entryPanelEl = appRoot.querySelector("[data-entry-panel]");
     const responsivePanelEl = appRoot.querySelector("[data-responsive-panel]");
     const saveStatusEl = appRoot.querySelector("[data-save-status]");
+    const lookPanelEl = appRoot.querySelector("[data-look-panel]");
+    const lookSectionEl = appRoot.querySelector("[data-look-section]");
 
     /* ---------------- MADDE 4: GERİ AL / İLERİ AL (GEÇMİŞ) ----------------
        Basit ama güvenilir bir "anlık görüntü" (snapshot) tabanlı geçmiş:
@@ -268,6 +278,8 @@
           if (moduleDef) host.appendChild(moduleDef.render(layer.settings, "edit", { docId: doc.id, layerId: layer.id }));
         }
       }
+      // İÇ ZEMİN: sunum biçimi / kaydırınca canlanma varsa yeniden uygulanır
+      if (window.SeozTheme && (layer.present || layer.reveal)) SeozTheme.decorateLayer(node, layer, "edit");
       applyScaleAndHeight();
     }
 
@@ -347,6 +359,27 @@
       renderLayersPanel();
       renderPropPanel();
       renderResponsivePanel();
+      renderLookPanel();
+    }
+
+    /* ---------------- İÇ ZEMİN: seçili katmanın görünümü ---------------- */
+    function renderLookPanel() {
+      const layer = doc.layers.find(l => l.id === selectedLayerId) || null;
+      if (!lookPanelEl || typeof SeozThemePanel === "undefined") return;
+      lookSectionEl.style.display = layer ? "" : "none";
+      if (!layer) return;
+      SeozThemePanel.render(lookPanelEl, layer, {
+        onChange: () => {
+          const node = canvasEl.querySelector(`[data-layer-id="${layer.id}"]`);
+          if (node && window.SeozTheme) SeozTheme.decorateLayer(node, layer, "edit");
+          applyScaleAndHeight();
+          scheduleAutosave();
+        },
+        onResize: (sz) => {
+          if (layer.type !== "module") return;
+          if (layer.w < sz.w || layer.h < sz.h) { layer.w = Math.max(layer.w, sz.w); layer.h = Math.max(layer.h, sz.h); updateLayerPosition(layer); }
+        }
+      });
     }
 
     /* ---------------- FAZ 8: MASAÜSTÜ DÜZENİ ---------------- */
@@ -698,6 +731,33 @@
         moduleSelect.value = "";
       }
     });
+
+    /* ---------------- İÇ ZEMİN STÜDYOSU + ETKİLEŞİM EKLE ---------------- */
+    const interactiveSelect = appRoot.querySelector("[data-add-interactive]");
+    if (interactiveSelect && typeof SeozInteractive !== "undefined") {
+      SeozInteractive.KINDS.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; interactiveSelect.appendChild(o); });
+      interactiveSelect.addEventListener("change", () => {
+        const kind = interactiveSelect.value; interactiveSelect.value = "";
+        if (!kind) return;
+        addModuleLayer("interactive");
+        const layer = doc.layers[doc.layers.length - 1];
+        if (layer && layer.moduleId === "interactive") {
+          layer.settings.kind = kind;
+          if (doc.theme && doc.theme.palette) { layer.settings.color = doc.theme.palette.accent || layer.settings.color; layer.settings.textColor = doc.theme.palette.ink || layer.settings.textColor; }
+          updateLayerDOM(layer); renderPropPanel(); scheduleAutosave(true);
+        }
+      });
+    } else if (interactiveSelect) interactiveSelect.style.display = "none";
+    const themeBtn = appRoot.querySelector("[data-open-theme-studio]");
+    if (themeBtn && typeof SeozThemeStudio !== "undefined") {
+      themeBtn.addEventListener("click", () => {
+        SeozThemeStudio.open(doc, {
+          onChange: () => scheduleAutosave(true),
+          onClose: () => { refreshAllUI(); scheduleAutosave(true); },
+          measure: (id) => { const n = canvasEl.querySelector(`[data-layer-id="${id}"]`); return n ? n.offsetHeight : null; }
+        });
+      });
+    } else if (themeBtn) themeBtn.style.display = "none";
 
     /* ---------------- ZEMİN (canvas.background) ---------------- */
     function applyBackgroundUpdate() {

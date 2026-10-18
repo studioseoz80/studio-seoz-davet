@@ -33,6 +33,9 @@ cp -R js/core "$OUT/js/core"
 cp -R js/modules "$OUT/js/modules"
 cp js/*.js "$OUT/js/"
 cp -R js/cinema "$OUT/js/cinema"
+# İç Zemin Tasarım Stüdyosu: zemin motoru ve sunum biçimleri (yalnızca görüntüleme kodu)
+cp -R js/theme "$OUT/js/theme"
+cp css/theme.css "$OUT/css/theme.css"
 
 # Müşteri katılımcı paneli (panel.html#k=...). Veriye erişim gizli panel
 # anahtarıyla Supabase tarafında denetlenir; editör kodu içermez.
