@@ -236,7 +236,7 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 /* zarf */
 .ix-env{ position:relative; width:88%; height:70%; margin-top:14%; perspective:800px; cursor:pointer; }
 .ix-env-back{ position:absolute; inset:0; border-radius:6px; background:color-mix(in srgb, var(--ix-c) 70%, #000 10%); }
-.ix-letter{ position:absolute; left:6%; right:6%; top:8%; bottom:4%; background:#FFFDF8; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,.15); transition:transform .9s cubic-bezier(.2,.8,.2,1) .35s; }
+.ix-letter{ position:absolute; left:6%; right:6%; top:8%; bottom:4%; background:#FFFDF8; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,.15); opacity:0; transition:transform .9s cubic-bezier(.2,.8,.2,1) .35s, opacity .2s .3s; }
 .ix-letter .ix-result{ inset:6%; }
 .ix-env-front{ position:absolute; inset:0; border-radius:6px; background:linear-gradient(to top right, var(--ix-c) 50%, transparent 50.3%) left / 50% 100% no-repeat, linear-gradient(to top left, var(--ix-c) 50%, transparent 50.3%) right / 50% 100% no-repeat;
   filter:brightness(1.08); clip-path:polygon(0 30%, 50% 62%, 100% 30%, 100% 100%, 0 100%); background-color:var(--ix-c); }
@@ -245,7 +245,7 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 .ix-env-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; z-index:5; transition:opacity .4s; }
 .ix-env.is-open .ix-env-flap{ transform:rotateX(180deg); z-index:0; }
 .ix-env.is-open .ix-env-seal, .ix-env.is-open .ix-env-img{ opacity:0; }
-.ix-env.is-open .ix-letter{ transform:translateY(-62%); z-index:2; }
+.ix-env.is-open .ix-letter{ transform:translateY(-62%); z-index:2; opacity:1; }
 /* balon */
 .ix-balon .ix-result{ opacity:0; transition:opacity .6s; }
 .ix-balon.is-done .ix-result{ opacity:1; }

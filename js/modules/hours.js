@@ -68,7 +68,9 @@
   function dayIndex(name) {
     const n = lower(name);
     const keys = ["pazartesi", "salı", "çarşamba", "perşembe", "cuma", "cumartesi", "pazar"];
+    const ABBR = { pzt: 0, pts: 0, sal: 1, çar: 2, car: 2, çrş: 2, per: 3, prş: 3, cum: 4, cmt: 5, cts: 5, paz: 6, pzr: 6 };
     let i = keys.findIndex(k => n === k);
+    if (i < 0 && ABBR[n.replace(/\.$/, "")] != null) return ABBR[n.replace(/\.$/, "")];
     if (i < 0) i = keys.findIndex(k => n.startsWith(k.slice(0, 3)) && !(k === "cuma" && n.startsWith("cumartesi")) && !(k === "pazar" && n.startsWith("pazartesi")));
     return i;
   }
