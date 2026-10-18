@@ -66,9 +66,35 @@
     if (layer.w < sz.w || layer.h < sz.h) { layer.w = Math.max(layer.w, sz.w); layer.h = Math.max(layer.h, sz.h); }
     if (layer.x + layer.w > W) layer.x = Math.max(0, Math.round((W - layer.w) / 2));
   }
+  /* Modül renklerini zemine ve çerçeveye uydurur: açık çerçeveli (bilet, kartpostal…)
+     modüllerde koyu yazı, koyu çerçeve (ahşap tabela, ışıklı tabela) ya da koyu
+     zeminde açık yazı; düğmeler vurgu rengini alır. Modülün işine dokunmaz. */
+  const LIGHT_FRAMES = ["bilet", "kartpostal", "polaroid", "parsomen", "altin"], DARK_FRAMES = ["tabela", "isikli"];
+  const PAGE_TEXT = ["appointment", "before-after", "feedback", "gift", "hours", "poll", "price-list", "social-media"];
+  const BTN_BG = ["location", "rsvp", "calendar", "celebration", "guest-upload"];
+  const BTN_COLOR = ["appointment", "attendance-form", "feedback", "gift", "poll", "social-media"];
+  const OWN_SURFACE = ["kazi-kazan", "zarf", "foto-cevir", "mum", "kurdele", "kapi-cal"];
+  function harmonizeModule(l, th) {
+    if (l.type !== "module" || !l.settings) return;
+    const s = l.settings, p = th.palette || {}, fr = l.present && l.present.frame;
+    const darkCtx = DARK_FRAMES.includes(fr) || (!LIGHT_FRAMES.includes(fr) && !!th.dark);
+    const txt = darkCtx ? "#F7EFE0" : (LIGHT_FRAMES.includes(fr) ? "#2A2420" : (p.ink || "#2A2420"));
+    if (PAGE_TEXT.includes(l.moduleId) && "textColor" in s) s.textColor = txt;
+    if ("accentColor" in s && l.moduleId !== "campaign") s.accentColor = p.accent || s.accentColor;
+    if (BTN_BG.includes(l.moduleId)) { s.bgColor = p.accent2 && th.dark ? p.accent : (p.accent || s.bgColor); s.textColor = "#FFFFFF"; }
+    if (BTN_COLOR.includes(l.moduleId) && "buttonColor" in s) s.buttonColor = p.accent || s.buttonColor;
+    if (l.moduleId === "countdown") {
+      s.textColor = txt;
+      if (darkCtx) { s.boxColor = "#241C22"; s.boxBorderColor = p.accent || "#B8925A"; } else { s.boxColor = "#FFFFFF"; s.boxBorderColor = p.accent || "#DCD5C6"; }
+    }
+    if (l.moduleId === "qrcode") s.titleColor = txt;
+    if (l.moduleId === "services") { s.textColor = darkCtx ? "#F7EFE0" : "#1E2A22"; s.cardColor = darkCtx ? "#2B2326" : "#FFFFFF"; }
+    if (l.moduleId === "music") s.noteColor = p.accent || s.noteColor;
+    if (l.moduleId === "interactive") { s.color = s.color || p.accent; s.textColor = OWN_SURFACE.includes(s.kind) ? "#3A2E28" : txt; }
+  }
   function applyModSettings(doc, pack, vi) {
     const ms = modSettingsFor(pack, vi);
-    doc.layers.forEach(l => { if (l.type === "module" && ms[l.moduleId]) Object.assign(l.settings, clone(ms[l.moduleId])); });
+    doc.layers.forEach(l => { harmonizeModule(l, doc.theme); if (l.type === "module" && ms[l.moduleId]) Object.assign(l.settings, clone(ms[l.moduleId])); });
   }
 
   /* Var olan katmanları şablonun bölümlerine göre alt alta dizer. İçerik
@@ -98,7 +124,7 @@
         l.x = Math.max(0, Math.round((W - num(l.w, 200)) / 2));
         l.y = Math.round(y);
         if (l.desktopOverride) l.desktopOverride = { enabled: false, x: null, y: null, w: null, h: null };
-        y += h + (k < b.length - 1 ? (l.type === "text" ? 14 : 22) : 0);
+        y += h + (l.moduleId === "interactive" ? 30 : 0) + (k < b.length - 1 ? (l.type === "text" ? 14 : 22) : 0);
       });
       y += si === 0 ? 70 : 64;
     });
@@ -119,7 +145,9 @@
         const font = (th.fonts || {})[st.font] || (th.fonts || {}).body || "Manrope";
         const l = DM.createTextLayer({ z: z++, x: Math.round((W - w) / 2), y: Math.round(y), w, content: { text: txt, fontFamily: font, fontSize: st.size, color: st.accent ? th.palette.accent2 : th.palette.ink, italic: !!st.italic, letterSpacing: st.spacing || 0, align: "center" } });
         l.reveal = { type: role === "title" ? "yakinlas" : "yukari", delay: 0, duration: 1 };
-        out.push(l); y += st.h + 12;
+        // metin kutusu yüksekliği içeriğe göre büyür: satır sayısı yaklaşık hesaplanır
+        const lines = Math.max(1, Math.ceil(String(txt).length * st.size * 0.5 / w));
+        out.push(l); y += Math.max(st.h, Math.round(lines * st.size * 1.32)) + 12;
       });
       (sec.modules || []).forEach(mid => {
         if (tpl.create.indexOf(mid) < 0) return;
@@ -136,11 +164,12 @@
         }
         const p = presentFor(pack, l); if (p) { l.present = p; fitSpecial(l, W); }
         if (mid === "music" && !(l.present && l.present.special)) { l.x = W - size.w - 18; l.y = 18; l.z = 50; out.push(l); return; }
-        l.reveal = { type: "yukari", delay: 0, duration: 0.9 }; out.push(l); y += l.h + (def.autoHeight ? 40 : 26);
+        l.reveal = { type: "yukari", delay: 0, duration: 0.9 }; out.push(l); y += l.h + (def.autoHeight ? 40 : mid === "interactive" ? 46 : 26);
       });
       if (y > before) y += 46;
     });
     doc.layers = out;
+    applyModSettings(doc, pack, vi);
     return out.length;
   }
 
@@ -561,5 +590,5 @@
     return { close, preview: () => preview(true) };
   }
 
-  global.SeozThemeStudio = { open, applyPack, themeFromPack, restyleTexts, layoutExisting, createFromTemplate, syncOpening, paletteFor };
+  global.SeozThemeStudio = { open, applyPack, harmonizeModule, themeFromPack, restyleTexts, layoutExisting, createFromTemplate, syncOpening, paletteFor };
 })(window);

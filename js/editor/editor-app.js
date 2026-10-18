@@ -373,7 +373,7 @@
           const node = canvasEl.querySelector(`[data-layer-id="${layer.id}"]`);
           if (node && window.SeozTheme) SeozTheme.decorateLayer(node, layer, "edit");
           applyScaleAndHeight();
-          scheduleAutosave();
+          scheduleAutosave(true);
         },
         onResize: (sz) => {
           if (layer.type !== "module") return;

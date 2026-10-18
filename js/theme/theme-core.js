@@ -45,6 +45,7 @@
     if (f.body) set("--th-body", `"${f.body}", sans-serif`);
     if (th.radius != null) set("--th-radius", num(th.radius, 14) + "px");
     canvasEl.classList.add("th-on");
+    canvasEl.classList.toggle("th-dark", !!th.dark);
   }
 
   /* =============================== zemin =============================== */
@@ -180,7 +181,7 @@
     if (st) { try { st.destroy(); } catch (e) { /* önemsiz */ } canvasEl.__seozTheme = null; }
     if (canvasEl) {
       ["--th-paper", "--th-ink", "--th-accent", "--th-accent2", "--th-title", "--th-body", "--th-radius"].forEach(k => canvasEl.style.removeProperty(k));
-      canvasEl.classList.remove("th-on");
+      canvasEl.classList.remove("th-on", "th-dark");
     }
   }
 

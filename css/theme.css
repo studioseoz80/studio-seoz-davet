@@ -42,6 +42,10 @@
 .tp-f{ isolation:isolate; }
 .tp-deco{ position:absolute; inset:-14px; z-index:-1; pointer-events:none; border-radius:calc(var(--th-radius, 14px) + 4px); }
 .tp-hidden{ display:none !important; }
+/* çerçeveli modüllerde yazı rengi (modülün kendi rengi olmayan yazılar için) */
+.tp-f-bilet, .tp-f-kartpostal, .tp-f-polaroid, .tp-f-parsomen, .tp-f-altin{ color:#2A2420; }
+.seoz-canvas.th-dark .seoz-layer-module:not(.tp-f){ color:var(--th-ink, #F7EFE0); }
+.seoz-canvas.th-dark .tp-f-cam{ color:#F7EFE0; }
 .tp-deco-bilet{ inset:-12px -16px; border-radius:10px; background:var(--th-paper, #FBF7EF);
   -webkit-mask:radial-gradient(circle 11px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 11px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
   mask:radial-gradient(circle 11px at 0 50%, transparent 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 11px at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
