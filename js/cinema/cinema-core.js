@@ -939,6 +939,8 @@
       }
       function waitStart() {
         if (cfg.start === "auto") return ctx.wait(opts.autoDelay != null ? opts.autoDelay : 1600);
+        // A2.4: senaryo kendi başlatma hareketini (çekme, kaydırma, basılı tutma) bekleyebilir
+        if (!reduced && ctx.scenario.waitStart) return ctx.scenario.waitStart(ctx);
         return new Promise(r => { tapResolve = r; });
       }
       function holdCard() {

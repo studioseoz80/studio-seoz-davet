@@ -27,7 +27,11 @@
   const { h } = C.util;
 
   const MOVES = {}, ORDER = [];
-  const GROUPS = [["acilma", "Açılma"], ["sinematik", "Sinematik hareket"], ["isik", "Işık ve efekt"], ["kart", "İç kart"]];
+  const GROUPS = [["acilma", "Açılma"], ["sinematik", "Sinematik hareket"], ["etkilesim", "Sürpriz ve etkileşim"], ["isik", "Işık ve efekt"], ["kart", "İç kart"]];
+  // A2.4: misafirin bir hareketiyle başlayan adımlar (bölüm başı). "tap" = dokunma, "pull" = çekme,
+  // "swipe" = kaydırma, "hold" = basılı tutma.
+  const GATES = { tap: 1, pull: 1, swipe: 1, hold: 1 };
+  const isGate = a => !!(a && GATES[a.start]);
   function registerMove(def) { if (!MOVES[def.id]) ORDER.push(def.id); MOVES[def.id] = def; }
 
   const EASE = {
@@ -598,6 +602,233 @@
       return t.it === Infinity ? 0 : t.dur * t.it;
     } });
 
+  /* =================== A2.4 — SÜRPRİZ VE ETKİLEŞİM (6 hareket) =================== */
+  /* Hepsi yalnızca kullanıcının kendi görsel(ler)ini hareket ettirir. Kesen hareketler
+     (mühür, kurdele) görselin gerçek parçalarını kullanır; kilit ve gizli görsel ayrı
+     katman ister. Anahtar, kilit halkası ve makas isteğe bağlı ayrı katmanlardır. */
+  const OPENERS = ["split-h", "split-v", "hinge", "slide", "quad", "fold", "curtain", "drawer", "page-turn"];
+  function openerFor(ctx, a) {
+    const acts = ctx.cfg.actions || [], i = acts.findIndex(x => x.id === a.id);
+    const same = x => x.layer === a.layer && OPENERS.includes(x.move);
+    return acts.slice(i + 1).find(same) || acts.slice(0, Math.max(0, i)).reverse().find(same) || null;
+  }
+  function otherLayer(ctx, a, key, def) { const id = P(a, def, key); return id && id !== a.layer && ctx.C[id] ? id : null; }
+  // bir hareketin "aç–bekle–kapan" anahtar kareleri; sürekli tekrarda sonunda kısa bir dinlenme olur
+  function pulseKF(zero, peak, loopy) {
+    const E1 = EASE.yumusak;
+    return loopy ? [{ transform: zero, offset: 0, easing: E1 }, { transform: peak, offset: 0.24 }, { transform: peak, offset: 0.32, easing: E1 }, { transform: zero, offset: 0.58 }, { transform: zero, offset: 1 }]
+      : [{ transform: zero, easing: E1 }, { transform: peak, offset: 0.42 }, { transform: peak, offset: 0.56, easing: E1 }, { transform: zero }];
+  }
+  registerMove({ id: "tease", group: "etkilesim", label: "Önce hafif açılıp kapanma", single: true, duration: 2.4, easing: "yumusak", loop: true, defRepeat: 0,
+    note: "Aynı katmandaki açılma hareketi (ör. ortadan açılma, menteşe) biraz aralanıp geri kapanır; misafiri dokunmaya davet eder. Katmanda açılma hareketi yoksa görsel hafifçe nefes alır.",
+    params: [{ key: "amount", label: "Aralık", def: "orta", options: [["az", "Az"], ["orta", "Orta"], ["cok", "Belirgin"]] }],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), amt = { az: 0.1, orta: 0.18, cok: 0.3 }[P(a, def, "amount")] || 0.18;
+      const loopy = t.it === Infinity, tg = openerFor(ctx, a), tm = tg && MOVES[tg.move];
+      const go = (el, zero, peak) => el && ctx.anim(el, pulseKF(zero, peak, loopy), { d: t.dur, delay: begin, e: "linear", it: t.it, fill: "none", comp: "add" });
+      const inner = ctx.L[a.layer];
+      const tp = k => P(tg, tm, k);
+      if (tm && (tg.move === "split-h" || tg.move === "split-v") && ctx.parts && ctx.parts[a.layer]) {
+        const v = tg.move === "split-v", kay = tp("style") === "kay";
+        const ang = num(tp("angle"), 100) * (tp("dir") === "disa" ? -1 : 1);
+        ctx.parts[a.layer].forEach((p, i) => {
+          const sgn = i ? 1 : -1;
+          if (kay) go(p.half, v ? "translateY(0%)" : "translateX(0%)", v ? `translateY(${sgn * amt * 60}%)` : `translateX(${sgn * amt * 60}%)`);
+          else go(p.half, v ? "rotateX(0deg)" : "rotateY(0deg)", v ? `rotateX(${-sgn * ang * amt}deg)` : `rotateY(${-sgn * ang * amt}deg)`);
+        });
+      } else if (tm && tg.move === "hinge") {
+        const side = tp("side"), out = tp("dir") === "disa", ang = num(tp("angle"), 100) * (out ? -1 : 1);
+        const ax = side === "top" || side === "bottom" ? "rotateX" : "rotateY", sign = side === "right" || side === "top" ? -1 : 1;
+        const deg = (ax === "rotateX" ? -sign * ang : sign * ang) * amt;
+        go(inner, `${ax}(0deg)`, `${ax}(${deg}deg)`);
+      } else if (tm && tg.move === "slide") {
+        const d = tp("dir"), m = amt * 55;
+        go(inner, "translate(0%, 0%)", { left: `translate(${-m}%, 0%)`, right: `translate(${m}%, 0%)`, up: `translate(0%, ${-m}%)`, down: `translate(0%, ${m}%)` }[d] || `translate(${-m}%, 0%)`);
+      } else if (tm && (tg.move === "quad" || tg.move === "fold" || tg.move === "curtain") && ctx.tiles && ctx.tiles[a.layer]) {
+        const g = ctx.tiles[a.layer];
+        g.tiles.forEach(p => {
+          const dx = (p.c + 0.5) / g.cols - 0.5, dy = (p.r + 0.5) / g.rows - 0.5;
+          go(p.el, "translate(0%, 0%)", `translate(${dx * amt * 90}%, ${dy * amt * 90}%)`);
+        });
+      } else if (tm && tg.move === "drawer") {
+        go(inner, "translate3d(0px, 0px, 0px)", `translate3d(0px, ${40 * amt}px, ${ctx.Z(140 * amt)}px)`);
+      } else if (tm && tg.move === "page-turn") {
+        go(inner, "rotateY(0deg)", `rotateY(${-170 * amt}deg)`);
+      } else {
+        go(ctx.C[a.layer] || inner, "scale(1)", `scale(${1 + amt * 0.25})`);
+      }
+      if (!loopy) ctx.later(begin, () => ctx.sfx("creak"));
+      return loopy ? 0 : t.dur * t.it;
+    } });
+
+  registerMove({ id: "lock", group: "etkilesim", label: "Kilit açma", needsLayers: 2, duration: 2.2, easing: "yumusak",
+    note: "Bu katman kilit olur. İsterseniz anahtarı ve kilidin halkasını ayrı katman olarak seçin: anahtar kilide gidip döner, halka kalkar, kilit düşer ve arkası görünür.",
+    params: [
+      { key: "key", label: "Anahtar katmanı", type: "layer", def: "" },
+      { key: "shackle", label: "Halka katmanı", type: "layer", def: "" },
+      { key: "after", label: "Açılınca", def: "dus", options: [["dus", "Aşağı düşer"], ["sol", "Solarak kaybolur"], ["kal", "Yerinde kalır"]] }
+    ],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), D = t.dur, lc = center(ctx, a.layer), after = P(a, def, "after");
+      const lockEl = ctx.C[a.layer] || ctx.L[a.layer];
+      const keyId = otherLayer(ctx, a, "key", def), shId = otherLayer(ctx, a, "shackle", def);
+      const turn = keyId ? 0.55 : 0.3;                   // kilidin "tık" diye açıldığı an
+      const fallKF = (zero) => after === "dus"
+        ? [{ transform: zero, offset: turn + 0.17, easing: EASE.hizlanarak }, { transform: "translate(0px, 760px) rotate(16deg)", offset: 1 }] : [];
+      const Z0 = "translate(0px, 0px) rotate(0deg)";
+      // kilit: anahtar dönünce sarsılır, sonra düşer / solar
+      ctx.anim(lockEl, [{ transform: Z0, offset: 0 }, { transform: Z0, offset: turn - 0.02 }, { transform: "translate(0px, 0px) rotate(-4deg)", offset: turn + 0.03 },
+        { transform: "translate(0px, 0px) rotate(3deg)", offset: turn + 0.08 }, { transform: Z0, offset: turn + 0.13 }].concat(fallKF(Z0).length ? fallKF(Z0) : [{ transform: Z0, offset: 1 }]),
+        { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+      if (keyId) {
+        const kc = center(ctx, keyId), dx = lc.x - kc.x, dy = (lc.b.y + lc.b.h * 0.62) - kc.y;
+        const at = `translate(${dx}px, ${dy}px) rotate(0deg)`, turned = `translate(${dx}px, ${dy}px) rotate(90deg)`;
+        const kf = [{ transform: Z0, easing: EASE.yumusak }, { transform: at, offset: 0.33 }, { transform: at, offset: 0.38, easing: EASE.yumusak }, { transform: turned, offset: turn }];
+        if (after === "dus") kf.push({ transform: turned, offset: turn + 0.17, easing: EASE.hizlanarak }, { transform: `translate(${dx}px, ${dy + 760}px) rotate(110deg)`, offset: 1 });
+        else kf.push({ transform: turned, offset: 1 });
+        ctx.anim(ctx.C[keyId], kf, { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+        if (after === "sol") ctx.anim(ctx.C[keyId], [{ opacity: 1, offset: 0 }, { opacity: 1, offset: turn + 0.15 }, { opacity: 0, offset: 1 }], { d: D, delay: begin, e: "linear", fill: "forwards" });
+      }
+      if (shId) {
+        const sb = ctx.box[shId] || { h: 60 }, up = Math.max(10, sb.h * 0.22);
+        const kf = [{ transform: Z0, offset: 0 }, { transform: Z0, offset: turn }, { transform: `translate(0px, ${-up}px) rotate(0deg)`, offset: turn + 0.1, easing: EASE.esnek }];
+        if (after === "dus") kf.push({ transform: `translate(0px, ${-up}px) rotate(0deg)`, offset: turn + 0.17, easing: EASE.hizlanarak }, { transform: `translate(0px, ${760 - up}px) rotate(16deg)`, offset: 1 });
+        else kf.push({ transform: `translate(0px, ${-up}px) rotate(0deg)`, offset: 1 });
+        ctx.anim(ctx.C[shId], kf, { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+      }
+      if (after === "sol") [lockEl, shId && ctx.C[shId]].filter(Boolean).forEach(el => ctx.anim(el, [{ opacity: 1, offset: 0 }, { opacity: 1, offset: turn + 0.15 }, { opacity: 0, offset: 1 }], { d: D, delay: begin, e: "linear", fill: "forwards" }));
+      ctx.later(begin + D * turn, () => {
+        const p = ctx.frameToScreen(lc.x, lc.b.y + lc.b.h * 0.6);
+        if (!ctx.lite) { const g = ctx.glow(lc.x, lc.b.y + lc.b.h * 0.6, Math.max(90, lc.b.w * 0.7), "rgba(255,226,170,.9)", 40);
+          ctx.anim(g, [{ opacity: 0, transform: "scale(.5)" }, { opacity: 1, transform: "scale(1)", offset: 0.3 }, { opacity: 0, transform: "scale(1.3)" }], { d: 700, e: EASE.yavaslayarak, fill: "forwards" }); }
+        ctx.fx.burst({ type: "spark", x: p.x, y: p.y, count: 16, speed: 260, colors: ["#F3D27A", "#FFFFFF"], gravity: 300 });
+        ctx.sfx("lock");
+      });
+      if (after === "dus") ctx.later(begin + D * (turn + 0.2), () => ctx.sfx("whoosh"));
+      return D;
+    } });
+
+  // mühür: görsel zikzak bir çizgiden gerçekten ikiye bölünür (iki parça = aynı görselin iki kırpımı)
+  function zigzag(vertical) {
+    const pts = [], n = 7;
+    for (let i = 0; i <= n; i++) { const along = (100 * i / n).toFixed(2), off = (50 + (i === 0 || i === n ? 0 : (i % 2 ? 7 : -6))).toFixed(2); pts.push(vertical ? `${off}% ${along}%` : `${along}% ${off}%`); }
+    const A = vertical ? ["0% 0%"].concat(pts, ["0% 100%"]) : ["0% 0%"].concat(pts, ["100% 0%"]);
+    const B = vertical ? ["100% 0%"].concat(pts, ["100% 100%"]) : ["0% 100%"].concat(pts, ["100% 100%"]);
+    return [`polygon(${A.join(", ")})`, `polygon(${B.join(", ")})`];
+  }
+  function sealPrepare(ctx, a, def) {
+    const inner = ctx.L[a.layer], u = ctx.cfg.layers[a.layer];
+    if (!inner || !u || !u.src || inner.__split) return;
+    const imgEl = inner.querySelector(".sc-front") || inner.querySelector("img"); if (!imgEl) return;
+    inner.__split = true;
+    const vertical = P(a, def, "dir") !== "yatay", fit = imgEl.style.objectFit || "contain", polys = zigzag(vertical);
+    Array.from(inner.children).forEach(ch => { if (!ch.classList.contains("sc-slot")) ch.style.display = "none"; });
+    const firstChild = Array.from(inner.children).find(ch => ch.classList.contains("sc-slot"));
+    const parts = polys.map((poly, i) => {
+      const el = h("div", "sc-half sc-shard", { position: "absolute", inset: "0", clipPath: poly, WebkitClipPath: poly,
+        transformOrigin: vertical ? (i ? "75% 50%" : "25% 50%") : (i ? "50% 75%" : "50% 25%") });
+      const im = h("img", "", { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: fit, pointerEvents: "none" });
+      im.src = imgEl.src; im.alt = ""; el.appendChild(im);
+      inner.insertBefore(el, firstChild || null);
+      return el;
+    });
+    const pb = ctx.box[a.layer] || { w: C.FRAME_W, h: C.FRAME_H };
+    Array.from(inner.children).filter(ch => ch.classList.contains("sc-slot")).forEach(ch => {
+      const cx = parseFloat(ch.style.left) + parseFloat(ch.style.width) / 2, cy = parseFloat(ch.style.top) + parseFloat(ch.style.height) / 2;
+      parts[vertical ? (cx < pb.w / 2 ? 0 : 1) : (cy < pb.h / 2 ? 0 : 1)].appendChild(ch);
+    });
+    ctx.shards = ctx.shards || {}; ctx.shards[a.layer] = { parts, vertical };
+  }
+  registerMove({ id: "seal", group: "etkilesim", label: "Mühür kırılma", single: true, duration: 1.4, easing: "hizlanarak",
+    note: "Görsel zikzak bir çizgiden gerçekten ikiye ayrılır, parçalar düşer. En gerçekçi sonuç için mührü ayrı bir katman olarak yükleyin.",
+    params: [{ key: "dir", label: "Kırılma", def: "dikey", options: [["dikey", "Dikey çizgiden"], ["yatay", "Yatay çizgiden"]] }],
+    prepare: sealPrepare,
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), sh = ctx.shards && ctx.shards[a.layer], c = center(ctx, a.layer);
+      if (!sh) return t.dur;
+      sh.parts.forEach((el, i) => {
+        const s = i ? 1 : -1, w = c.b.w, hh = c.b.h;
+        const crack = sh.vertical ? `translate(${s * 5}px, 2px) rotate(${s * 4}deg)` : `translate(2px, ${s * 5}px) rotate(${s * 4}deg)`;
+        const far = sh.vertical ? `translate(${s * w * 0.4}px, 780px) rotate(${s * 38}deg)` : `translate(${s * 30}px, ${780 + (i ? 0 : -hh * 0.2)}px) rotate(${s * 30}deg)`;
+        ctx.anim(el, [{ transform: "translate(0px, 0px) rotate(0deg)" }, { transform: crack, offset: 0.14, easing: t.e }, { transform: far }], { d: t.dur, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+        ctx.anim(el, [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { d: t.dur, delay: begin, e: "linear", fill: "forwards" });
+      });
+      ctx.later(begin, () => {
+        const p = ctx.frameToScreen(c.x, c.y);
+        ctx.fx.burst({ type: "spark", x: p.x, y: p.y, count: 22, speed: 320, colors: ["#FFFFFF", "#F3D27A"], gravity: 420 });
+        if (!ctx.lite) ctx.flash("#FFFFFF", 260, 0.35);
+        ctx.sfx("crack");
+      });
+      return t.dur;
+    } });
+
+  registerMove({ id: "ribbon-cut", group: "etkilesim", label: "Kurdele kesme", single: true, duration: 1.8, easing: "hizlanarak",
+    note: "Bu katman kurdele olur; ortadan gerçekten kesilir ve iki ucu düşer. Makas görselini ayrı bir katman olarak seçerseniz önce makas gelip keser.",
+    params: [{ key: "dir", label: "Kurdele", def: "yatay", options: [["yatay", "Yatay (uçlar iki yana düşer)"], ["dikey", "Dikey"]] },
+             { key: "scissors", label: "Makas katmanı", type: "layer", def: "" }],
+    prepare(ctx, a, def) { return splitPrepare(P(a, def, "dir") === "dikey")(ctx, a); },
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), D = t.dur, c = center(ctx, a.layer), parts = ctx.parts && ctx.parts[a.layer];
+      const v = P(a, def, "dir") === "dikey", sid = otherLayer(ctx, a, "scissors", def);
+      const cut = sid ? 0.34 : 0.06;
+      if (sid) {
+        const sc = center(ctx, sid), dx = c.x - sc.x, dy = c.y - sc.y;
+        const at = r => `translate(${dx}px, ${dy}px) rotate(${r}deg)`;
+        ctx.anim(ctx.C[sid], [{ transform: "translate(0px, 0px) rotate(0deg)", easing: EASE.yumusak }, { transform: at(0), offset: 0.22 }, { transform: at(-14), offset: 0.27 },
+          { transform: at(0), offset: cut }, { transform: at(0), offset: cut + 0.08, easing: EASE.hizlanarak }, { transform: `translate(${dx + 220}px, ${dy - 80}px) rotate(20deg)` }],
+          { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+        ctx.anim(ctx.C[sid], [{ opacity: 1 }, { opacity: 1, offset: cut + 0.1 }, { opacity: 0, offset: 0.8 }, { opacity: 0 }], { d: D, delay: begin, e: "linear", fill: "forwards" });
+      }
+      if (parts) parts.forEach((p, i) => {
+        const s = i ? -1 : 1;          // sol (veya üst) parça saat yönünde sarkar
+        const Z0 = "translateY(0px) rotate(0deg)";
+        const hang = v ? `translateY(0px) rotate(${s * 18}deg)` : `translateY(0px) rotate(${s * 62}deg)`;
+        const fall = v ? (i ? "translateY(820px) rotate(-12deg)" : `translateY(820px) rotate(${s * 40}deg)`) : `translateY(820px) rotate(${s * 84}deg)`;
+        ctx.anim(p.half, [{ transform: Z0, offset: 0 }, { transform: Z0, offset: cut, easing: EASE.yavaslayarak }, { transform: hang, offset: cut + 0.3, easing: EASE.hizlanarak }, { transform: fall, offset: 1 }],
+          { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+      });
+      ctx.later(begin + D * cut, () => ctx.sfx("snip"));
+      ctx.later(begin + D * (cut + 0.3), () => ctx.sfx("swoosh"));
+      return D;
+    } });
+
+  registerMove({ id: "burst", group: "etkilesim", label: "Dokununca patlama", single: true, duration: 1.6, easing: "hizlanarak",
+    note: "Görsel gerçek parçalarına bölünerek patlar; ışık ve konfeti aynı anda çıkar. Başlat ayarını “Dokununca” bırakın.",
+    params: SHATTER_PARAMS.concat([{ key: "palette", label: "Konfeti", def: "altin", options: [["renkli", "Renkli"], ["altin", "Altın ve beyaz"], ["pastel", "Pastel"], ["yok", "Konfeti yok"]] }]),
+    prepare: shatterPrepare,
+    run(ctx, a, def, begin) {
+      const t = timing(a, def);
+      scatter(ctx, a, t, begin, false);
+      const sub = (id, extra) => Object.assign({}, a, { move: id, delay: 0, speed: a.speed, repeat: 1 }, extra);
+      MOVES["light-burst"].run(ctx, sub("light-burst", { duration: 1.3, params: { color: "sicak" } }), MOVES["light-burst"], begin);
+      if (P(a, def, "palette") !== "yok") MOVES.confetti.run(ctx, sub("confetti", { duration: 1.2, params: { style: "top", palette: P(a, def, "palette") } }), MOVES.confetti, begin + 60);
+      ctx.later(begin, () => ctx.sfx("boom"));
+      return t.dur * 1.25;
+    } });
+
+  registerMove({ id: "reveal", group: "etkilesim", label: "Gizli görselin ortaya çıkması", needsLayers: 2, duration: 1.4, easing: "yavaslayarak",
+    note: "Bu katman açılış başlayana kadar görünmez. Açılan katmanın arkasına yerleştirin; sırası gelince ışıkla ortaya çıkar.",
+    params: [{ key: "style", label: "Biçim", def: "parla", options: [["parla", "Işıkla belirerek"], ["yuksel", "Yükselerek"], ["don", "Dönerek"]] }],
+    prepare(ctx, a) {
+      // hizalama ekranında görünür kalır (yerleştirebilmek için); gerçek oynatmada başta gizli
+      const S = ctx.S[a.layer]; if (S && !ctx.overlay.classList.contains("sc-freeze")) S.style.opacity = "0";
+    },
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), st = P(a, def, "style"), S = ctx.S[a.layer], el = ctx.C[a.layer] || ctx.L[a.layer], c = center(ctx, a.layer);
+      if (!S) return t.dur;
+      ctx.anim(S, [{ opacity: 0 }, { opacity: 1, offset: st === "parla" ? 0.5 : 0.6 }, { opacity: 1 }], { d: t.dur, delay: begin, e: "linear", fill: "both" });
+      const from = { yuksel: `translate3d(0px, 60px, ${ctx.Z(-60)}px) scale(.9) rotateY(0deg)`, don: "translate3d(0px, 0px, 0px) scale(.9) rotateY(90deg)" }[st] || "translate3d(0px, 0px, 0px) scale(.92) rotateY(0deg)";
+      ctx.anim(el, [{ transform: from }, { transform: "translate3d(0px, 0px, 0px) scale(1) rotateY(0deg)" }], { d: t.dur, delay: begin, e: t.e, fill: "backwards", comp: "add" });
+      if (st === "parla") ctx.later(begin, () => {
+        if (!ctx.lite) { const g = ctx.glow(c.x, c.y, Math.min(700, Math.max(c.b.w, c.b.h) * 1.3), "rgba(255,236,190,.9)", Math.max(1, (ctx.model.slots.find(x => x.id === a.layer) || { z: 2 }).z - 1));
+          ctx.anim(g, [{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "scale(1)", offset: 0.4 }, { opacity: 0, transform: "scale(1.2)" }], { d: t.dur * 1.4, e: t.e, fill: "forwards" }); }
+        const p = ctx.frameToScreen(c.x, c.y);
+        ctx.fx.burst({ type: "spark", x: p.x, y: p.y, count: 24, speed: 300, colors: ["#F3D27A", "#FFFFFF"], gravity: 120 });
+      });
+      ctx.later(begin, () => ctx.sfx("magic"));
+      return t.dur;
+    } });
+
   function revealCard(ctx, style, t, begin) {
     if (!ctx.hasCard || ctx.__cardShown) return;
     ctx.__cardShown = true;
@@ -620,7 +851,7 @@
     return { items: list.map((a, i) => {
       const def = MOVES[a.move], t = timing(a, def), delay = Math.max(0, num(a.delay, 0) * 1000);
       let begin;
-      if (i === 0 || a.start === "tap" || a.start === "at") begin = delay;   // "at" = bölüm başından itibaren belirli saniye
+      if (i === 0 || isGate(a) || a.start === "at") begin = delay;   // "at" = bölüm başından itibaren belirli saniye
       else if (a.start === "with") begin = prevBegin + delay;
       else begin = prevEnd + delay;
       const end = begin + (t.it === Infinity ? 0 : t.dur * (def.loop ? t.it : 1));
@@ -630,7 +861,7 @@
   }
   function chunks(list) {
     const out = [];
-    list.forEach((a, i) => { if (i === 0 || a.start === "tap") out.push([]); out[out.length - 1].push(a); });
+    list.forEach((a, i) => { if (i === 0 || isGate(a)) out.push([]); out[out.length - 1].push(a); });
     return out;
   }
   function runChunk(ctx, list) {
@@ -643,12 +874,175 @@
     });
     return ctx.wait(end);
   }
-  function showTapHint(ctx, on) {
+  const GATE_HINT = { tap: "Devam etmek için dokunun", pull: "Açmak için çekin", swipe: "Açmak için kaydırın", hold: "Açmak için basılı tutun" };
+  const DIR_ARROW = { up: " ↑", down: " ↓", left: " ←", right: " →" };
+  function showTapHint(ctx, on, kind, dir) {
     const hint = ctx.overlay.querySelector(".sc-hint");
     if (!hint) return;
-    if (on) { hint.textContent = "Devam etmek için dokunun"; hint.style.display = ""; }
+    if (on) { hint.textContent = (GATE_HINT[kind] || GATE_HINT.tap) + (kind === "pull" || kind === "swipe" ? (DIR_ARROW[dir] || "") : ""); hint.style.display = ""; }
     else hint.style.display = "none";
   }
+
+  /* =================== A2.4 · DOKUNMA HAREKETLERİ =================== */
+  /* Tek bir işaretçi izleyicisi sahnenin üstünde çalışır (fare, parmak, kalem).
+     Çekme/basılı tutma sırasında oluşan "tıklama" motorun dokunma işleyicisine
+     ulaşmaz (yoksa açılış karta atlardı). */
+  function tracker(ctx) {
+    if (ctx.__gt) return ctx.__gt;
+    const ov = ctx.overlay;
+    const g = { down: false, id: null, x0: 0, y0: 0, x: 0, y: 0, t0: 0, eat: false, block: false, subs: new Set() };
+    const emit = (type, e) => Array.from(g.subs).forEach(f => { try { f(type, e); } catch (err) { console.error(err); } });
+    ov.addEventListener("pointerdown", e => {
+      if (e.target.closest && e.target.closest(".sc-skip")) return;
+      if (g.down) return;
+      g.down = true; g.id = e.pointerId; g.x0 = g.x = e.clientX; g.y0 = g.y = e.clientY; g.t0 = performance.now(); g.eat = false;
+      try { ov.setPointerCapture(e.pointerId); } catch (err) { /* önemsiz */ }
+      emit("down", e);
+    });
+    ov.addEventListener("pointermove", e => { if (!g.down || e.pointerId !== g.id) return; g.x = e.clientX; g.y = e.clientY; emit("move", e); });
+    const up = e => { if (!g.down || e.pointerId !== g.id) return; g.down = false; g.x = e.clientX; g.y = e.clientY; emit(e.type === "pointercancel" ? "cancel" : "up", e); };
+    ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
+    ov.addEventListener("click", e => {
+      if (e.target.closest && e.target.closest(".sc-skip")) return;
+      if (g.eat || g.block) { g.eat = false; e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+    g.dist = dir => {
+      const dx = g.x - g.x0, dy = g.y - g.y0;
+      return { up: -dy, down: dy, left: -dx, right: dx }[dir] != null ? { up: -dy, down: dy, left: -dx, right: dx }[dir] : Math.hypot(dx, dy);
+    };
+    ctx.__gt = g;
+    return g;
+  }
+  function prepareGestures(ctx, firstKind) {
+    tracker(ctx);
+    ctx.overlay.style.touchAction = "none";               // tarayıcı kaydırması parmağı çalmasın
+    ctx.overlay.classList.add("sc-gesture");
+    const hint = ctx.overlay.querySelector(".sc-hint");
+    const def = "Açmak için dokunun";
+    if (hint && firstKind !== "tap" && (!ctx.cfg.hintText || ctx.cfg.hintText === def)) {
+      const first = (ctx.cfg.actions || []).find(isGate);
+      hint.textContent = GATE_HINT[firstKind] + (firstKind === "pull" || firstKind === "swipe" ? (DIR_ARROW[first && first.gdir] || "") : "");
+    }
+  }
+  function nudgeHint(ctx) {
+    const hint = ctx.overlay.querySelector(".sc-hint");
+    if (hint && hint.style.display !== "none") hint.animate([{ transform: "scale(1)" }, { transform: "scale(1.1)" }, { transform: "scale(1)" }], { duration: 380, easing: "ease-out", composite: "add" });
+  }
+  // Misafirin hareketini bekler: hold = basınca, pull = parmak yöne doğru kayınca, swipe = hızlı kaydırınca.
+  function gate(ctx, kind, dir) {
+    const g = tracker(ctx);
+    g.block = true;
+    return new Promise(res => {
+      const ok = () => { g.subs.delete(f); g.eat = true; res(); };
+      const f = (type) => {
+        if (ctx.dead) { g.subs.delete(f); return; }
+        const d = g.dist(dir), el = performance.now() - g.t0;
+        if (kind === "hold" && type === "down") return ok();
+        if (kind === "pull" && type === "move" && d > 10) return ok();
+        if (kind === "swipe" && (type === "move" || type === "up") && d > 45 && el < 900) return ok();
+        if (type === "up") nudgeHint(ctx);
+      };
+      g.subs.add(f);
+      if (kind === "hold" && g.down) ok();
+    });
+  }
+  /* Çekme ve basılı tutma: bölümün bütün hareketleri kurulur ve DURDURULUR; zaman,
+     parmağın çektiği mesafeye (çekme) ya da basılı tutulan süreye (basılı tutma) bağlanır.
+     Bırakınca: yeterince ilerlediyse kendiliğinden tamamlanır, değilse geri döner ve
+     yeniden bekler. Ses ve parçacık anları, zaman o noktaya geldiğinde bir kez çalar. */
+  function runScrubChunk(ctx, list, kind, dir) {
+    return new Promise(resolve => {
+      const g = tracker(ctx), ov = ctx.overlay, k = ctx.k;
+      const before = new Set(ov.getAnimations({ subtree: true }));
+      const q = [], realLater = ctx.later;
+      ctx.later = (ms, fn) => q.push({ at: Math.max(0, ms) * k, fn, done: false });
+      let end = 0;
+      schedule(list).items.forEach(it => {
+        let used = 0;
+        try { used = it.def.run(ctx, it.a, it.def, it.begin) || 0; } catch (e) { console.error("[Studio SEOZ] Hareket hatası:", it.a.move, e); }
+        if (isFinite(used)) end = Math.max(end, it.begin + used);
+      });
+      ctx.later = realLater;
+      const finite = a => a.effect && a.effect.getTiming().iterations !== Infinity;
+      const anims = ov.getAnimations({ subtree: true }).filter(a => !before.has(a) && finite(a)).map(a => ({ a, off: 0 }));
+      const T = Math.max(120, end * k);
+      anims.forEach(x => { try { x.a.pause(); x.a.currentTime = 0; } catch (e) { /* önemsiz */ } });
+      let t = 0, mode = "idle", raf = 0, last = 0, done = false, rate = 0;
+      // Hareketler iki yolla sürülür: çekerken her karede zaman elle ayarlanır (parmağı izler);
+      // basılı tutarken / geri dönerken / tamamlanırken animasyonlar kendi hızlarıyla oynar
+      // (tarayıcı çizer, ana iş parçacığı yorulmaz).
+      const drive = (x) => { try { x.a.pause(); x.a.currentTime = Math.max(0, t - x.off); } catch (e) { /* önemsiz */ } };
+      const resume = (x, r) => {
+        try {
+          const endT = x.a.effect.getComputedTiming().endTime, ct = x.a.currentTime || 0;
+          if (r > 0 && ct >= endT) { x.a.pause(); x.a.currentTime = endT; return; }   // bitmiş: sonunda kalır
+          if (r < 0 && ct <= 0) { x.a.pause(); x.a.currentTime = 0; return; }
+          x.a.playbackRate = r; x.a.play();
+        } catch (e) { /* önemsiz */ }
+      };
+      const setRate = r => { rate = r; anims.forEach(x => r ? resume(x, r) : drive(x)); };
+      const fire = () => q.forEach(x => {
+        if (x.done || x.at > t) return;
+        x.done = true;
+        const pre = new Set(ov.getAnimations({ subtree: true }));
+        try { if (!ctx.dead) x.fn(); } catch (e) { console.error(e); }
+        ov.getAnimations({ subtree: true }).forEach(a => {
+          if (pre.has(a) || !finite(a)) return;
+          const y = { a, off: x.at }; anims.push(y);
+          if (rate) { try { a.currentTime = Math.max(0, t - x.at); } catch (e) { /* önemsiz */ } resume(y, rate); } else drive(y);
+        });
+      });
+      const span = () => Math.max(120, 0.45 * Math.min(global.innerWidth || 400, global.innerHeight || 700));
+      const loop = now => {
+        if (done || ctx.dead) return;
+        const dt = Math.min(64, now - last); last = now;
+        if (mode === "fwd") { t = Math.min(T, t + dt); fire(); if (t >= T) return commit(); }
+        else if (mode === "back") {
+          t = Math.max(0, t - dt * 1.6);
+          if (t <= 0) { mode = "idle"; setRate(0); showTapHint(ctx, true, kind, dir); return; }
+        } else if (mode === "track" && g.pend != null) {
+          t = Math.max(0, Math.min(T, g.pend)); g.pend = null; anims.forEach(drive); fire();
+          if (t >= T) return commit();
+        }
+        raf = requestAnimationFrame(loop);
+      };
+      const run = (m, r) => { mode = m; setRate(r); cancelAnimationFrame(raf); last = performance.now(); raf = requestAnimationFrame(loop); };
+      function commit() {
+        if (done) return; done = true; mode = "done";
+        cancelAnimationFrame(raf); g.subs.delete(f); g.block = false;
+        showTapHint(ctx, false);
+        fire(); setRate(1);
+        q.forEach(x => { if (!x.done) { x.done = true; realLater((x.at - t) / k, x.fn); } });
+        ctx.wait((T - t) / k).then(resolve);
+      }
+      const f = (type) => {
+        if (done) return;
+        if (ctx.dead) { g.subs.delete(f); return; }
+        if (kind === "hold") {
+          if (type === "down") { g.eat = true; showTapHint(ctx, false); run("fwd", 1); }
+          else if ((type === "up" || type === "cancel") && mode === "fwd") run("back", -1.6);
+          return;
+        }
+        // çekme: parmağın yöne doğru aldığı yol = açılışın ilerleyişi (kare başına bir kez uygulanır)
+        if (type === "down") { g.base = t; g.pend = null; run("track", 0); }
+        else if (type === "move" && mode === "track") {
+          const d = g.dist(dir);
+          if (d > 10) { g.eat = true; showTapHint(ctx, false); }
+          g.pend = (g.base || 0) + T * Math.max(0, d) / span();
+        } else if ((type === "up" || type === "cancel") && mode === "track") {
+          if (g.pend != null) { t = Math.max(0, Math.min(T, g.pend)); g.pend = null; anims.forEach(drive); fire(); }
+          if (t >= T * 0.35) return commit();
+          if (t > 0) run("back", -1.6); else { mode = "idle"; showTapHint(ctx, true, kind, dir); }
+        }
+      };
+      g.subs.add(f);
+      g.block = true;
+      // açılışı başlatan dokunuş hâlâ basılıysa hemen başla
+      if (g.down) { if (kind === "hold") { g.eat = true; run("fwd", 1); } else { g.base = 0; run("track", 0); f("move"); } }
+      else showTapHint(ctx, true, kind, dir);
+    });
+  }
+
 
   /* =================== SERBEST MODEL =================== */
   function placeholderArt(l) {
@@ -674,9 +1068,11 @@
         z: (i + 1) * 2, zLayer: i * 1.5, origin: "50% 50%", back: uses(l.id, "needsBack") || !!l.backSrc, lit: uses(l.id, "needsLit"),
         art: placeholderArt(l) };
     });
-    const firstTap = acts.findIndex(a => a.start === "tap");
+    const firstTap = acts.findIndex(isGate);
     const pre = firstTap > 0 ? acts.slice(0, firstTap) : [];   // ilk dokunuştan önceki hareketler = bekleme (dikkat) bölümü
     const rest = firstTap >= 0 ? acts.slice(firstTap) : acts;
+    const firstKind = rest.length && isGate(rest[0]) ? rest[0].start : "tap";
+    const gestures = acts.some(a => isGate(a) && a.start !== "tap");
     const model = {
       id: "free", label: "Serbest stüdyo", icon: "🎬", concept: "none", slots,
       build(ctx) {
@@ -694,12 +1090,24 @@
       },
       scenarios: [{
         id: "custom", label: "Kendi kurgum",
-        attention(ctx) { if (pre.length) runChunk(ctx, pre); },
+        attention(ctx) {
+          if (gestures) prepareGestures(ctx, firstKind);
+          if (pre.length) runChunk(ctx, pre);
+        },
+        // A2.4: ilk adım çekme/kaydırma/basılı tutma ise açılış bu hareketle başlar (dokunma değil)
+        waitStart: firstKind !== "tap" ? (ctx) => gate(ctx, firstKind, rest[0].gdir).then(() => { ctx.__gateOpen = true; }) : null,
         async open(ctx) {
           const parts = rest.length ? chunks(rest) : [];
           for (let i = 0; i < parts.length; i++) {
-            if (i > 0) { showTapHint(ctx, true); await ctx.waitTap(); showTapHint(ctx, false); if (ctx.dead) return; }
-            await runChunk(ctx, parts[i]);
+            const head = parts[i][0], kind = isGate(head) ? head.start : "tap";
+            if (i > 0 || (kind !== "tap" && !ctx.__gateOpen)) {
+              showTapHint(ctx, true, kind);
+              if (kind === "tap") await ctx.waitTap(); else await gate(ctx, kind, head.gdir);
+              showTapHint(ctx, false); if (ctx.dead) return;
+            }
+            ctx.__gateOpen = false;
+            if (kind === "pull" || kind === "hold") await runScrubChunk(ctx, parts[i], kind, head.gdir);
+            else await runChunk(ctx, parts[i]);
             if (ctx.dead) return;
           }
           if (!ctx.__cardShown && ctx.hasCard) {
@@ -766,7 +1174,7 @@
   const TAP_GAP = 600, ATTENTION_MIN = 1500, CARD_AUTO = 1300;
   function plan(ncfg, entry) {
     const model = ncfg.__free, acts = model ? (ncfg.actions || []) : [];
-    const firstTap = acts.findIndex(a => a.start === "tap");
+    const firstTap = acts.findIndex(isGate);
     const pre = firstTap > 0 ? acts.slice(0, firstTap) : [];
     const rest = firstTap >= 0 ? acts.slice(firstTap) : acts;
     const items = [], taps = [];
@@ -776,10 +1184,10 @@
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: it.begin, end: it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: 0 })));
       t = Math.max(ATTENTION_MIN, sp.end);
     } else t = ncfg.start === "auto" ? 1600 : 900;
-    taps.push({ time: t, first: true });
+    taps.push({ time: t, first: true, kind: rest.length && isGate(rest[0]) ? rest[0].start : "tap" });
     const parts = rest.length ? chunks(rest) : [];
     parts.forEach((list, ci) => {
-      if (ci > 0) { t += TAP_GAP; taps.push({ time: t }); }
+      if (ci > 0) { t += TAP_GAP; taps.push({ time: t, kind: list[0].start }); }
       const sp = schedule(list);
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: t + it.begin, end: t + it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: ci + 1 })));
       t += sp.end;
@@ -845,5 +1253,5 @@
   }
 
   global.SeozCinemaFree = { registerMove, moves: () => ORDER.map(id => MOVES[id]), move: id => MOVES[id], movesByGroup, availability, EASE_LABELS,
-    PRESETS, presetOf, rolesOf, schedule, chunks, plan, runTimeline };
+    PRESETS, presetOf, rolesOf, schedule, chunks, plan, runTimeline, isGate };
 })(window);

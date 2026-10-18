@@ -84,3 +84,6 @@
   border:2px dashed rgba(255,255,255,.55); border-radius:8px; color:rgba(255,255,255,.8); font:600 13px "Manrope",system-ui,sans-serif; background:rgba(255,255,255,.06); }
 .sc-freeze .sc-ph{ display:flex; }
 .sc-half, .sc-leak{ pointer-events:none; }
+/* A2.4 · çekme / kaydırma / basılı tutma ile açılan sahne */
+.sc-overlay.sc-gesture{ cursor:grab; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.sc-overlay.sc-gesture:active{ cursor:grabbing; }

@@ -16,7 +16,10 @@
   "use strict";
 
   const BUDGET_MB = 15, MAX_LAYERS_WARN = 12;
-  const START_LABELS = [["tap", "Dokununca"], ["with", "Öncekiyle birlikte"], ["after", "Öncekinden sonra"], ["at", "Belirli saniyede"]];
+  const START_LABELS = [["tap", "Dokununca"], ["pull", "Çekince"], ["swipe", "Kaydırınca"], ["hold", "Basılı tutunca"], ["with", "Öncekiyle birlikte"], ["after", "Öncekinden sonra"], ["at", "Belirli saniyede"]];
+  const GDIRS = [["any", "Herhangi bir yöne"], ["up", "Yukarı"], ["down", "Aşağı"], ["left", "Sola"], ["right", "Sağa"]];
+  const GATE_NAMES = { tap: "Dokunuş", pull: "Çekme", swipe: "Kaydırma", hold: "Basılı tutma" };
+  const gateOf = a => !!(a && GATE_NAMES[a.start]);
   const SPEEDS = [[0.5, "0,5× (yavaş)"], [0.75, "0,75×"], [1, "1× (normal)"], [1.5, "1,5×"], [2, "2× (hızlı)"]];
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -214,7 +217,9 @@
 
     /* ---------- sağ panel ---------- */
     function paramsHTML(a, m) {
-      return (m.params || []).map(p => `<label class="cs-row"><span>${esc(p.label)}</span><select data-cs-ap="${a.id}" data-key="${p.key}">
+      return (m.params || []).map(p => p.type === "layer" ? `<label class="cs-row"><span>${esc(p.label)}</span><select data-cs-ap="${a.id}" data-key="${p.key}">
+        <option value="">Yok</option>${cin.layers.filter(l => l.id !== a.layer && !l.backdrop).map(l => `<option value="${l.id}" ${(a.params || {})[p.key] === l.id ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></label>`
+        : `<label class="cs-row"><span>${esc(p.label)}</span><select data-cs-ap="${a.id}" data-key="${p.key}">
         ${p.options.map(([v, l]) => `<option value="${v}" ${String((a.params || {})[p.key] != null ? a.params[p.key] : p.def) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`).join("");
     }
     function actionHTML(a) {
@@ -227,6 +232,8 @@
         ${m.note ? `<p class="cs-hint">${esc(m.note)}</p>` : ""}
         <label class="cs-row"><span>Başlat</span><select data-cs-af="${a.id}" data-key="start">
           ${START_LABELS.map(([v, l]) => `<option value="${v}" ${a.start === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="cs-row" data-gdir-row ${a.start === "pull" || a.start === "swipe" ? "" : "hidden"}><span>Parmak yönü</span><select data-cs-af="${a.id}" data-key="gdir">
+          ${GDIRS.map(([v, l]) => `<option value="${v}" ${(a.gdir || "any") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <div class="cs-grid2">
           <label>${a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)"}<input type="number" min="0" max="60" step="0.1" data-cs-af="${a.id}" data-key="delay" value="${a.delay || 0}"></label>
           <label>Süre (sn)<input type="number" min="0.1" max="20" step="0.1" data-cs-af="${a.id}" data-key="duration" value="${a.duration}"></label>
@@ -436,10 +443,10 @@
       if (m.loop && a.repeat === 0) {
         // sürekli tekrarlanan bekleme hareketleri (süzülme, titreşim) ilk dokunuştan önce oynar
         a.start = "with";
-        const ft = cin.actions.findIndex(x => x.start === "tap");
+        const ft = cin.actions.findIndex(gateOf);
         cin.actions.splice(ft >= 0 ? ft : cin.actions.length, 0, a);
       } else {
-        a.start = cin.actions.some(x => x.start === "tap") ? "after" : "tap";
+        a.start = cin.actions.some(gateOf) ? "after" : "tap";
         cin.actions.push(a);
       }
       save(); refreshAll();
@@ -463,7 +470,7 @@
       if (!state.clip || !layerById(state.sel)) return;
       const c = JSON.parse(JSON.stringify(state.clip)); c.id = uid("A"); c.layer = state.sel;
       const srcIdx = cin.actions.findIndex(x => x.id === state.clip.id);
-      if (c.start === "tap" && cin.actions.some(x => x.start === "tap")) c.start = "with";
+      if (gateOf(c) && cin.actions.some(gateOf)) c.start = "with";
       cin.actions.splice(srcIdx >= 0 ? srcIdx + 1 : cin.actions.length, 0, c);
       if (c.start !== "at" && srcIdx >= 0) c.start = "with";
       state.selAct = c.id; save(); refreshAll(); toast("Yapıştırıldı");
@@ -497,7 +504,8 @@
       }
       const ticks = [];
       for (let t = 0; t <= Math.ceil(total); t++) ticks.push(`<span class="cs-tick" style="left:${t * pps}px">${t}</span>`);
-      const taps = p.taps.map((tp, i) => `<div class="cs-tap" style="left:${sec(tp.time) * pps}px" title="${i === 0 ? "Misafirin ilk dokunuşu (açılış başlar)" : "Yeni dokunuş bekler"}"><span>👆 ${i === 0 ? "Dokunuş" : "Dokunuş " + (i + 1)}</span></div>`).join("");
+      const taps = p.taps.map((tp, i) => { const nm = GATE_NAMES[tp.kind] || GATE_NAMES.tap, ic = { pull: "✋", swipe: "👉", hold: "☝️" }[tp.kind] || "👆";
+        return `<div class="cs-tap" data-kind="${tp.kind || "tap"}" style="left:${sec(tp.time) * pps}px" title="${i === 0 ? "Misafirin ilk hareketi (açılış başlar): " + nm.toLowerCase() : "Misafiri bekler: " + nm.toLowerCase()}"><span>${ic} ${nm}${i ? " " + (i + 1) : ""}</span></div>`; }).join("");
       const cardRow = p.hasCard ? `<div class="cs-tl-row"><div class="cs-tl-name">İç kart</div><div class="cs-tl-track" style="width:${W}px">
           <div class="cs-bar g-kart is-fixed" style="left:${sec(p.cardStart) * pps}px;width:${Math.max(20, sec(p.exitAt - p.cardStart) * pps)}px" title="İç kart görünür; ${p.holdTap ? "misafir dokunana kadar" : "ayarlanan süre kadar"} ekranda kalır"><span>İç kart${p.holdTap ? " · dokunana kadar" : ` · ${fmt(sec(p.exitAt - p.cardShown))} sn ekranda`}</span></div>
           <div class="cs-bar g-exit is-fixed" style="left:${sec(p.exitAt) * pps}px;width:${Math.max(16, sec(p.exitMs) * pps)}px" title="Davetiyeye geçiş"><span>Geçiş</span></div>
@@ -593,7 +601,7 @@
         } else {
           const beginU = barEl.offsetLeft / state.zoom * 1000 / k;           // hız uygulanmamış ms
           const rel = Math.max(0, Math.round((beginU - chunkStart) / 100) / 10);
-          if (a.start !== "tap") a.start = "at";
+          if (!gateOf(a)) a.start = "at";
           a.delay = rel;
         }
         const relayer = state.sel !== a.layer; state.selAct = id; state.sel = a.layer; save();
@@ -698,7 +706,8 @@
         if (key === "duration" && !a.duration) a.duration = 0.1;
         if (key === "speed" && !a.speed) a.speed = 1;
         save(); renderSeq(); renderSub(); renderTimeline();
-        if (key === "start") { const lab = tg.closest(".cs-act").querySelector('[data-key="delay"]').parentNode; lab.firstChild.textContent = a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)"; }
+        if (key === "start") { const card = tg.closest(".cs-act"), lab = card.querySelector('[data-key="delay"]').parentNode; lab.firstChild.textContent = a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)";
+          const gr = card.querySelector("[data-gdir-row]"); if (gr) gr.hidden = !(a.start === "pull" || a.start === "swipe"); }
         return;
       }
       if (tg.dataset.csAp) {

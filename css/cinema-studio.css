@@ -179,3 +179,7 @@ body.cs-open{ overflow:hidden; }
 .cs-tl .cs-tl-go{ white-space:nowrap; }
 .cs-tl .cs-tl-go input{ width:64px; flex:none; min-height:28px; }
 .cs-tl-row[data-tl-layer]{ min-height:30px; }
+/* A2.4 */
+.cs-row[hidden]{ display:none; }
+.cs-tap[data-kind=pull], .cs-tap[data-kind=swipe], .cs-tap[data-kind=hold]{ border-left-color:#4F7FB0; }
+.cs-tap[data-kind=pull] span, .cs-tap[data-kind=swipe] span, .cs-tap[data-kind=hold] span{ color:#3D6A99; }
