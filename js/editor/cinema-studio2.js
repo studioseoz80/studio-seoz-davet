@@ -247,8 +247,27 @@
     }
 
     /* ---------- sağ panel ---------- */
+    function pairsHTML(a, m) {
+      if (!m.pairs) return "";
+      const pv = (k, d) => { const v = (a.params || {})[k]; return v != null && v !== "" ? v : d; };
+      return `<div class="cs-pairs" role="group" aria-label="Başlangıç ve bitiş duruşu">
+        <div class="cs-pair cs-pair-h"><span></span><b>Başlangıç</b><b>Bitiş</b></div>
+        ${m.pairs.map(ax => { const d = ax.def != null ? ax.def : 0;
+          return `<div class="cs-pair"><span>${esc(ax.label)}</span>
+            <input type="number" min="${ax.min}" max="${ax.max}" step="${ax.step}" data-cs-ap="${a.id}" data-key="${ax.key}0" value="${esc(pv(ax.key + "0", d))}" aria-label="${esc(ax.label)} başlangıç">
+            <input type="number" min="${ax.min}" max="${ax.max}" step="${ax.step}" data-cs-ap="${a.id}" data-key="${ax.key}1" value="${esc(pv(ax.key + "1", d))}" aria-label="${esc(ax.label)} bitiş"></div>`; }).join("")}
+      </div>`;
+    }
+    // 3D-1: arka yüzü olmayan yeni görsel, arkası görünecek biçimde dönüyorsa uyarı
+    function backWarnHTML(l, m, a) {
+      if (!l || !l.v3 || l.backSrc) return "";
+      let turns = !!(m && m.needsBack);
+      if (m && m.pairs && a) { const p = a.params || {}; turns = ["rx0", "rx1", "ry0", "ry1"].some(k => Math.abs(Number(p[k]) || 0) > 90); }
+      if (!m) turns = !!(l.d3 && (Math.abs(Number(l.rx) || 0) > 90 || Math.abs(Number(l.ry) || 0) > 90));
+      return turns ? `<p class="cs-hint cs-warn">⚠ Bu görselin arka yüzü yok. Arkası izleyiciye döndüğünde görsel görünmez — sahte arka yüz oluşturulmaz. Arkası görünsün istiyorsanız yukarıdan "Arka yüz" görseli yükleyin.</p>` : "";
+    }
     function paramsHTML(a, m) {
-      return (m.params || []).map(p => p.type === "layer" ? `<label class="cs-row"><span>${esc(p.label)}</span><select data-cs-ap="${a.id}" data-key="${p.key}">
+      return pairsHTML(a, m) + (m.params || []).map(p => p.type === "layer" ? `<label class="cs-row"><span>${esc(p.label)}</span><select data-cs-ap="${a.id}" data-key="${p.key}">
         <option value="">Yok</option>${cin.layers.filter(l => l.id !== a.layer && !l.backdrop).map(l => `<option value="${l.id}" ${(a.params || {})[p.key] === l.id ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></label>`
         : `<label class="cs-row"><span>${esc(p.label)}</span><select data-cs-ap="${a.id}" data-key="${p.key}">
         ${p.options.map(([v, l]) => `<option value="${v}" ${String((a.params || {})[p.key] != null ? a.params[p.key] : p.def) === String(v) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`).join("");
@@ -261,6 +280,7 @@
           <span class="cs-row-btns"><button type="button" class="cs-ico" data-cs-acopy="${a.id}" title="Kopyala (sonra başka katmanı seçip Yapıştır)" aria-label="Kopyala">⧉</button>
           <button type="button" class="cs-ico cs-del" data-cs-adel="${a.id}" aria-label="Hareketi sil">✕</button></span></div>
         ${m.note ? `<p class="cs-hint">${esc(m.note)}</p>` : ""}
+        ${backWarnHTML(layerById(a.layer), m, a)}
         <label class="cs-row"><span>Başlat</span><select data-cs-af="${a.id}" data-key="start">
           ${START_LABELS.map(([v, l]) => `<option value="${v}" ${a.start === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="cs-row" data-gdir-row ${a.start === "pull" || a.start === "swipe" ? "" : "hidden"}><span>Parmak yönü</span><select data-cs-af="${a.id}" data-key="gdir">
@@ -277,6 +297,22 @@
           ${[[0, "Sürekli"], [1, "1 kez"], [2, "2 kez"], [3, "3 kez"], [5, "5 kez"]].map(([v, l]) => `<option value="${v}" ${Number(a.repeat) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>` : ""}
         ${paramsHTML(a, m)}
       </div>`;
+    }
+    /* 3D-1: katmanın 3D duruşu (X/Y/Z dönüşü, perspektif). Kapalıyken katman eskisi gibidir. */
+    const PERSP = [["", "Sahneyle aynı"], ["500", "Güçlü"], ["1000", "Orta"], ["2000", "Hafif"]];
+    function d3HTML(l) {
+      const deg = k => Math.round(Number(l[k]) || 0);
+      const rot = (k, label) => `<label class="cs-row"><span>${label}</span><input type="range" min="-180" max="180" step="1" data-cs-l="${k}" value="${deg(k)}"><output data-cs-lout="${k}">${deg(k)}°</output></label>`;
+      return `<section class="cs-sec cs-3d">
+          <h3>3D</h3>
+          <label class="cs-check"><input type="checkbox" data-cs-l="d3" ${l.d3 ? "checked" : ""}> 3D efekt</label>
+          ${l.d3 ? `${rot("rx", "X dönüşü")}${rot("ry", "Y dönüşü")}${rot("rz", "Z dönüşü")}
+            <label class="cs-row"><span>Perspektif</span><select data-cs-l="persp">${PERSP.map(([v, t]) => `<option value="${v}" ${String(l.persp || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select><span></span></label>
+            ${backWarnHTML(l, null)}
+            <p class="cs-hint">X: öne-arkaya yatırır · Y: sağa-sola çevirir · Z: düz döndürür. Derinliği (Z konumu) yukarıdaki "Derinlik" belirler. Hareket için "+ Hareket ekle → Serbest 3D hareket".</p>
+            <button type="button" class="btn btn-outline cs-reset" data-cs-3dreset>3D duruşu sıfırla</button>`
+          : `<p class="cs-hint">Açınca bu katmanı X/Y/Z ekseninde döndürebilir ve ona özel perspektif verebilirsiniz. Kapalıyken katman eskisi gibi görünür.</p>`}
+        </section>`;
     }
     function renderRight() {
       const l = layerById(state.sel);
@@ -315,7 +351,8 @@
           <label class="cs-row"><span>Işık tepkisi</span><input type="range" min="0" max="1.5" step="0.05" data-cs-l="light" value="${L.light}"><output data-cs-lout="light">${Math.round(L.light * 100)}%</output></label>
           <button type="button" class="btn btn-outline cs-reset" data-cs-reset>Yerleşimi sıfırla</button>
           <p class="cs-hint">Sahnede katmanı sürükleyin, sağ alt köşeden büyütün, kırmızı artıyla dönme noktasını taşıyın. Ok tuşları 1, Shift ile 10 birim kaydırır.</p>
-        </section>`}`;
+        </section>
+        ${d3HTML(l)}`}`;
     }
 
     /* ---------- sahne ---------- */
@@ -419,8 +456,9 @@
       for (const f of files) {
         try {
           const res = await process(f);
+          // v3 (3D-1): bu görselde ayrı arka yüz yüklenmedikçe arkaya hiçbir şey uydurulmaz
           const l = { id: uid("L"), name: (f.name || "Görsel").replace(/\.[a-z0-9]+$/i, "").slice(0, 40), src: res.ref, box: fitBox(res.info.w, res.info.h),
-            check: { warnings: res.warnings, notes: res.notes, info: res.info } };
+            check: { warnings: res.warnings, notes: res.notes, info: res.info }, v3: 1 };
           cin.layers.push(l); state.sel = l.id;
         } catch (err) { errs.push(`${f.name}: ${err.message || "yüklenemedi"}`); }
       }
@@ -807,6 +845,7 @@
       if (d.csDelBack != null) { const l = layerById(state.sel); delete l.backSrc; delete l.backCheck; save(); return refreshAll(); }
       if (d.csCardUp != null) return pick(false, ([f]) => uploadCard(f));
       if (d.csCardDel != null) { entry.cardSrc = ""; delete cin.cardCheck; save(); return refreshAll(); }
+      if (d.cs3dreset != null) { const l = layerById(state.sel); ["rx", "ry", "rz", "persp"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
       if (d.csReset != null) { const l = layerById(state.sel); ["x", "y", "scale", "origin", "depth", "thickness", "light"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
     });
     leftEl.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-cs-sel][role=button]")) { e.preventDefault(); e.target.click(); } });
@@ -848,6 +887,7 @@
       else if (k === "depth") { setLayerLive(state.sel, { depth: v }); if (out) out.textContent = v; }
       else if (k === "thickness" && out) out.textContent = v;
       else if (k === "light" && out) out.textContent = Math.round(v * 100) + "%";
+      else if (k === "rx" || k === "ry" || k === "rz") { setLayerLive(state.sel, { [k]: v }); if (out) out.textContent = v + "°"; }
     });
     rightEl.addEventListener("change", (e) => {
       const tg = e.target, l = layerById(state.sel);
@@ -871,7 +911,9 @@
       if (tg.dataset.csAp) {
         const a = cin.actions.find(x => x.id === tg.dataset.csAp); a.params = a.params || {};
         const raw = tg.value; a.params[tg.dataset.key] = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
-        save(); renderTimeline(); return rebuildStage();
+        save(); renderTimeline();
+        if (/^r[xy][01]$/.test(tg.dataset.key)) renderRight();   // 3D-1: arka yüz uyarısı güncellensin
+        return rebuildStage();
       }
       const k = tg.dataset.csL; if (!k || !l) return;
       if (k === "hidden" || k === "backdrop") {
@@ -880,6 +922,9 @@
         save(); return refreshAll();
       }
       if (k === "thickness" || k === "light") { l[k] = Number(tg.value); save(); return rebuildStage(); }
+      if (k === "d3") { setLayerLive(state.sel, { d3: tg.checked }, true); return renderRight(); }
+      if (k === "persp") { setLayerLive(state.sel, { persp: tg.value ? Number(tg.value) : "" }, true); return; }
+      if (k === "rx" || k === "ry" || k === "rz") { setLayerLive(state.sel, { [k]: Number(tg.value) || 0 }, true); return renderRight(); }
       save();
     });
 

@@ -211,3 +211,10 @@ body.cs-open{ overflow:hidden; }
 .cs-lib-roles select{ width:100%; }
 .cs-libsec .cs-grid2 .btn{ min-height:34px; }
 @media (max-width: 560px){ .cs-lib-row{ flex-direction:column; align-items:flex-start; } }
+
+/* 3D-1: katman 3D bölümü ve Serbest 3D hareket tablosu */
+.cs-warn{ color:#8A4B12; background:#FFF6E8; border:1px solid #F1D9B5; border-radius:6px; padding:6px 8px; }
+.cs-pairs{ margin:6px 0 8px; border:1px solid #EFE9DD; border-radius:8px; padding:6px 8px; background:#FDFBF7; }
+.cs-pair{ display:grid; grid-template-columns:minmax(0,1fr) 72px 72px; gap:6px; align-items:center; margin:4px 0; font-size:11.5px; }
+.cs-pair input{ width:100%; min-width:0; }
+.cs-pair-h b{ font-size:10.5px; font-weight:600; color:var(--ink-soft, #6B6A5E); text-align:center; }

@@ -423,8 +423,11 @@
           const leaf = h("div", "sc-half sc-leaf", { position: "absolute", inset: "0", transformOrigin: "0% 50%", transformStyle: "preserve-3d", transform: `translateZ(${-i * 0.8}px)` });
           const im = h("img", "", { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: (front && front.style.objectFit) || "contain", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", filter: `brightness(${1 - i * 0.05})` });
           im.src = front ? front.src : ""; im.alt = "";
-          const back = h("div", "", { position: "absolute", inset: "0", background: "#EDE6D8", transform: "rotateY(180deg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" });
-          leaf.appendChild(im); leaf.appendChild(back);
+          leaf.appendChild(im);
+          if (!C.honestBack(u)) {     // 3D-1: yeni görsellerde arka yüz uydurulmaz
+            const back = h("div", "", { position: "absolute", inset: "0", background: "#EDE6D8", transform: "rotateY(180deg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" });
+            leaf.appendChild(back);
+          }
           ctx.S[a.layer].insertBefore(leaf, ctx.C[a.layer]);
           inner.__pages.push(leaf);
         }
@@ -439,6 +442,53 @@
       });
       ctx.later(begin, () => ctx.shade(a.layer, 0.45, { d: t.dur * 0.5 }));
       return t.dur + (leaves.length - 1) * t.dur * 0.45;
+    } });
+
+  /* =================== 3D-1 — SERBEST 3D HAREKET ===================
+     Katmanı başlangıç duruşundan bitiş duruşuna götürür: X/Y/Z konumu, X/Y/Z dönüşü ve ölçek.
+     Değerler katmanın kendi yerleşimine ve 3D duruşuna EKLENİR (comp:"add"); diğer hareketlerle
+     birlikte kullanılabilir. Yalnızca CSS dönüşümü kullanır (telefonda hafif). */
+  const FREE3D_AXES = [
+    { key: "x", label: "Sağ-sol (px)", min: -800, max: 800, step: 1, unit: "px" },
+    { key: "y", label: "Yukarı-aşağı (px)", min: -1000, max: 1000, step: 1, unit: "px" },
+    { key: "z", label: "Derinlik (px)", min: -1200, max: 800, step: 1, unit: "px" },
+    { key: "rx", label: "X dönüşü (°)", min: -720, max: 720, step: 1, unit: "deg" },
+    { key: "ry", label: "Y dönüşü (°)", min: -720, max: 720, step: 1, unit: "deg" },
+    { key: "rz", label: "Z dönüşü (°)", min: -720, max: 720, step: 1, unit: "deg" },
+    { key: "s", label: "Ölçek (%)", min: 5, max: 400, step: 1, def: 100 }
+  ];
+  function free3dPose(a, end) {
+    const v = (ax) => {
+      const raw = (a.params || {})[ax.key + (end ? "1" : "0")];
+      const d = ax.def != null ? ax.def : 0;
+      const n = raw == null || raw === "" ? d : num(raw, d);
+      return Math.max(ax.min, Math.min(ax.max, n));
+    };
+    const [x, y, z, rx, ry, rz, s] = FREE3D_AXES.map(v);
+    return { x, y, z, rx, ry, rz, s };
+  }
+  function free3dTransform(p) {
+    return `translate3d(${p.x}px,${p.y}px,${p.z}px) rotateX(${p.rx}deg) rotateY(${p.ry}deg) rotateZ(${p.rz}deg) scale(${p.s / 100})`;
+  }
+  registerMove({ id: "free3d", group: "sinematik", label: "Serbest 3D hareket", single: true, duration: 1.6, easing: "yumusak", free3d: true,
+    note: "Katmanı başlangıç duruşundan bitiş duruşuna götürür. Değerler katmanın yerleşimine eklenir; 0 = olduğu yer, ölçek 100 = kendi boyu.",
+    pairs: FREE3D_AXES,
+    params: [
+      { key: "fade", label: "Görünürlük", def: "yok", options: [["yok", "Değişmesin"], ["belir", "Belirerek gelsin"], ["kaybol", "Kaybolarak gitsin"]] },
+      { key: "hold", label: "Hareketten önce", def: "bekle", options: [["bekle", "Başlangıç duruşunda beklesin"], ["normal", "Olduğu yerde dursun"]] }
+    ],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), el = ctx.L[a.layer];
+      if (!el) return t.dur;
+      const fade = P(a, def, "fade"), from = free3dPose(a, false), to = free3dPose(a, true);
+      const k0 = { transform: free3dTransform(from) }, k1 = { transform: free3dTransform(to) };
+      const hold = P(a, def, "hold") !== "normal";
+      ctx.anim(el, [k0, k1], { d: t.dur, delay: begin, e: t.e, it: t.it, fill: hold ? "both" : "forwards", comp: "add" });
+      if (fade === "belir" || fade === "kaybol") {
+        const o = fade === "belir" ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }];
+        ctx.anim(ctx.C[a.layer] || el, o, { d: t.dur, delay: begin, e: t.e, fill: fade === "belir" ? "both" : "forwards" });
+      }
+      return t.dur;
     } });
 
   registerMove({ id: "rise", group: "sinematik", label: "Yavaş yükselme", single: true, duration: 2.2, easing: "yavaslayarak",
@@ -462,7 +512,7 @@
       return t.dur;
     } });
   registerMove({ id: "spin", group: "sinematik", label: "Kendi etrafında dönme", single: true, needsBack: true, duration: 1.6, easing: "yumusak", loop: true, defRepeat: 1,
-    note: "Arka yüz görseli yüklemezseniz arkada görselin koyulaştırılmış hâli görünür.",
+    note: "Arka yüz görseli yüklemezseniz: eski katmanlarda görselin koyulaştırılmış hâli, yeni eklenen görsellerde boşluk görünür.",
     params: [{ key: "axis", label: "Eksen", def: "y", options: [["y", "Dikey eksen (kart gibi)"], ["z", "Düz döner"]] }, { key: "turns", label: "Tur", def: 1, options: [[0.5, "Yarım tur"], [1, "1 tur"], [2, "2 tur"]] }],
     run(ctx, a, def, begin) {
       const t = timing(a, def), ax = P(a, def, "axis") === "z" ? "rotateZ" : "rotateY", deg = 360 * num(P(a, def, "turns"), 1);
@@ -1140,7 +1190,7 @@
     const layers = {};
     C.model(p.model).slots.forEach(s => {
       const l = byId[roles[s.id]];
-      if (l && l.src) layers[s.id] = { src: l.src, backSrc: l.backSrc || "", thickness: l.thickness, light: l.light };
+      if (l && l.src) layers[s.id] = { src: l.src, backSrc: l.backSrc || "", thickness: l.thickness, light: l.light, v3: l.v3 };
       else if (!artFill) layers[s.id] = { hidden: true };
     });
     const out = Object.assign({}, cfg, { model: p.model, scenario: p.scenario, layers });

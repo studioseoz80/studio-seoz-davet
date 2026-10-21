@@ -538,14 +538,33 @@
       z: (Number(u.depth) || 0) * depthMul + (slot.zLayer || 0),
       origin: u.origin || slot.origin || "50% 50%",
       thickness: u.thickness != null && u.thickness !== "" ? Math.max(0, Math.min(60, Number(u.thickness) || 0)) : (slot.thickness || 0),
-      light: u.light != null && u.light !== "" ? Math.max(0, Math.min(1.5, Number(u.light))) : 1
+      light: u.light != null && u.light !== "" ? Math.max(0, Math.min(1.5, Number(u.light))) : 1,
+      pose: poseOf(u)
     };
   }
+  /* 3D-1: katmanın 3D duruşu. YALNIZCA katmanda "3D efekt" açıksa (u.d3) uygulanır;
+     açık değilse boş döner → eski katmanların dönüşümü birebir aynı kalır.
+     rx/ry/rz: X/Y/Z ekseninde dönüş (derece), persp: bu katmana özel perspektif (px, boş = sahneninki). */
+  function poseOf(u) {
+    if (!u || !u.d3) return "";
+    const a = k => Math.max(-180, Math.min(180, Number(u[k]) || 0));
+    const pp = Number(u.persp);
+    const parts = [];
+    if (pp > 0) parts.push(`perspective(${Math.max(200, Math.min(4000, pp))}px)`);
+    if (a("rx")) parts.push(`rotateX(${a("rx")}deg)`);
+    if (a("ry")) parts.push(`rotateY(${a("ry")}deg)`);
+    if (a("rz")) parts.push(`rotateZ(${a("rz")}deg)`);
+    return parts.join(" ");
+  }
+  /* 3D-1: "dürüst arka yüz" — 3D-1'den sonra eklenen görsellerde (u.v3) ayrı arka yüz görseli
+     yoksa arkaya hiçbir şey uydurulmaz (koyulaştırılmış kopya / kâğıt rengi yok): görselin
+     arkası izleyiciye döndüğünde görsel görünmez. Eski katmanlar eskisi gibi çalışır. */
+  function honestBack(u) { return !!(u && u.v3 && !u.backSrc); }
   function applyLayout(ctx, slot) {
     const outer = ctx.S[slot.id], inner = ctx.L[slot.id];
     if (!outer || !inner || slot.backdrop) return;
     const L = layoutOf(slot, layerOf(ctx.cfg, slot), ctx.cfg.depth);
-    outer.style.transform = `translate3d(${L.x}px,${L.y}px,${L.z}px) scale(${L.s})`;
+    outer.style.transform = `translate3d(${L.x}px,${L.y}px,${L.z}px) scale(${L.s})` + (L.pose ? " " + L.pose : "");
     inner.style.transformOrigin = L.origin;
     ctx.box[slot.id] = { x: L.g.x + L.x, y: L.g.y + L.y, w: L.g.w, h: L.g.h, s: L.s };
   }
@@ -566,7 +585,8 @@
 
   function buildPngFaces(ctx, slot, u, L, inner, src) {
     const fit = slot.fit || "contain";
-    const two = !!slot.back;            // dönen parça: arkası görünebilir
+    const honest = honestBack(u);
+    const two = !!slot.back || honest;  // dönen parça: arkası görünebilir (dürüst modda ön yüz arkadan gizlenir)
     const t = L.thickness;
     // kalınlık: PNG'nin arkasına çok ince aralıkla dizilen koyulaştırılmış kopyalar
     const dark = DARK.get(src);
@@ -577,10 +597,11 @@
         if (dark) { sl = h("img", "sc-slab", { width: "100%", height: "100%", objectFit: fit, display: "block", pointerEvents: "none" }); sl.alt = ""; sl.src = dark.slab; }
         else { sl = img(src, "sc-slab", fit); sl.style.filter = "brightness(.4)"; }
         sl.style.transform = `translateZ(${-(t * i / (n + 1)).toFixed(2)}px)`;
+        if (honest) setHidden(sl);      // kalınlık dilimleri arkadan bakınca "arka yüz" gibi görünmesin
         inner.appendChild(sl);
       }
     }
-    if (two) {
+    if (two && !honest) {
       const backRef = u.backSrc && !ctx.failed[u.backSrc] ? u.backSrc : "";
       let back;
       if (!backRef && dark) { back = h("img", "sc-upload sc-backface", { width: "100%", height: "100%", objectFit: fit, display: "block", pointerEvents: "none" }); back.alt = ""; back.src = dark.back; }
@@ -1044,7 +1065,7 @@
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
     normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active,
-    preload, sourcesOf, layoutOf, setV2Adapter, modelOf, applyLayout,
+    preload, sourcesOf, layoutOf, setV2Adapter, modelOf, applyLayout, honestBack, poseOf,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }
   };
