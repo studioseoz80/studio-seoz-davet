@@ -956,6 +956,19 @@
                 return;
               }
             }
+            if (err && err.code === "NETWORK") {
+              const part = typeof err.total === "number" && err.total
+                ? "\nYüklenen görsel: " + err.uploaded + "/" + err.total + " — tekrar bastığınızda yüklenenler atlanır, kaldığı yerden devam eder.\n"
+                : "";
+              alert(
+                "Supabase'e ulaşılamıyor — internet bağlantınızı kontrol edin.\n\n" +
+                "Bağlantı 3 kez yeniden denendi ama kurulamadı.\n" + part +
+                "\nTaslağınız ve mevcut müşteri linki güvende; hiçbir şey silinmedi veya değişmedi.\n" +
+                "Bağlantı düzelince \"Yayına Hazırla\"ya tekrar basın.\n\n" +
+                "(Ayrıntı: " + (err.message || "") + ")"
+              );
+              return;
+            }
             alert(
               "Yayın sırasında hata oluştu.\n\n" +
               (err && err.message ? err.message : "Bilinmeyen hata.") +

@@ -82,6 +82,49 @@
       .finally(() => { if (timer) clearTimeout(timer); });
   }
 
+  /* ---------------- DAYANIKLILIK (bağlantı kopmalarına karşı) ----------------
+     Bağlantı hiç kurulamazsa ("Failed to fetch", ERR_CONNECTION_TIMED_OUT),
+     süre aşılırsa veya Supabase geçici bir hata verirse (408/429/5xx) istek
+     2 / 5 / 10 saniye arayla en fazla 3 kez YENİDEN denenir. Kalıcı yanıtlar
+     (başarılı, yetki hatası, "zaten var" vb.) beklenmeden olduğu gibi döner.
+     Yalnızca yayın sırasında kullanılır; müşteri sayfasının okuması değişmedi.
+     Güvenli: aynı görsel ikinci kez yüklenmez (409 = zaten yüklü sayılır),
+     davetiye kaydı da aynı slug'a yazılır (yeni satır açılmaz). */
+  const RETRY_DELAYS = [2000, 5000, 10000];
+  const RETRY_STATUS = { 408: 1, 425: 1, 429: 1, 500: 1, 502: 1, 503: 1, 504: 1 };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function isNetworkFailure(e) {
+    return !!e && (e.code === "NETWORK" || e.name === "TypeError" || e.name === "AbortError");
+  }
+  function networkError(cause, message) {
+    const err = new Error(message || "Supabase'e ulaşılamıyor (bağlantı kurulamadı veya zaman aşımı).");
+    err.code = "NETWORK";
+    if (cause) err.cause = cause;
+    return err;
+  }
+
+  // onRetry(deneme, toplam): isteğe bağlı, editörde "yeniden deneniyor" yazmak için.
+  async function fetchRetry(url, options, ms, onRetry) {
+    let lastErr = null;
+    for (let i = 0; i <= RETRY_DELAYS.length; i++) {
+      if (i > 0) {
+        if (typeof onRetry === "function") { try { onRetry(i, RETRY_DELAYS.length); } catch (e) { /* yok say */ } }
+        await sleep(RETRY_DELAYS[i - 1]);
+      }
+      try {
+        const res = await fetchWithTimeout(url, options, ms);
+        if (!RETRY_STATUS[res.status] || i === RETRY_DELAYS.length) return res;
+        try { await res.text(); } catch (e) { /* yok say */ }
+        lastErr = new Error("HTTP " + res.status);
+      } catch (e) {
+        if (!isNetworkFailure(e)) throw e;
+        lastErr = e;
+      }
+    }
+    throw networkError(lastErr);
+  }
+
   async function errorText(res) {
     let body = "";
     try { body = await res.text(); } catch (e) { /* yok say */ }
@@ -181,12 +224,22 @@
     if (!sess || !sess.refresh_token) return null;
     const now = Math.floor(Date.now() / 1000);
     if (sess.access_token && sess.expires_at - 60 > now) return sess.access_token;
-    const res = await fetchWithTimeout(`${baseUrl()}/auth/v1/token?grant_type=refresh_token`, {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ refresh_token: sess.refresh_token })
-    }, 20000);
-    if (!res.ok) { writeSession(null); return null; }
+    let res;
+    try {
+      res = await fetchRetry(`${baseUrl()}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ refresh_token: sess.refresh_token })
+      }, 20000);
+    } catch (e) {
+      throw isNetworkFailure(e) ? (e.code === "NETWORK" ? e : networkError(e)) : e;
+    }
+    if (!res.ok) {
+      // Oturum YALNIZCA belirteç gerçekten geçersizse silinir (400/401/403).
+      // Geçici sunucu hatalarında oturum korunur; tekrar denenebilir.
+      if (res.status === 400 || res.status === 401 || res.status === 403) { writeSession(null); return null; }
+      throw networkError(null, "Supabase oturum sunucusu geçici olarak yanıt vermiyor (HTTP " + res.status + ").");
+    }
     const fresh = sessionFromTokenResponse(await res.json(), sess.email);
     writeSession(fresh);
     return fresh.access_token;
@@ -207,7 +260,9 @@
   // Yazma işlemleri için başlıklar: giriş yapılmışsa kullanıcının
   // belirteci, değilse anon anahtar (RLS sıkılaştırılmışsa reddedilir).
   async function writeHeaders(extra) {
-    const token = await getAccessToken().catch(() => null);
+    let token = null;
+    try { token = await getAccessToken(); }
+    catch (e) { if (e && e.code === "NETWORK") throw e; }
     return Object.assign({ apikey: anonKey(), Authorization: "Bearer " + (token || anonKey()) }, extra || {});
   }
 
@@ -254,7 +309,7 @@
 
   async function slugExists(slug) {
     const url = `${baseUrl()}/rest/v1/${TABLE}?slug=eq.${encodeURIComponent(slug)}&select=slug&limit=1`;
-    const res = await fetchWithTimeout(url, { headers: authHeaders() }, 20000);
+    const res = await fetchRetry(url, { headers: authHeaders() }, 20000);
     if (!res.ok) throw new Error("Slug kontrolü yapılamadı: " + await errorText(res));
     const rows = await res.json();
     return Array.isArray(rows) && rows.length > 0;
@@ -316,7 +371,7 @@
   // Bir "idb:..." dosyasını Storage'a yükler, herkese açık adresini döndürür.
   // IndexedDB anahtarları değişmez (yeni dosya = yeni anahtar), bu yüzden
   // daha önce yüklenmiş dosya tekrar yüklenmez (büyük videolarda önemli).
-  async function uploadRef(ref, slug, cache) {
+  async function uploadRef(ref, slug, cache, onRetry) {
     const key = ref.slice(4);
     const cacheKey = `${bucket()}|${slug}|${key}`;
     if (cache[cacheKey]) return cache[cacheKey];
@@ -326,7 +381,7 @@
 
     const path = `${slug}/${key}.${EXT_BY_MIME[blob.type] || "bin"}`;
     const url = `${baseUrl()}/storage/v1/object/${encodeURIComponent(bucket())}/${path.split("/").map(encodeURIComponent).join("/")}`;
-    const res = await fetchWithTimeout(url, {
+    const res = await fetchRetry(url, {
       method: "POST",
       headers: await writeHeaders({
         "Content-Type": blob.type || "application/octet-stream",
@@ -334,7 +389,7 @@
         "cache-control": "31536000"
       }),
       body: blob
-    }, 180000);
+    }, 180000, onRetry);
 
     if (!res.ok) {
       const detail = await errorText(res);
@@ -365,13 +420,19 @@
     const map = new Map();
     const cache = readAssetCache();
     for (let i = 0; i < refs.length; i++) {
-      progress(`Medya yükleniyor (${i + 1}/${refs.length})...`);
-      map.set(refs[i], await uploadRef(refs[i], slug, cache));
+      const label = `Medya yükleniyor (${i + 1}/${refs.length})`;
+      progress(label + "...");
+      try {
+        map.set(refs[i], await uploadRef(refs[i], slug, cache, (k, n) => progress(`${label} · bağlantı koptu, yeniden deneniyor (${k}/${n})...`)));
+      } catch (e) {
+        e.uploaded = i; e.total = refs.length;      // editör "kaç görsel yüklendi" gösterebilsin
+        throw e;
+      }
     }
 
     progress("Davetiye kaydediliyor...");
     const documentData = replaceRefs(snapshot, map);
-    const res = await fetchWithTimeout(`${baseUrl()}/rest/v1/${TABLE}?on_conflict=slug`, {
+    const res = await fetchRetry(`${baseUrl()}/rest/v1/${TABLE}?on_conflict=slug`, {
       method: "POST",
       headers: await writeHeaders({
         "Content-Type": "application/json",
@@ -379,7 +440,7 @@
         Prefer: "resolution=merge-duplicates,return=minimal"
       }),
       body: JSON.stringify({ slug: slug, document_data: documentData })
-    }, 60000);
+    }, 60000, (k, n) => progress(`Davetiye kaydediliyor · bağlantı koptu, yeniden deneniyor (${k}/${n})...`));
     if (!res.ok) {
       const detail = await errorText(res);
       if (isPermissionError(res.status, detail)) throw authRequiredError(detail);
