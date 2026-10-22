@@ -361,11 +361,71 @@
           <p class="ts-hint">“Metinlerime uygula” yazı tiplerini ve yazı rengini bütün metin katmanlarına uygular (geri alınabilir).</p></section>`;
     }
     function bgLayerRow(L) {
-      const nm = L.art ? (A.get(L.art) || {}).label || L.art : "Görsel";
-      return `<button type="button" class="ts-bl${state.selBg === L.id ? " is-on" : ""}" data-ts-bl="${L.id}">${L.art ? artImg(L.art, L.color, L.color2, "ts-bl-art") : `<span class="ts-bl-art ts-bl-up">PNG</span>`}<span>${esc(nm)}<small>${L.motion && L.motion !== "none" ? (T.MOTIONS.find(m => m[0] === L.motion) || [0, ""])[1] : "hareketsiz"}${num(L.depth, 0) ? " · derinlik " + num(L.depth, 0) : ""}${L.front ? " · önde" : ""}</small></span></button>`;
+      const fog = L.kind === "fog";
+      const nm = fog ? "Sis katmanı" : L.art ? (A.get(L.art) || {}).label || L.art : (L.name || "Görsel");
+      const t = th(), nAct = ((t && t.bg.actions) || []).filter(a => a.layer === L.id).length;
+      const tags = [fog ? "" : (L.motion && L.motion !== "none" ? (T.MOTIONS.find(m => m[0] === L.motion) || [0, ""])[1] : "hareketsiz"),
+        num(L.depth, 0) ? "derinlik " + num(L.depth, 0) : "", L.d3 ? "3D" : "", num(L.z, 0) ? "Z " + num(L.z, 0) : "", num(L.shadow, 0) > 0 ? "gölge" : "", nAct ? nAct + " hareket" : "", L.front ? "önde" : ""].filter(Boolean).join(" · ");
+      return `<div class="ts-blrow"><button type="button" class="ts-bl${state.selBg === L.id ? " is-on" : ""}" data-ts-bl="${L.id}">${fog ? `<span class="ts-bl-art ts-bl-up">SİS</span>` : L.art ? artImg(L.art, L.color, L.color2, "ts-bl-art") : `<span class="ts-bl-art ts-bl-up">PNG</span>`}<span>${esc(nm)}<small>${esc(tags)}</small></span></button>
+        <span class="ts-blbtns"><button type="button" class="ts-ico" data-ts-blmv="up" data-id="${L.id}" title="Öne al" aria-label="${esc(nm)} öne al">▲</button><button type="button" class="ts-ico" data-ts-blmv="down" data-id="${L.id}" title="Arkaya al" aria-label="${esc(nm)} arkaya al">▼</button></span></div>`;
+    }
+    /* İç Zemin 3D: hareket kartları (A2 hareketleri; arayüz burada, motor A2'nin kendisi) */
+    const F = global.SeozCinemaFree;
+    const BG_STARTS = [["with", "Öncekiyle birlikte"], ["after", "Öncekinden sonra"], ["at", "Belirli saniyede"], ["view", "Katman göründüğünde"]];
+    const SPEEDS = [[0.5, "0,5× (yavaş)"], [0.75, "0,75×"], [1, "1× (normal)"], [1.5, "1,5×"], [2, "2× (hızlı)"]];
+    function bgActHTML(a, i) {
+      const m = F && F.move(a.move); if (!m) return "";
+      const pv = (k, d) => { const v = (a.params || {})[k]; return v != null && v !== "" ? v : d; };
+      const opt = (key, list, v) => list.map(([x, l]) => `<option value="${x}" ${String(v) === String(x) ? "selected" : ""}>${esc(l)}</option>`).join("");
+      return `<div class="ts-act" data-aid="${a.id}">
+        <div class="ts-act-h"><strong>${i + 1}. ${esc(m.label)}</strong><button type="button" class="ts-ico ts-del" data-ts-adel="${a.id}" aria-label="Hareketi sil">✕</button></div>
+        <label class="ts-row">Başlat <select data-ts-a="start" data-aid="${a.id}">${opt("start", BG_STARTS, a.start || "with")}</select></label>
+        <div class="ts-grid2"><label>${a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)"}<input type="number" min="0" max="60" step="0.1" data-ts-a="delay" data-aid="${a.id}" value="${num(a.delay, 0)}"></label>
+          <label>Süre (sn)<input type="number" min="0.1" max="30" step="0.1" data-ts-a="duration" data-aid="${a.id}" value="${num(a.duration, m.duration)}"></label></div>
+        <label class="ts-row">Hız <select data-ts-a="speed" data-aid="${a.id}">${opt("speed", SPEEDS, num(a.speed, 1))}</select></label>
+        <label class="ts-row">Yumuşaklık <select data-ts-a="easing" data-aid="${a.id}">${opt("easing", F.EASE_LABELS, a.easing || m.easing)}</select></label>
+        ${m.loop ? `<label class="ts-row">Tekrar <select data-ts-a="repeat" data-aid="${a.id}">${opt("repeat", [[1, "1 kez"], [2, "2 kez"], [3, "3 kez"], [0, "Sürekli"]], a.repeat != null ? a.repeat : (m.defRepeat != null ? m.defRepeat : 1))}</select></label>` : ""}
+        ${m.pairs ? `<div class="ts-pairs"><div class="ts-pair ts-pair-h"><span></span><b>Başlangıç</b><b>Bitiş</b></div>${m.pairs.map(ax => { const d = ax.def != null ? ax.def : 0;
+          return `<div class="ts-pair"><span>${esc(ax.label)}</span><input type="number" min="${ax.min}" max="${ax.max}" step="${ax.step}" data-ts-ap="${ax.key}0" data-aid="${a.id}" value="${esc(pv(ax.key + "0", d))}" aria-label="${esc(ax.label)} başlangıç"><input type="number" min="${ax.min}" max="${ax.max}" step="${ax.step}" data-ts-ap="${ax.key}1" data-aid="${a.id}" value="${esc(pv(ax.key + "1", d))}" aria-label="${esc(ax.label)} bitiş"></div>`; }).join("")}</div>` : ""}
+        ${(m.params || []).filter(p => p.options).map(p => `<label class="ts-row">${esc(p.label)} <select data-ts-ap="${p.key}" data-aid="${a.id}">${opt(p.key, p.options, pv(p.key, p.def))}</select></label>`).join("")}
+      </div>`;
+    }
+    function bgActsHTML(L) {
+      if (!F || L.kind === "fog") return "";
+      const t = ensure(), all = t.bg.actions || [], mine = all.filter(a => a.layer === L.id);
+      return `<div class="ts-sub"><h5>Hareketler</h5>
+        <select data-ts-am aria-label="Katmana hareket ekle"><option value="">+ Hareket ekle…</option>${T.BG_MOVES.map(id => F.move(id)).filter(Boolean).map(m => `<option value="${m.id}">${esc(m.label)}</option>`).join("")}</select>
+        ${mine.map(a => bgActHTML(a, all.indexOf(a))).join("") || `<p class="ts-hint">Bu katmanın henüz hareketi yok. Hareketler sayfa açılınca (açılış bittiyse) ya da katman göründüğünde oynar.</p>`}
+      </div>`;
+    }
+    function bg3dHTML(L) {
+      const deg = k => Math.round(num(L[k], 0));
+      const rot = (k, label) => `<label class="ts-row">${label} <input type="range" min="-180" max="180" step="1" data-ts-l="${k}" value="${deg(k)}"><small data-ts-lout="${k}">${deg(k)}°</small></label>`;
+      return `<div class="ts-sub"><h5>3D</h5>
+        <label class="ts-check"><input type="checkbox" data-ts-l="d3" ${L.d3 ? "checked" : ""}> 3D duruş (X/Y/Z dönüşü)</label>
+        ${L.d3 ? `${rot("rx", "X dönüşü")}${rot("ry", "Y dönüşü")}${rot("rz", "Z dönüşü")}
+          <label class="ts-row">Perspektif <select data-ts-l="persp">${[["", "Sahneyle aynı"], ["500", "Güçlü"], ["1000", "Orta"], ["2000", "Hafif"]].map(([v, l]) => `<option value="${v}" ${String(L.persp || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>` : ""}
+        <label class="ts-row">Derinlik (Z) <input type="range" min="-600" max="600" step="10" data-ts-l="z" value="${num(L.z, 0)}"><small data-ts-lout="z">${num(L.z, 0)}</small></label>
+        ${L.kind === "fog" ? "" : `<label class="ts-row">Ölçek <input type="range" min="0.2" max="3" step="0.05" data-ts-l="scale" value="${num(L.scale, 1)}"><small data-ts-lout="scale">${Math.round(num(L.scale, 1) * 100)}%</small></label>
+        <label class="ts-row">Yumuşak gölge <input type="range" min="0" max="1" step="0.05" data-ts-l="shadow" value="${num(L.shadow, 0)}"><small data-ts-lout="shadow">${num(L.shadow, 0) > 0 ? Math.round(num(L.shadow, 0) * 100) + "%" : "kapalı"}</small></label>`}
+        <p class="ts-hint">Z: artı değer katmanı öne, eksi değer geriye alır; kamera hareket edince uzak ve yakın katmanlar farklı hızda kayar.${L.d3 && (Math.abs(num(L.rx, 0)) > 90 || Math.abs(num(L.ry, 0)) > 90) ? " ⚠ Görselin arkası uydurulmaz: bu açıda katman görünmez." : ""}</p>
+      </div>`;
     }
     function bgLayerEditor(L) {
       const sel = (k, list, v) => `<select data-ts-l="${k}">${list.map(([a, b]) => `<option value="${a}" ${String(v) === a ? "selected" : ""}>${esc(b)}</option>`).join("")}</select>`;
+      if (L.kind === "fog") return `<div class="ts-bled">
+        <div class="ts-grid2">
+          <label>Yatay (x)<input type="number" step="1" data-ts-l="x" value="${num(L.x, -40)}"></label><label>Dikey (y)<input type="number" step="1" data-ts-l="y" value="${num(L.y, 0)}"></label>
+          <label>Genişlik<input type="number" min="40" step="1" data-ts-l="w" value="${num(L.w, 510)}"></label><label>Yükseklik<input type="number" min="40" step="1" data-ts-l="h" value="${num(L.h, 260)}"></label>
+        </div>
+        <label class="ts-row ts-color">Renk <input type="color" data-ts-l="color" value="${esc(L.color || "#FFFFFF")}"></label>
+        <label class="ts-row">Yoğunluk <input type="range" min="0.05" max="1" step="0.05" data-ts-l="opacity" value="${num(L.opacity, 0.55)}"></label>
+        <label class="ts-row">Akış hızı <input type="range" min="0.2" max="3" step="0.1" data-ts-l="speed" value="${num(L.speed, 1)}"></label>
+        <label class="ts-row">Derinlik <input type="range" min="0" max="1" step="0.05" data-ts-l="depth" value="${num(L.depth, 0)}"><small>kaydırınca geriden kayar</small></label>
+        ${bg3dHTML(L)}
+        <div class="ts-apply"><button type="button" class="btn btn-outline" data-ts-bldup>⧉ Çoğalt</button><button type="button" class="btn btn-outline ts-del" data-ts-bldel>✕ Sil</button></div>
+        <p class="ts-hint">Sis katmanını görsel katmanlarının arasına sıralayarak (▲▼) katmanlı derinlik elde edersiniz.</p>
+      </div>`;
       return `<div class="ts-bled">
         <div class="ts-grid2">
           <label>Yatay (x)<input type="number" step="1" data-ts-l="x" value="${num(L.x, 0)}"></label><label>Dikey (y)<input type="number" step="1" data-ts-l="y" value="${num(L.y, 0)}"></label>
@@ -379,9 +439,26 @@
         <label class="ts-row">Döndür <input type="range" min="-180" max="180" step="1" data-ts-l="rotate" value="${num(L.rotate, 0)}"></label>
         <div class="ts-checks"><label class="ts-check"><input type="checkbox" data-ts-l="flip" ${L.flip ? "checked" : ""}> Ayna (yatay çevir)</label>
           <label class="ts-check"><input type="checkbox" data-ts-l="front" ${L.front ? "checked" : ""}> İçeriğin önünde</label></div>
+        ${bg3dHTML(L)}
+        ${bgActsHTML(L)}
         <div class="ts-apply"><button type="button" class="btn btn-outline" data-ts-bldup>⧉ Çoğalt</button><button type="button" class="btn btn-outline ts-del" data-ts-bldel>✕ Sil</button></div>
         <p class="ts-hint">Önizlemede çerçeveli katmanı sürükleyerek taşıyabilir, sağ alt köşesinden büyütebilirsiniz.</p>
       </div>`;
+    }
+    function scene3dHTML(t) {
+      const sc = t.bg.scene || {}, cm = sc.camera || {}, acts = t.bg.actions || [];
+      const lname = id => { const L = t.bg.layers.find(x => x.id === id); return L ? (L.kind === "fog" ? "Sis" : L.art ? (A.get(L.art) || {}).label || L.art : (L.name || "Görsel")) : "?"; };
+      const st = id => (BG_STARTS.find(x => x[0] === id) || BG_STARTS[0])[1];
+      return `<section class="ts-sec"><h4>3D sahne</h4>
+          <label class="ts-row">Perspektif <select data-ts-sc="persp">${[["", "Varsayılan"], ["700", "Güçlü"], ["1200", "Orta"], ["2200", "Hafif"]].map(([v, l]) => `<option value="${v}" ${String(sc.persp || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="ts-row">Kamera <select data-ts-sc="camera">${T.CAMERAS.map(([v, l]) => `<option value="${v}" ${(cm.type || "none") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          ${cm.type && cm.type !== "none" ? `<label class="ts-row">Kamera gücü <input type="range" min="0" max="1" step="0.05" data-ts-sc="strength" value="${num(cm.strength, 0.5)}"></label>
+            ${cm.type === "yaklas" || cm.type === "uzaklas" ? `<label class="ts-row">Kamera süresi <select data-ts-sc="duration">${[[2, "2 sn"], [3, "3 sn"], [5, "5 sn"], [8, "8 sn"]].map(([v, l]) => `<option value="${v}" ${num(cm.duration, 3) === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>` : ""}` : ""}
+          ${acts.length ? `<h5>Hareket sırası</h5><ol class="ts-seq">${acts.map((a, i) => `<li><span>${esc((F && F.move(a.move) || {}).label || a.move)} <small>· ${esc(lname(a.layer))} · ${i === 0 ? "Sayfa açılınca" : esc(st(a.start))}</small></span>
+            <span class="ts-blbtns"><button type="button" class="ts-ico" data-ts-aup="${a.id}" aria-label="Yukarı">▲</button><button type="button" class="ts-ico" data-ts-adown="${a.id}" aria-label="Aşağı">▼</button></span></li>`).join("")}</ol>` : ""}
+          <button type="button" class="btn btn-outline ts-wide" data-ts-play>▶ Önizlemede oynat</button>
+          <p class="ts-hint">Kamera ve hareketler müşteri sayfasında açılış bittikten sonra başlar. Derinliği (Z), 3D duruşu ve hareketleri her katmanın kendi ayarlarından verin.</p>
+        </section>`;
     }
     function panelZemin() {
       const t = ensure(), b = t.bg.base;
@@ -395,8 +472,10 @@
         </section>
         <section class="ts-sec"><label class="ts-check"><input type="checkbox" data-ts-tilt ${t.bg.tilt ? "checked" : ""}> Telefon eğimiyle derinlik (derinliği olan katmanlar telefonu eğince kayar)</label>
           <p class="ts-hint">iPhone'da misafir köşedeki “Eğerek derinlik” düğmesine bir kez dokunarak izin verir; varsayılan derinlik kaydırmaya bağlıdır.</p></section>
-        <section class="ts-sec"><h4>Sahne katmanları <small>(${t.bg.layers.length})</small></h4>
-          <div class="ts-apply"><button type="button" class="btn btn-gold" data-ts-artpick>+ Süsleme ekle</button><button type="button" class="btn btn-outline" data-ts-upload>+ PNG yükle</button></div>
+        ${scene3dHTML(t)}
+        <section class="ts-sec"><h4>Sahne katmanları <small>(${t.bg.layers.length} · listenin altındaki önde)</small></h4>
+          <div class="ts-apply"><button type="button" class="btn btn-gold" data-ts-artpick>+ Süsleme ekle</button><button type="button" class="btn btn-outline" data-ts-upload>+ PNG yükle (birden çok)</button><button type="button" class="btn btn-outline" data-ts-fogadd>+ Sis katmanı</button></div>
+          ${t.bg.layers.length > 15 ? `<p class="ts-hint cs-warn">${t.bg.layers.length} katman: telefonda akıcılık için 15'i aşmamaya çalışın (zayıf telefonlarda sis hareketi kendiliğinden durur).</p>` : ""}
           <div class="ts-bls">${t.bg.layers.map(bgLayerRow).join("") || `<p class="ts-hint">Henüz katman yok. Dal, bulut, balon gibi süslemeler ya da kendi PNG'nizi ekleyin.</p>`}</div>
           ${L ? bgLayerEditor(L) : ""}</section>
         <div class="ts-artgrid" data-ts-arts hidden>${A.list().map(a => `<button type="button" data-ts-art="${a.id}" title="${esc(a.label)}">${artImg(a.id, t.palette.accent || "#B8925A", t.palette.accent2 || "#7A1F2B")}<small>${esc(a.label)}</small></button>`).join("")}</div>`;
@@ -520,8 +599,24 @@
         t.bg.layers.push(L); state.selBg = L.id; renderPanel(); return save();
       }
       if (d.tsUpload != null) return uploadBg();
+      if (d.tsFogadd != null) {
+        const t = ensure(), L = { id: uid("bl"), kind: "fog", color: "#FFFFFF", opacity: 0.55, speed: 1, depth: 0.2, x: -40, y: Math.round(phone.scrollTop / scaleNow()) + 200, w: 510, h: 260 };
+        t.bg.layers.push(L); state.selBg = L.id; renderPanel(); return save();
+      }
+      if (d.tsBlmv) {
+        const t = ensure(), i = t.bg.layers.findIndex(x => x.id === d.id), j = d.tsBlmv === "up" ? i + 1 : i - 1;
+        if (i < 0 || j < 0 || j >= t.bg.layers.length) return;
+        const x = t.bg.layers[i]; t.bg.layers[i] = t.bg.layers[j]; t.bg.layers[j] = x; renderPanel(); return save();
+      }
+      if (d.tsAdel) { const t = ensure(); t.bg.actions = (t.bg.actions || []).filter(a => a.id !== d.tsAdel); renderPanel(); return save(); }
+      if (d.tsAup || d.tsAdown) {
+        const t = ensure(), list = t.bg.actions || [], i = list.findIndex(a => a.id === (d.tsAup || d.tsAdown)), j = d.tsAup ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= list.length) return;
+        const x = list[i]; list[i] = list[j]; list[j] = x; renderPanel(); return save();
+      }
+      if (d.tsPlay != null) return preview(true);
       if (d.tsBl) { state.selBg = state.selBg === d.tsBl ? null : d.tsBl; renderPanel(); return; }
-      if (d.tsBldel != null) { const t = ensure(); t.bg.layers = t.bg.layers.filter(x => x.id !== state.selBg); state.selBg = null; renderPanel(); return save(); }
+      if (d.tsBldel != null) { const t = ensure(); t.bg.layers = t.bg.layers.filter(x => x.id !== state.selBg); if (t.bg.actions) t.bg.actions = t.bg.actions.filter(a => a.layer !== state.selBg); state.selBg = null; renderPanel(); return save(); }
       if (d.tsBldup != null) { const t = ensure(), L = t.bg.layers.find(x => x.id === state.selBg); if (!L) return; const c = Object.assign(clone(L), { id: uid("bl"), x: num(L.x, 0) + 20, y: num(L.y, 0) + 20 }); t.bg.layers.push(c); state.selBg = c.id; renderPanel(); return save(); }
       if (d.tsSadd != null) { const t = ensure(), last = t.bg.sections[t.bg.sections.length - 1]; t.bg.sections.push({ y: last ? num(last.y, 0) + 600 : 0, color: last ? "rgba(60,40,70,.25)" : "rgba(255,255,255,0)" }); renderPanel(); return save(); }
       if (d.tsSdel != null) { ensure().bg.sections.splice(Number(d.tsSdel), 1); renderPanel(); return save(); }
@@ -549,7 +644,9 @@
         const L = t.bg.layers.find(x => x.id === state.selBg); if (!L) return;
         const k = tg.dataset.tsL;
         if (tg.type === "checkbox") return;
-        L[k] = ["x", "y", "w", "h", "speed", "depth", "opacity", "rotate"].includes(k) ? Number(tg.value) : tg.value;
+        L[k] = ["x", "y", "w", "h", "speed", "depth", "opacity", "rotate", "rx", "ry", "rz", "z", "scale", "shadow"].includes(k) ? Number(tg.value) : (k === "persp" ? (tg.value ? Number(tg.value) : "") : tg.value);
+        const lo = panel.querySelector(`[data-ts-lout="${k}"]`);
+        if (lo) lo.textContent = k === "scale" ? Math.round(Number(tg.value) * 100) + "%" : k === "shadow" ? (Number(tg.value) > 0 ? Math.round(Number(tg.value) * 100) + "%" : "kapalı") : k === "z" ? tg.value : tg.value + "°";
         if (k === "w" && L.art) { const a = A.get(L.art); if (a && a.ratio) { L.h = Math.round(L.w / a.ratio); const hi = panel.querySelector('[data-ts-l="h"]'); if (hi) hi.value = L.h; } }
         return save();
       }
@@ -575,20 +672,54 @@
       }
       if (tg.dataset.tsL && tg.type === "checkbox") { const L = t.bg.layers.find(x => x.id === state.selBg); if (L) { L[tg.dataset.tsL] = tg.checked; renderPanel(); save(); } return; }
       if (tg.dataset.tsL === "motion") { renderPanel(); return; }
+      if (tg.matches("[data-ts-am]")) {
+        const L = t.bg.layers.find(x => x.id === state.selBg), m = F && F.move(tg.value); if (!L || !m) return;
+        const a = { id: uid("ba"), layer: L.id, move: m.id, start: "with", delay: 0, duration: m.duration, easing: m.easing, params: {} };
+        if (m.loop) a.repeat = m.id === "sheen" ? 1 : 0;
+        if (m.id === "free3d") { a.params = { z0: -400, ry0: -30, s0: 80, fade: "belir" }; a.easing = "yavaslayarak"; }
+        t.bg.actions = t.bg.actions || []; t.bg.actions.push(a); renderPanel(); return save();
+      }
+      if (tg.dataset.tsA) {
+        const a = (t.bg.actions || []).find(x => x.id === tg.dataset.aid); if (!a) return;
+        const k = tg.dataset.tsA;
+        a[k] = ["delay", "duration", "speed", "repeat"].includes(k) ? Math.max(0, Number(tg.value) || 0) : tg.value;
+        if (k === "duration" && !a.duration) a.duration = 0.1;
+        if (k === "speed" && !a.speed) a.speed = 1;
+        if (k === "start") renderPanel();
+        return save();
+      }
+      if (tg.dataset.tsAp) {
+        const a = (t.bg.actions || []).find(x => x.id === tg.dataset.aid); if (!a) return;
+        a.params = a.params || {}; const raw = tg.value; a.params[tg.dataset.tsAp] = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
+        return save();
+      }
+      if (tg.dataset.tsSc) {
+        const sc = t.bg.scene = t.bg.scene || {}, k = tg.dataset.tsSc;
+        if (k === "persp") { if (tg.value) sc.persp = Number(tg.value); else delete sc.persp; }
+        else { sc.camera = sc.camera || {}; if (k === "camera") sc.camera.type = tg.value; else sc.camera[k] = Number(tg.value); }
+        if (!sc.persp && (!sc.camera || !sc.camera.type || sc.camera.type === "none")) delete t.bg.scene;
+        renderPanel(); return save();
+      }
       if (tg.dataset.tsP) { t.bg.particles[tg.dataset.tsP] = tg.dataset.tsP === "type" ? tg.value : Number(tg.value); return save(); }
       if (tg.dataset.tsLi) { t.bg.light[tg.dataset.tsLi] = tg.dataset.tsLi === "type" ? tg.value : Number(tg.value); return save(); }
       if (tg.dataset.tsL || tg.dataset.tsS || tg.dataset.tsB) renderPanel();
     });
     function uploadBg() {
       const inp = document.createElement("input");
-      inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp"; inp.style.display = "none";
-      inp.addEventListener("change", () => {
-        const f = inp.files && inp.files[0]; inp.remove(); if (!f) return;
-        global.SeozImageUtils.processImageFile(f).then(r => {
-          const t = ensure(), w = Math.min(260, r.naturalWidth || 260), h = Math.round(w * (r.naturalHeight || w) / (r.naturalWidth || w));
-          const L = { id: uid("bl"), src: r.ref, x: Math.round((430 - w) / 2), y: Math.round(phone.scrollTop / scaleNow()) + 60, w, h, depth: 0, motion: "none", speed: 1, opacity: 1 };
-          t.bg.layers.push(L); state.selBg = L.id; renderPanel(); save();
-        }).catch(() => alert("Görsel yüklenemedi. PNG, JPG veya WebP deneyin."));
+      inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp"; inp.multiple = true; inp.style.display = "none";
+      inp.addEventListener("change", async () => {
+        const files = Array.from(inp.files || []); inp.remove(); if (!files.length) return;
+        const fails = [];
+        for (let i = 0; i < files.length; i++) {
+          try {
+            const r = await global.SeozImageUtils.processImageFile(files[i]);
+            const t = ensure(), w = Math.min(260, r.naturalWidth || 260), h = Math.round(w * (r.naturalHeight || w) / (r.naturalWidth || w));
+            const L = { id: uid("bl"), src: r.ref, name: String(files[i].name || "Görsel").replace(/\.[a-z0-9]+$/i, "").slice(0, 30), x: Math.round((430 - w) / 2) + i * 12, y: Math.round(phone.scrollTop / scaleNow()) + 60 + i * 12, w, h, depth: 0, motion: "none", speed: 1, opacity: 1 };
+            t.bg.layers.push(L); state.selBg = L.id;
+          } catch (e) { fails.push(files[i].name); }
+        }
+        renderPanel(); save();
+        if (fails.length) alert("Şu görseller yüklenemedi (PNG, JPG veya WebP deneyin):\n" + fails.join("\n"));
       });
       root.appendChild(inp); inp.click();
     }

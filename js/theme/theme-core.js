@@ -62,7 +62,52 @@
     const s = A.art(id, c1, c2); if (!s) return "";
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
   }
-  function buildBgLayer(L, mode) {
+  /* =============================== İÇ ZEMİN 3D ===============================
+     Yalnızca 3D özelliği kullanılan zeminlerde kurulur (bkz. use3d); diğer zeminler eski yoldan,
+     birebir aynı çizilir. Ayrı bir animasyon motoru YOKTUR:
+       - katmanın 3D duruşu  → 3D-1'in hesabı (SeozCinema.poseOf)
+       - hareketler ve sıra  → A2'nin hareketleri ve sıralayıcısı (SeozCinemaFree.move / schedule)
+     Yapı:  kök (perspektif) → kamera → katman (kaydırma derinliği) → duruş (X/Y/Z, ölçek)
+            → taşıyıcı (süzülme, belirme) → hareket (Serbest 3D, yakınlaşma) → CSS hareketi → görsel
+     bg.scene = { persp, camera: { type, strength, duration } }
+     katman: d3, rx, ry, rz, persp, z, scale, shadow (0–1), kind:"fog" (sis katmanı)
+     bg.actions = A2 hareket listesi (layer, move, start: with|after|at|view, delay, duration, speed, easing, repeat, params) */
+  const BG_MOVES = ["free3d", "float", "shake", "zoom", "sheen"];
+  const CAMERAS = [["none", "Yok"], ["yaklas", "Açılışta yaklaşma"], ["uzaklas", "Açılışta uzaklaşma (geri çekilme)"], ["kaydir-yaklas", "Kaydırdıkça yaklaşma"], ["kaydir-uzaklas", "Kaydırdıkça uzaklaşma"]];
+  function use3d(bg) {
+    if (!bg) return false;
+    if (bg.scene && (bg.scene.camera && bg.scene.camera.type && bg.scene.camera.type !== "none" || num(bg.scene.persp, 0) > 0)) return true;
+    if (Array.isArray(bg.actions) && bg.actions.length) return true;
+    return (Array.isArray(bg.layers) ? bg.layers : []).some(L => L && (L.d3 || num(L.z, 0) || (L.scale != null && num(L.scale, 1) !== 1) || num(L.shadow, 0) > 0 || L.kind === "fog"));
+  }
+  function poseCSS(L) {
+    const C = global.SeozCinema, parts = [];
+    const z = Math.max(-1200, Math.min(800, num(L.z, 0))), sc = Math.max(0.1, Math.min(6, num(L.scale, 1)));
+    if (z) parts.push(`translateZ(${z}px)`);
+    const p = C && C.poseOf ? C.poseOf(L) : "";
+    if (p) parts.push(p);
+    if (sc !== 1) parts.push(`scale(${sc})`);
+    return parts.join(" ");
+  }
+  function buildFog(L) {
+    const outer = el("div", "th-bl th-bl3 th-fog", {
+      left: num(L.x, -40) + "px", top: num(L.y, 0) + "px", width: num(L.w, 510) + "px", height: num(L.h, 260) + "px"
+    });
+    const fogOp = Math.max(0, Math.min(1, num(L.opacity, 0.55)));
+    outer.dataset.depth = String(Math.max(0, Math.min(1, num(L.depth, 0))));
+    const pose = el("div", "th-pose"); const pc = poseCSS(L); if (pc) pose.style.transform = pc;
+    const col = L.color || "#FFFFFF";
+    const sp = (40 / Math.max(0.2, num(L.speed, 1))).toFixed(1) + "s";
+    // tek bant, iki yumuşak bulut: ekranı az kaplar, bulanıklık filtresi yoktur (kaydırmayı yavaşlatmaz)
+    const band = el("div", "th-fog-band", { opacity: fogOp.toFixed(2),
+      background: `radial-gradient(42% 55% at 30% 55%, ${col}, transparent 72%), radial-gradient(38% 48% at 72% 45%, ${col}, transparent 72%)` });
+    band.style.setProperty("--th-fog-sp", sp);
+    pose.appendChild(band);
+    outer.appendChild(pose);
+    return outer;
+  }
+  function buildBgLayer(L, mode, three, needLit) {
+    if (three) return buildBgLayer3(L, mode, needLit);
     const outer = el("div", "th-bl" + (L.front ? " th-bl-front" : ""), {
       left: num(L.x, 0) + "px", top: num(L.y, 0) + "px", width: num(L.w, 120) + "px", height: num(L.h, 120) + "px",
       opacity: String(Math.max(0, Math.min(1, num(L.opacity, 1))))
@@ -82,6 +127,107 @@
     }
     mid.appendChild(img); outer.appendChild(mid);
     return outer;
+  }
+  function buildBgLayer3(L, mode, needLit) {
+    if (L.kind === "fog") return buildFog(L);
+    const outer = el("div", "th-bl th-bl3" + (L.front ? " th-bl-front" : ""), {
+      left: num(L.x, 0) + "px", top: num(L.y, 0) + "px", width: num(L.w, 120) + "px", height: num(L.h, 120) + "px"
+    });
+    const op = Math.max(0, Math.min(1, num(L.opacity, 1)));
+    outer.dataset.depth = String(Math.max(0, Math.min(1, num(L.depth, 0))));
+    outer.dataset.bl = L.id || "";
+    const pose = el("div", "th-pose"), carry = el("div", "th-carry"), anim = el("div", "th-anim");
+    const pc = poseCSS(L); if (pc) pose.style.transform = pc;
+    const mid = el("div", "th-bl-m" + (L.motion && L.motion !== "none" ? " th-m-" + L.motion : ""));
+    mid.style.setProperty("--th-sp", (8 / Math.max(0.2, num(L.speed, 1))).toFixed(2) + "s");
+    if (L.motion === "salinim" || L.motion === "donme") mid.style.transformOrigin = L.origin || (L.motion === "salinim" ? "0% 100%" : "50% 50%");
+    const img = el("img", "th-bl-img", { transform: `${L.flip ? "scaleX(-1) " : ""}rotate(${num(L.rotate, 0)}deg)` });
+    img.alt = ""; img.draggable = false;
+    if (op < 1) img.style.opacity = String(op);
+    // görselin arkası uydurulmaz: katman arkasını döndüğünde görünmez
+    img.style.backfaceVisibility = "hidden"; img.style.webkitBackfaceVisibility = "hidden";
+    const setSrc = (im, after) => {
+      if (L.art) { im.src = artURL(L.art, L.color, L.color2); if (after) after(im.src); }
+      else if (L.src) {
+        im.loading = "lazy"; im.decoding = "async"; im.dataset.srcRef = L.src;
+        if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(L.src).then(u => { if (u) { im.src = u; if (after) after(u); } });
+        else { im.src = L.src; if (after) after(L.src); }
+      }
+    };
+    // yumuşak gölge: görselin kendi şekli, BİR KEZ küçük bir tuvale bulanık çizilir; tarayıcı her karede
+    // bulanıklık hesaplamaz (canlı CSS bulanıklığı kaydırmayı yavaşlatıyordu)
+    const shs = Math.max(0, Math.min(1, num(L.shadow, 0)));
+    let sh = null;
+    if (shs > 0) {
+      sh = el("canvas", "th-shadow", { opacity: ((0.25 + 0.5 * shs) * op).toFixed(2), transform: `translate3d(${Math.round(6 + 10 * shs)}px, ${Math.round(10 + 16 * shs)}px, -8px) ${L.flip ? "scaleX(-1) " : ""}rotate(${num(L.rotate, 0)}deg)` });
+      pose.appendChild(sh);
+    }
+    // ışık yansıması katmanı yalnızca o katmana "Metalik ışık" hareketi verildiyse kurulur
+    let lit = null, bar = null;
+    if (needLit) { lit = el("div", "th-lit"); bar = el("div", "th-lit-bar"); lit.appendChild(bar); }
+    setSrc(img, url => {
+      if (lit) { const m = `url("${url}")`; Object.assign(lit.style, { WebkitMaskImage: m, maskImage: m }); }
+      if (sh) softShadow(sh, url, num(L.w, 120), num(L.h, 120));
+    });
+    mid.appendChild(img); anim.appendChild(mid); if (lit) anim.appendChild(lit); carry.appendChild(anim); pose.appendChild(carry); outer.appendChild(pose);
+    outer.__th = { L: anim, C: carry, lit: lit ? { bar, k: 1 } : null };
+    return outer;
+  }
+  // görselin siluetini düşük çözünürlüklü tuvale çizer; CSS büyütmesi kenarları kendiliğinden yumuşatır
+  function softShadow(cv, url, w, h) {
+    const im = new Image();
+    im.decoding = "async";
+    im.onload = () => {
+      const q = 4, W = Math.max(8, Math.round(w / q)), H = Math.max(8, Math.round(h / q)), pad = 3;
+      cv.width = W + pad * 2; cv.height = H + pad * 2;
+      Object.assign(cv.style, { left: -(pad * q) + "px", top: -(pad * q) + "px", width: `calc(100% + ${pad * q * 2}px)`, height: `calc(100% + ${pad * q * 2}px)` });
+      const iw = im.naturalWidth || W, ih = im.naturalHeight || H, s = Math.min(W / iw, H / ih);
+      const dw = iw * s, dh = ih * s, c = cv.getContext("2d");
+      if (!c) return;
+      try {
+        if ("filter" in c) c.filter = "blur(2px)";
+        c.drawImage(im, pad + (W - dw) / 2, pad + (H - dh) / 2, dw, dh);
+        c.filter = "none"; c.globalCompositeOperation = "source-in"; c.fillStyle = "#000"; c.fillRect(0, 0, cv.width, cv.height);
+      } catch (e) { cv.remove(); }
+    };
+    im.onerror = () => cv.remove();
+    im.src = url;
+  }
+  /* İç Zemin hareketleri: A2'nin hareketleri ve sıralayıcısı, zemine bağlanan küçük bir bağlamla çalışır */
+  function bgMoves(st, bg, nodes, mode) {
+    const F = global.SeozCinemaFree;
+    const acts = (Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && BG_MOVES.includes(a.move) && nodes[a.layer]);
+    if (!F || !acts.length || mode !== "view" || reduced()) return;
+    const anims = [];
+    const ctx = { L: {}, C: {}, S: {}, box: {}, lit: {}, cfg: { layers: {}, depth: 1, actions: [] }, k: 1, lite: weak(), dead: false,
+      anim(elm, kf, o) {
+        if (!elm || ctx.dead) return null; o = o || {};
+        const a = elm.animate(kf, { duration: o.d || 600, delay: o.delay || 0, easing: o.e || "cubic-bezier(.16,1,.3,1)", fill: o.fill || "both", iterations: o.it || 1, direction: o.dir || "normal", composite: o.comp || "replace" });
+        anims.push(a); return a;
+      },
+      later(ms, fn) { const t = setTimeout(() => { if (!ctx.dead) fn(); }, Math.max(0, ms)); st.cleanups.push(() => clearTimeout(t)); },
+      sfx() {}, Z: n => n, scale: () => 1, shade() { return null; },
+      sheen(id, o) {
+        const l = ctx.lit[id]; if (!l) return null;
+        return ctx.anim(l.bar, [{ transform: "translateX(-130%) skewX(-16deg)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { transform: "translateX(330%) skewX(-16deg)", opacity: 0 }], Object.assign({ d: 1500, e: "cubic-bezier(.65,0,.35,1)" }, o || {}));
+      }
+    };
+    Object.keys(nodes).forEach(id => { const n = nodes[id].__th; if (!n) return; ctx.L[id] = n.L; ctx.C[id] = n.C; if (n.lit) ctx.lit[id] = n.lit; });
+    st.cleanups.push(() => { ctx.dead = true; anims.forEach(a => { try { a.cancel(); } catch (e) { /* önemsiz */ } }); });
+    // "Göründüğünde" ile başlayan hareket yeni bir bölüm açar: o katman ekrana gelince bölüm oynar
+    const parts = [];
+    acts.forEach((a, i) => { if (i === 0 || a.start === "view") parts.push([]); parts[parts.length - 1].push(a); });
+    const runPart = list => {
+      const sp = F.schedule(list.map((a, i) => i === 0 ? Object.assign({}, a, { start: "with" }) : a));
+      sp.items.forEach(it => { try { it.def.run(ctx, it.a, it.def, it.begin); } catch (e) { console.error("[Studio SEOZ] Zemin hareketi:", it.a.move, e); } });
+    };
+    parts.forEach((list, i) => {
+      if (i === 0 && list[0].start !== "view") return runPart(list);
+      const target = nodes[list[0].layer];
+      if (!global.IntersectionObserver || !target) return runPart(list);
+      const io = new IntersectionObserver(ents => { if (ents.some(e => e.isIntersecting)) { io.disconnect(); runPart(list); } }, { threshold: 0.2 });
+      io.observe(target); st.cleanups.push(() => io.disconnect());
+    });
   }
   function sectionGradient(sections) {
     const s = sections.filter(x => x && x.color).slice().sort((a, b) => num(a.y, 0) - num(b.y, 0));
@@ -210,7 +356,20 @@
       if (bg.base && bg.base.type === "gradient") root.appendChild(el("div", "th-fill", { background: `linear-gradient(${num(bg.base.angle, 180)}deg, ${bg.base.from || "#fff"}, ${bg.base.to || "#eee"})` }));
       else if (bg.base && bg.base.type === "radial") root.appendChild(el("div", "th-fill", { background: `radial-gradient(120% 80% at 50% 20%, ${bg.base.inner || "#fff"}, ${bg.base.outer || "#ddd"})` }));
       if (Array.isArray(bg.sections) && bg.sections.length) { const g = sectionGradient(bg.sections); if (g) root.appendChild(el("div", "th-fill th-sections", { background: g })); }
-      const bls = (Array.isArray(bg.layers) ? bg.layers : []).map(L => { const n = buildBgLayer(L, mode); (L.front ? front : root).appendChild(n); return n; });
+      const three = use3d(bg);
+      let cam = null, camF = null;
+      if (three) {
+        // perspektifli sahne: kamera kökün içinde; perspektifin bakış noktası kaydırmayla ekranın ortasında tutulur
+        const P = Math.max(300, Math.min(4000, num(bg.scene && bg.scene.persp, 0) || 1200));
+        [root, front].forEach(r => { r.classList.add("th-3d"); r.style.perspective = P + "px"; });
+        cam = el("div", "th-cam"); camF = el("div", "th-cam");
+        root.appendChild(cam); front.appendChild(camF);
+      }
+      const nodes = {};
+      const litIds = new Set((Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && a.move === "sheen").map(a => a.layer));
+      const bls = (Array.isArray(bg.layers) ? bg.layers : []).map(L => { const n = buildBgLayer(L, mode, three, litIds.has(L.id)); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; return n; });
+      if (three && !camF.childNodes.length) camF.remove();
+      if (three && weak()) { canvasEl.classList.add("th-lite3"); st.cleanups.push(() => canvasEl.classList.remove("th-lite3")); }
       const lc = bg.light && bg.light.type && bg.light.type !== "none" ? lightCSS(bg.light, (th.palette || {}).accent) : null;
       if (lc) root.appendChild(el("div", "th-fill th-light th-light-" + bg.light.type, lc));
       let pc = null, parts = null;
@@ -238,9 +397,25 @@
       }
       // ekranda görünmeyen zemin hareketleri durur
       if (global.IntersectionObserver && !rm) {
-        const io = new IntersectionObserver(ents => ents.forEach(e => e.target.classList.toggle("th-off", !e.isIntersecting)), { rootMargin: "120px" });
+        const io = new IntersectionObserver(ents => ents.forEach(e => {
+          e.target.classList.toggle("th-off", !e.isIntersecting);
+          if (three) e.target.getAnimations({ subtree: true }).forEach(a => { if (a.effect && a.effect.getTiming().iterations === Infinity) { try { e.isIntersecting ? a.play() : a.pause(); } catch (err) { /* önemsiz */ } } });
+        }), { rootMargin: "120px" });
         bls.forEach(n => io.observe(n));
         st.cleanups.push(() => io.disconnect());
+      }
+      // İç Zemin 3D: kamera ve hareketler (açılış ekranı kalkınca başlar)
+      const camCfg = three && bg.scene && bg.scene.camera && bg.scene.camera.type && bg.scene.camera.type !== "none" ? bg.scene.camera : null;
+      const camD = camCfg ? Math.round(60 + 260 * Math.max(0, Math.min(1, num(camCfg.strength, 0.5)))) : 0;
+      if (three) {
+        afterEntry(mode, st, () => {
+          if (camCfg && mode === "view" && !rm && (camCfg.type === "yaklas" || camCfg.type === "uzaklas")) {
+            const kf = camCfg.type === "yaklas" ? [{ transform: "translateZ(0)" }, { transform: `translateZ(${camD}px)` }] : [{ transform: `translateZ(${camD}px)` }, { transform: "translateZ(0)" }];
+            const d = Math.max(400, Math.min(12000, num(camCfg.duration, 3) * 1000));
+            [cam, camF].forEach(c => { const a = c.animate(kf, { duration: d, easing: "cubic-bezier(.33,0,.2,1)", fill: "forwards" }); st.cleanups.push(() => { try { a.cancel(); } catch (e) { /* önemsiz */ } }); });
+          }
+          bgMoves(st, bg, nodes, mode);
+        });
       }
       // derinlik (kaydırınca farklı hızda kayma) + parçacık tuvalini görünen bölgeye taşıma
       const deep = bls.filter(n => Number(n.dataset.depth) > 0);
@@ -255,6 +430,15 @@
           const d = Number(n.dataset.depth), cy = n.offsetTop + n.offsetHeight / 2, mid = top + (vh / scale) / 2;
           n.style.transform = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
         });
+        if (three) {
+          const oy = (top + (vh / scale) / 2).toFixed(0) + "px";
+          root.style.perspectiveOrigin = front.style.perspectiveOrigin = "50% " + oy;
+          if (camCfg && !rm && (camCfg.type === "kaydir-yaklas" || camCfg.type === "kaydir-uzaklas")) {
+            const span = Math.max(1, canvasEl.offsetHeight - vh / scale), pr = Math.max(0, Math.min(1, top / span));
+            const z = (camCfg.type === "kaydir-yaklas" ? pr : 1 - pr) * camD;
+            cam.style.transform = camF.style.transform = `translateZ(${z.toFixed(1)}px)`;
+          }
+        }
         if (pc && parts && hgt > 0) {
           pc.style.top = top + "px"; pc.style.height = Math.max(1, hgt) + "px";
           parts.resize(canvasEl.offsetWidth || 430, Math.max(1, hgt));
@@ -263,7 +447,7 @@
       }
       st.update = update;
       const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
-      if (deep.length || pc) {
+      if (deep.length || pc || three) {
         global.addEventListener("scroll", onScroll, { passive: true, capture: true });
         global.addEventListener("resize", onScroll);
         st.cleanups.push(() => { global.removeEventListener("scroll", onScroll, { capture: true }); global.removeEventListener("resize", onScroll); });
@@ -312,5 +496,5 @@
     if (global.SeozThemePresent) global.SeozThemePresent.apply(wrap, layer, mode);
   }
 
-  global.SeozTheme = { applyDocument, teardown, decorateLayer, Particles, artURL, MOTIONS, PARTICLES, LIGHTS, REVEALS, sectionGradient };
+  global.SeozTheme = { applyDocument, teardown, decorateLayer, Particles, artURL, MOTIONS, PARTICLES, LIGHTS, REVEALS, sectionGradient, use3d, BG_MOVES, CAMERAS };
 })(window);

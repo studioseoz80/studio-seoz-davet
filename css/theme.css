@@ -16,7 +16,7 @@
 .th-m-nefes{ animation-name:thBreath; animation-direction:alternate; }
 .th-m-kayma{ animation-name:thDrift; animation-direction:alternate; animation-duration:calc(var(--th-sp, 8s) * 2); }
 .th-m-parilti{ animation-name:thTwinkle; animation-direction:alternate; animation-duration:calc(var(--th-sp, 8s) / 3); }
-.th-off .th-bl-m, .th-still .th-bl-m, .th-wait .th-bl-m{ animation-play-state:paused; }
+.th-off .th-bl-m, .th-still .th-bl-m, .th-wait .th-bl-m, .th-off .th-fog-band, .th-still .th-fog-band, .th-wait .th-fog-band{ animation-play-state:paused; }
 @keyframes thSway{ from{ transform:rotate(-3deg); } to{ transform:rotate(3deg); } }
 @keyframes thFloat{ from{ transform:translateY(-8px); } to{ transform:translateY(8px); } }
 @keyframes thSpin{ to{ transform:rotate(360deg); } }
@@ -334,3 +334,19 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 .ix-knocks i.is-on{ background:var(--ix-c); }
 @keyframes ixKnock{ 30%{ transform:translateX(-3px) rotate(-.6deg); } 60%{ transform:translateX(3px) rotate(.6deg); } }
 @media (prefers-reduced-motion: reduce){ .ix-balloon, .ix-gift, .ix-flame{ animation:none !important; } }
+
+/* İç Zemin 3D (yalnızca 3D özelliği kullanılan zeminlerde) */
+.th-cam{ position:absolute; inset:0; transform-style:preserve-3d; will-change:transform; }
+.th-bl3{ transform-style:preserve-3d; }
+.th-pose, .th-carry, .th-anim{ position:absolute; inset:0; transform-style:preserve-3d; }
+.th-anim > .th-bl-m{ position:absolute; inset:0; }
+.th-shadow{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.th-lit{ position:absolute; inset:0; overflow:hidden; pointer-events:none; -webkit-mask-size:contain; mask-size:contain; -webkit-mask-position:center; mask-position:center; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; transform:translateZ(.5px); backface-visibility:hidden; }
+.th-lit-bar{ position:absolute; top:-15%; bottom:-15%; left:0; width:42%; opacity:0; transform:translateX(-130%) skewX(-16deg);
+  background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.75), rgba(255,255,255,0)); }
+.th-fog{ pointer-events:none; }
+.th-fog-band{ position:absolute; inset:0 -15%; animation:thFogDrift var(--th-fog-sp, 40s) ease-in-out infinite alternate; }
+@keyframes thFogDrift{ from{ transform:translateX(-9%); } to{ transform:translateX(9%); } }
+@media (prefers-reduced-motion: reduce){ .th-fog-band{ animation:none; } }
+.th-lite3 .th-fog-band{ animation:none; }
+.th-lite3 .th-lit{ display:none; }
