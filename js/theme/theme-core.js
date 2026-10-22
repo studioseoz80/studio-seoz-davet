@@ -106,8 +106,8 @@
     outer.appendChild(pose);
     return outer;
   }
-  function buildBgLayer(L, mode, three, needLit) {
-    if (three) return buildBgLayer3(L, mode, needLit);
+  function buildBgLayer(L, mode, three, opt) {
+    if (three) return buildBgLayer3(L, mode, opt || {});
     const outer = el("div", "th-bl" + (L.front ? " th-bl-front" : ""), {
       left: num(L.x, 0) + "px", top: num(L.y, 0) + "px", width: num(L.w, 120) + "px", height: num(L.h, 120) + "px",
       opacity: String(Math.max(0, Math.min(1, num(L.opacity, 1))))
@@ -128,7 +128,8 @@
     mid.appendChild(img); outer.appendChild(mid);
     return outer;
   }
-  function buildBgLayer3(L, mode, needLit) {
+  function buildBgLayer3(L, mode, opt) {
+    const needLit = !!opt.lit, hasAct = !!opt.act;
     if (L.kind === "fog") return buildFog(L);
     const outer = el("div", "th-bl th-bl3" + (L.front ? " th-bl-front" : ""), {
       left: num(L.x, 0) + "px", top: num(L.y, 0) + "px", width: num(L.w, 120) + "px", height: num(L.h, 120) + "px"
@@ -136,12 +137,18 @@
     const op = Math.max(0, Math.min(1, num(L.opacity, 1)));
     outer.dataset.depth = String(Math.max(0, Math.min(1, num(L.depth, 0))));
     outer.dataset.bl = L.id || "";
-    const pose = el("div", "th-pose"), carry = el("div", "th-carry"), anim = el("div", "th-anim");
+    // yalnızca gereken kutular kurulur: hareketi olmayan katmanda taşıyıcı/hareket kutusu, CSS hareketi
+    // olmayan katmanda hareket sarmalı yoktur (her kutu tarayıcıya ayrı bir katman yükü getiriyordu)
+    const pose = el("div", "th-pose"), carry = hasAct ? el("div", "th-carry") : null, anim = hasAct ? el("div", "th-anim") : null;
     const pc = poseCSS(L); if (pc) pose.style.transform = pc;
-    const mid = el("div", "th-bl-m" + (L.motion && L.motion !== "none" ? " th-m-" + L.motion : ""));
-    mid.style.setProperty("--th-sp", (8 / Math.max(0.2, num(L.speed, 1))).toFixed(2) + "s");
-    if (L.motion === "salinim" || L.motion === "donme") mid.style.transformOrigin = L.origin || (L.motion === "salinim" ? "0% 100%" : "50% 50%");
-    const img = el("img", "th-bl-img", { transform: `${L.flip ? "scaleX(-1) " : ""}rotate(${num(L.rotate, 0)}deg)` });
+    const moving = L.motion && L.motion !== "none";
+    const mid = moving ? el("div", "th-bl-m th-m-" + L.motion) : null;
+    if (mid) {
+      mid.style.setProperty("--th-sp", (8 / Math.max(0.2, num(L.speed, 1))).toFixed(2) + "s");
+      if (L.motion === "salinim" || L.motion === "donme") mid.style.transformOrigin = L.origin || (L.motion === "salinim" ? "0% 100%" : "50% 50%");
+    }
+    const img = el("img", "th-bl-img");
+    if (L.flip || num(L.rotate, 0)) img.style.transform = `${L.flip ? "scaleX(-1) " : ""}rotate(${num(L.rotate, 0)}deg)`;
     img.alt = ""; img.draggable = false;
     if (op < 1) img.style.opacity = String(op);
     // görselin arkası uydurulmaz: katman arkasını döndüğünde görünmez
@@ -169,7 +176,11 @@
       if (lit) { const m = `url("${url}")`; Object.assign(lit.style, { WebkitMaskImage: m, maskImage: m }); }
       if (sh) softShadow(sh, url, num(L.w, 120), num(L.h, 120));
     });
-    mid.appendChild(img); anim.appendChild(mid); if (lit) anim.appendChild(lit); carry.appendChild(anim); pose.appendChild(carry); outer.appendChild(pose);
+    const body = mid || img; if (mid) mid.appendChild(img);
+    const host = anim || pose;
+    host.appendChild(body); if (lit) host.appendChild(lit);
+    if (anim) { carry.appendChild(anim); pose.appendChild(carry); }
+    outer.appendChild(pose);
     outer.__th = { L: anim, C: carry, lit: lit ? { bar, k: 1 } : null };
     return outer;
   }
@@ -196,7 +207,7 @@
   /* İç Zemin hareketleri: A2'nin hareketleri ve sıralayıcısı, zemine bağlanan küçük bir bağlamla çalışır */
   function bgMoves(st, bg, nodes, mode) {
     const F = global.SeozCinemaFree;
-    const acts = (Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && BG_MOVES.includes(a.move) && nodes[a.layer]);
+    const acts = (Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && BG_MOVES.includes(a.move) && nodes[a.layer] && nodes[a.layer].__th && nodes[a.layer].__th.L);
     if (!F || !acts.length || mode !== "view" || reduced()) return;
     const anims = [];
     const ctx = { L: {}, C: {}, S: {}, box: {}, lit: {}, cfg: { layers: {}, depth: 1, actions: [] }, k: 1, lite: weak(), dead: false,
@@ -212,7 +223,7 @@
         return ctx.anim(l.bar, [{ transform: "translateX(-130%) skewX(-16deg)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { transform: "translateX(330%) skewX(-16deg)", opacity: 0 }], Object.assign({ d: 1500, e: "cubic-bezier(.65,0,.35,1)" }, o || {}));
       }
     };
-    Object.keys(nodes).forEach(id => { const n = nodes[id].__th; if (!n) return; ctx.L[id] = n.L; ctx.C[id] = n.C; if (n.lit) ctx.lit[id] = n.lit; });
+    Object.keys(nodes).forEach(id => { const n = nodes[id].__th; if (!n || !n.L) return; ctx.L[id] = n.L; ctx.C[id] = n.C; if (n.lit) ctx.lit[id] = n.lit; });
     st.cleanups.push(() => { ctx.dead = true; anims.forEach(a => { try { a.cancel(); } catch (e) { /* önemsiz */ } }); });
     // "Göründüğünde" ile başlayan hareket yeni bir bölüm açar: o katman ekrana gelince bölüm oynar
     const parts = [];
@@ -265,12 +276,16 @@
     atesbocegi: ["rgba(240,255,150,1)", "rgba(255,236,150,1)"], yildiz: ["#FFFFFF", "#FFF1C4"], balon: ["#F49AB0", "#9FD3F5", "#F7D774", "#B5E3B5"],
     kalp: ["#F06A8A", "#F7A3B8", "#E2335C"], parilti: ["#F3D27A", "#FFF1C4", "#C9A45C"]
   };
-  function Particles(canvas, cfg) {
+  /* env: ayrı çalışanda (worker) çalışırken ekran yoğunluğu, kare zamanlayıcısı ve sekme durumu buradan gelir;
+     ana sayfada verilmez ve eskisi gibi davranır */
+  function Particles(canvas, cfg, env) {
+    env = env || {};
     const ctx = canvas.getContext("2d");
+    const RAF = env.raf || (f => requestAnimationFrame(f)), CAF = env.caf || (id => cancelAnimationFrame(id)), hidden = env.hidden || (() => document.hidden);
     const type = cfg.type, cols = (cfg.colors && cfg.colors.length ? cfg.colors : PCOL[type]) || ["#fff"];
-    let W = 430, H = 700, dpr = Math.min(2, global.devicePixelRatio || 1), list = [], fade = 1, raf = 0, last = 0, dead = false, paused = false;
+    let W = 430, H = 700, dpr = env.dpr || Math.min(2, global.devicePixelRatio || 1), list = [], fade = 1, raf = 0, last = 0, dead = false, paused = false, sized = false;
     const base = { kar: 40, yaprak: 22, konfeti: 34, atesbocegi: 22, yildiz: 36, balon: 9, kalp: 14, parilti: 30 }[type] || 20;
-    const N = Math.max(3, Math.round(base * Math.max(0.2, Math.min(2.5, num(cfg.density, 1))) * (weak() ? 0.4 : 1)));
+    const N = Math.max(3, Math.round(base * Math.max(0.2, Math.min(2.5, num(cfg.density, 1))) * ((env.weak != null ? env.weak : weak()) ? 0.4 : 1)));
     const R = Math.random;
     function spawn(p, fresh) {
       p.x = R() * W; p.y = fresh ? R() * H : (type === "balon" || type === "kalp" ? H + 30 : -20);
@@ -281,7 +296,8 @@
       return p;
     }
     function resize(w, h) {
-      if (Math.abs(w - W) < 1 && Math.abs(h - H) < 1 && canvas.width) return;
+      if (sized && Math.abs(w - W) < 1 && Math.abs(h - H) < 1) return;
+      sized = true;
       W = w; H = h; canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
       if (!list.length) list = Array.from({ length: N }, () => spawn({}, true));
       else list.forEach(p => { if (p.y > H + 40) p.y = R() * H; });
@@ -290,8 +306,8 @@
     function star4(x, y, s) { ctx.beginPath(); ctx.moveTo(x, y - s * 2); ctx.quadraticCurveTo(x, y, x + s * 2, y); ctx.quadraticCurveTo(x, y, x, y + s * 2); ctx.quadraticCurveTo(x, y, x - s * 2, y); ctx.quadraticCurveTo(x, y, x, y - s * 2); ctx.fill(); }
     function frame(now) {
       if (dead) return;
-      raf = requestAnimationFrame(frame);
-      if (paused || document.hidden) { last = now; return; }
+      raf = RAF(frame);
+      if (paused || hidden()) { last = now; return; }
       const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
       if (cfg.seconds > 0) { cfg.__t = (cfg.__t || 0) + dt; if (cfg.__t > cfg.seconds) fade = Math.max(0.25, fade - dt * 0.25); }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
@@ -326,9 +342,84 @@
       }
       ctx.globalAlpha = 1;
     }
-    raf = requestAnimationFrame(frame);
-    return { resize, destroy() { dead = true; cancelAnimationFrame(raf); }, pause() { paused = true; }, resume() { paused = false; }, count: () => list.length };
+    raf = RAF(frame);
+    // hafif mod: tuval çözünürlüğü düşürülür (parçacıkların sayısı, rengi ve hareketi aynı kalır)
+    function quality(d) { if (!d || d === dpr) return; dpr = d; if (sized) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); } }
+    return { resize, quality, destroy() { dead = true; CAF(raf); }, pause() { paused = true; }, resume() { paused = false; }, count: () => list.length };
   }
+  /* Parçacıklar ayrı bir çalışanda (OffscreenCanvas): aynı Particles kodu, ana iş parçacığının dışında çizer.
+     Kaydırma ve 3D hareketler parçacık çiziminden etkilenmez; görünüm birebir aynıdır.
+     Desteklenmeyen tarayıcıda null döner ve sayfa eski yoldan (ana iş parçacığında) çizer. */
+  let pWorkerURL = null;
+  function particleWorkerURL() {
+    if (pWorkerURL) return pWorkerURL;
+    const src = `"use strict";
+const global = self; const PCOL = ${JSON.stringify(PCOL)};
+${num.toString()}
+function weak() { return false; }
+${Particles.toString()}
+let P = null, hid = false;
+onmessage = e => { const m = e.data;
+  if (m.t === "init") {
+    const raf = self.requestAnimationFrame ? f => self.requestAnimationFrame(f) : f => setTimeout(() => f(performance.now()), 16);
+    const caf = self.cancelAnimationFrame ? id => self.cancelAnimationFrame(id) : id => clearTimeout(id);
+    P = Particles(m.canvas, m.cfg, { dpr: m.dpr, weak: m.weak, raf, caf, hidden: () => hid });
+  } else if (!P) return;
+  else if (m.t === "resize") P.resize(m.w, m.h);
+  else if (m.t === "pause") P.pause();
+  else if (m.t === "resume") P.resume();
+  else if (m.t === "quality") P.quality(m.d);
+  else if (m.t === "hidden") hid = m.v;
+  else if (m.t === "destroy") { P.destroy(); P = null; close(); }
+};`;
+    pWorkerURL = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    return pWorkerURL;
+  }
+  function ParticlesOff(canvas, cfg) {
+    if (!canvas.transferControlToOffscreen || !global.Worker || !global.OffscreenCanvas || !global.Blob || !global.URL) return null;
+    let w;
+    try { w = new Worker(particleWorkerURL()); } catch (e) { return null; }
+    try {
+      const off = canvas.transferControlToOffscreen();
+      w.postMessage({ t: "init", canvas: off, cfg: JSON.parse(JSON.stringify(cfg)), dpr: Math.min(2, global.devicePixelRatio || 1), weak: !!weak() }, [off]);
+    } catch (e) { w.terminate(); return null; }
+    const type = cfg.type, base = { kar: 40, yaprak: 22, konfeti: 34, atesbocegi: 22, yildiz: 36, balon: 9, kalp: 14, parilti: 30 }[type] || 20;
+    const N = Math.max(3, Math.round(base * Math.max(0.2, Math.min(2.5, num(cfg.density, 1))) * (weak() ? 0.4 : 1)));
+    const onVis = () => { if (!main) w.postMessage({ t: "hidden", v: !!document.hidden }); };
+    let lw = -1, lh = -1, pz = null, q = 0, dead = false, main = null;
+    const send = m => { if (!dead && !main) w.postMessage(m); };
+    // güvenlik ağı: çalışan açılamazsa (ör. sitenin güvenlik ayarı) tuval yenilenir ve eski yoldan çizilir
+    const fallback = () => {
+      if (dead || main) return;
+      try { w.terminate(); } catch (e) { /* önemsiz */ }
+      document.removeEventListener("visibilitychange", onVis);
+      const fresh = canvas.cloneNode(false);
+      if (canvas.parentNode) canvas.parentNode.replaceChild(fresh, canvas);
+      api.el = fresh;
+      main = Particles(fresh, cfg);
+      if (lw > 0) main.resize(lw, lh);
+      if (q) main.quality(q);
+      if (pz) main.pause();
+      api.off = false;
+    };
+    w.addEventListener("error", e => { if (e && e.preventDefault) e.preventDefault(); fallback(); });
+    document.addEventListener("visibilitychange", onVis); onVis();
+    const api = {
+      off: true, el: canvas,
+      resize(wd, h) { if (Math.abs(wd - lw) < 1 && Math.abs(h - lh) < 1) return; lw = wd; lh = h; if (main) main.resize(wd, h); else send({ t: "resize", w: wd, h }); },
+      quality(d) { q = d; if (main) main.quality(d); else send({ t: "quality", d }); },
+      pause() { if (pz !== true) { pz = true; if (main) main.pause(); else send({ t: "pause" }); } },
+      resume() { if (pz !== false) { pz = false; if (main) main.resume(); else send({ t: "resume" }); } },
+      destroy() {
+        if (dead) return;
+        if (main) main.destroy(); else { send({ t: "destroy" }); setTimeout(() => { try { w.terminate(); } catch (e) { /* önemsiz */ } }, 100); }
+        dead = true; document.removeEventListener("visibilitychange", onVis);
+      },
+      count: () => main ? main.count() : N
+    };
+    return api;
+  }
+
 
   /* =============================== belge uygulama =============================== */
   function teardown(canvasEl) {
@@ -357,19 +448,34 @@
       else if (bg.base && bg.base.type === "radial") root.appendChild(el("div", "th-fill", { background: `radial-gradient(120% 80% at 50% 20%, ${bg.base.inner || "#fff"}, ${bg.base.outer || "#ddd"})` }));
       if (Array.isArray(bg.sections) && bg.sections.length) { const g = sectionGradient(bg.sections); if (g) root.appendChild(el("div", "th-fill th-sections", { background: g })); }
       const three = use3d(bg);
-      let cam = null, camF = null;
+      let cam = null, camF = null, stage = null, stageF = null;
       if (three) {
         // perspektifli sahne: kamera kökün içinde; perspektifin bakış noktası kaydırmayla ekranın ortasında tutulur
         const P = Math.max(300, Math.min(4000, num(bg.scene && bg.scene.persp, 0) || 1200));
-        [root, front].forEach(r => { r.classList.add("th-3d"); r.style.perspective = P + "px"; });
+        // perspektif boyanmayan ayrı bir sahne kutusunda: kökün zemin boyası 3D katmanına taşınmaz
+        // (aksi hâlde sayfa boyu zemin her karede ikinci kez çiziliyordu)
+        stage = el("div", "th-stage"); stageF = el("div", "th-stage");
+        [stage, stageF].forEach(x => { x.style.perspective = P + "px"; });
+        [root, front].forEach(r => r.classList.add("th-3d"));
         cam = el("div", "th-cam"); camF = el("div", "th-cam");
-        root.appendChild(cam); front.appendChild(camF);
+        stage.appendChild(cam); stageF.appendChild(camF);
+        root.appendChild(stage); front.appendChild(stageF);
       }
       const nodes = {};
-      const litIds = new Set((Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && a.move === "sheen").map(a => a.layer));
-      const bls = (Array.isArray(bg.layers) ? bg.layers : []).map(L => { const n = buildBgLayer(L, mode, three, litIds.has(L.id)); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; return n; });
-      if (three && !camF.childNodes.length) camF.remove();
-      if (three && weak()) { canvasEl.classList.add("th-lite3"); st.cleanups.push(() => canvasEl.classList.remove("th-lite3")); }
+      const bgActs = (Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && BG_MOVES.includes(a.move));
+      const litIds = new Set(bgActs.filter(a => a.move === "sheen").map(a => a.layer)), actIds = new Set(bgActs.map(a => a.layer));
+      const bls = (Array.isArray(bg.layers) ? bg.layers : []).map(L => { const n = buildBgLayer(L, mode, three, { lit: litIds.has(L.id), act: actIds.has(L.id) }); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; return n; });
+      if (three && !camF.childNodes.length) { stageF.remove(); stageF = null; }
+      /* Hafif mod (yalnızca 3D zeminde): zayıf cihazda baştan, diğerlerinde gerektiğinde kendiliğinden açılır.
+         Sis akışı durur, ışık parıltısı gizlenir, parçacık tuvali düşük çözünürlükte çizilir.
+         PNG katmanlarının 3D duruşu ve hareketleri AYNEN korunur. */
+      const goLite = why => {
+        if (st.lite) return; st.lite = why;
+        canvasEl.classList.add("th-lite3"); canvasEl.dataset.thLite = why;
+        st.cleanups.push(() => { canvasEl.classList.remove("th-lite3"); delete canvasEl.dataset.thLite; });
+        if (st.particles) st.particles.quality(1);
+      };
+      if (three && weak()) goLite("cihaz");
       const lc = bg.light && bg.light.type && bg.light.type !== "none" ? lightCSS(bg.light, (th.palette || {}).accent) : null;
       if (lc) root.appendChild(el("div", "th-fill th-light th-light-" + bg.light.type, lc));
       let pc = null, parts = null;
@@ -377,7 +483,10 @@
       if (pt && !reduced()) {
         pc = el("canvas", "th-particles"); root.appendChild(pc);
         afterEntry(mode, st, () => {
-          parts = Particles(pc, Object.assign({}, pt, { seconds: num(pt.seconds, 0) })); st.particles = parts;
+          const pcfg = Object.assign({}, pt, { seconds: num(pt.seconds, 0) });
+          // 3D zeminli sayfada parçacıklar ayrı çalışanda çizilir (desteklenmezse eski yol); 2D sayfalar aynen eski yoldan
+          parts = (three && ParticlesOff(pc, pcfg)) || Particles(pc, pcfg); st.particles = parts;
+          if (st.lite) parts.quality(1);
           if (st.update) requestAnimationFrame(st.update);   // açılıştan sonra kurulduysa tuvali hemen yerine oturt
         });
       }
@@ -404,6 +513,25 @@
         bls.forEach(n => io.observe(n));
         st.cleanups.push(() => io.disconnect());
       }
+      // otomatik hafif mod: açılıştan sonraki ilk ~25 saniyede kare hızı art arda 2 saniye 40'ın altında kalırsa
+      if (three && mode === "view" && !rm && !st.lite && !global.__seozNoAutoLite) afterEntry(mode, st, () => {   // __seozNoAutoLite: yalnızca ölçüm için
+        let frames = 0, t0 = 0, slow = 0, windows = 0, raf = 0, dead = false;
+        const tick = now => {
+          if (dead || st.lite) return;
+          if (document.hidden) { t0 = 0; raf = requestAnimationFrame(tick); return; }
+          if (!t0) { t0 = now; frames = 0; }
+          frames++;
+          if (now - t0 >= 1000) {
+            const fps = (frames - 1) * 1000 / (now - t0);
+            windows++; slow = fps < 40 ? slow + 1 : 0; t0 = 0;
+            if (slow >= 2) return goLite("otomatik");
+            if (windows >= 25) return;
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        st.cleanups.push(() => { dead = true; cancelAnimationFrame(raf); });
+      });
       // İç Zemin 3D: kamera ve hareketler (açılış ekranı kalkınca başlar)
       const camCfg = three && bg.scene && bg.scene.camera && bg.scene.camera.type && bg.scene.camera.type !== "none" ? bg.scene.camera : null;
       const camD = camCfg ? Math.round(60 + 260 * Math.max(0, Math.min(1, num(camCfg.strength, 0.5)))) : 0;
@@ -412,7 +540,7 @@
           if (camCfg && mode === "view" && !rm && (camCfg.type === "yaklas" || camCfg.type === "uzaklas")) {
             const kf = camCfg.type === "yaklas" ? [{ transform: "translateZ(0)" }, { transform: `translateZ(${camD}px)` }] : [{ transform: `translateZ(${camD}px)` }, { transform: "translateZ(0)" }];
             const d = Math.max(400, Math.min(12000, num(camCfg.duration, 3) * 1000));
-            [cam, camF].forEach(c => { const a = c.animate(kf, { duration: d, easing: "cubic-bezier(.33,0,.2,1)", fill: "forwards" }); st.cleanups.push(() => { try { a.cancel(); } catch (e) { /* önemsiz */ } }); });
+            [cam, camF].filter(c => c.isConnected).forEach(c => { const a = c.animate(kf, { duration: d, easing: "cubic-bezier(.33,0,.2,1)", fill: "forwards" }); st.cleanups.push(() => { try { a.cancel(); } catch (e) { /* önemsiz */ } }); });
           }
           bgMoves(st, bg, nodes, mode);
         });
@@ -420,28 +548,39 @@
       // derinlik (kaydırınca farklı hızda kayma) + parçacık tuvalini görünen bölgeye taşıma
       const deep = bls.filter(n => Number(n.dataset.depth) > 0);
       let ticking = false, tiltX = 0, tiltY = 0;
+      // önce bütün ölçüler okunur, sonra bütün yazmalar yapılır: okuma-yazma karışınca tarayıcı her
+      // katmanda sayfayı yeniden ölçmek zorunda kalıyordu. Katman konumları müşteri sayfasında değişmez,
+      // bu yüzden bir kez ölçülür (pencere boyu değişince yeniden).
+      let geo = null;
+      const measure = () => deep.map(n => ({ n, d: Number(n.dataset.depth), cy: n.offsetTop + n.offsetHeight / 2 }));
       function update() {
         ticking = false;
         const r = canvasEl.getBoundingClientRect();
-        const scale = r.width / (canvasEl.offsetWidth || 1) || 1;
+        const cw = canvasEl.offsetWidth || 1, ch = canvasEl.offsetHeight;
+        const scale = r.width / cw || 1;
         const vh = (global.innerHeight || 800);
-        const top = Math.max(0, -r.top / scale), hgt = Math.min(canvasEl.offsetHeight - top, vh / scale);
-        if (!rm) deep.forEach(n => {
-          const d = Number(n.dataset.depth), cy = n.offsetTop + n.offsetHeight / 2, mid = top + (vh / scale) / 2;
+        const top = Math.max(0, -r.top / scale), hgt = Math.min(ch - top, vh / scale);
+        const g = (mode === "view" && geo) || measure();
+        if (mode === "view") geo = g;
+        const mid = top + (vh / scale) / 2;
+        if (!rm) g.forEach(({ n, d, cy }) => {
           n.style.transform = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
         });
         if (three) {
-          const oy = (top + (vh / scale) / 2).toFixed(0) + "px";
-          root.style.perspectiveOrigin = front.style.perspectiveOrigin = "50% " + oy;
+          const oy = mid.toFixed(0) + "px";
+          stage.style.perspectiveOrigin = "50% " + oy; if (stageF) stageF.style.perspectiveOrigin = "50% " + oy;
           if (camCfg && !rm && (camCfg.type === "kaydir-yaklas" || camCfg.type === "kaydir-uzaklas")) {
-            const span = Math.max(1, canvasEl.offsetHeight - vh / scale), pr = Math.max(0, Math.min(1, top / span));
+            const span = Math.max(1, ch - vh / scale), pr = Math.max(0, Math.min(1, top / span));
             const z = (camCfg.type === "kaydir-yaklas" ? pr : 1 - pr) * camD;
             cam.style.transform = camF.style.transform = `translateZ(${z.toFixed(1)}px)`;
           }
         }
         if (pc && parts && hgt > 0) {
-          pc.style.top = top + "px"; pc.style.height = Math.max(1, hgt) + "px";
-          parts.resize(canvasEl.offsetWidth || 430, Math.max(1, hgt));
+          // 3D sayfada tuval yeniden yerleşim gerektirmeyen dönüşümle taşınır (görünüm aynı)
+          const pe = parts.el || pc;   // çalışan açılamadıysa tuval yenilenmiş olabilir
+          if (three) pe.style.transform = `translate3d(0, ${top}px, 0)`; else pe.style.top = top + "px";
+          pe.style.height = Math.max(1, hgt) + "px";
+          parts.resize(cw === 1 ? 430 : cw, Math.max(1, hgt));
           if (r.bottom < 0 || r.top > vh) parts.pause(); else parts.resume();
         }
       }
@@ -449,8 +588,9 @@
       const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
       if (deep.length || pc || three) {
         global.addEventListener("scroll", onScroll, { passive: true, capture: true });
-        global.addEventListener("resize", onScroll);
-        st.cleanups.push(() => { global.removeEventListener("scroll", onScroll, { capture: true }); global.removeEventListener("resize", onScroll); });
+        const onResize = () => { geo = null; onScroll(); };
+        global.addEventListener("resize", onResize);
+        st.cleanups.push(() => { global.removeEventListener("scroll", onScroll, { capture: true }); global.removeEventListener("resize", onResize); });
         requestAnimationFrame(update); setTimeout(update, 300);
       }
       st.cleanups.push(() => { if (parts) parts.destroy(); });   // parçacıklar açılıştan sonra kurulabilir

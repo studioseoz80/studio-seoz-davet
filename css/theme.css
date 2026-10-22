@@ -336,6 +336,7 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 @media (prefers-reduced-motion: reduce){ .ix-balloon, .ix-gift, .ix-flame{ animation:none !important; } }
 
 /* İç Zemin 3D (yalnızca 3D özelliği kullanılan zeminlerde) */
+.th-stage{ position:absolute; inset:0; pointer-events:none; }
 .th-cam{ position:absolute; inset:0; transform-style:preserve-3d; will-change:transform; }
 .th-bl3{ transform-style:preserve-3d; }
 .th-pose, .th-carry, .th-anim{ position:absolute; inset:0; transform-style:preserve-3d; }
