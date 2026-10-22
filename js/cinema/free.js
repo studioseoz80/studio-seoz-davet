@@ -198,8 +198,12 @@
     params: [{ key: "amount", label: "Genlik", def: "orta", options: [["az", "Az"], ["orta", "Orta"], ["cok", "Çok"]] }],
     run(ctx, a, def, begin) {
       const t = timing(a, def), px = { az: 5, orta: 10, cok: 18 }[P(a, def, "amount")] || 10;
-      ctx.anim(ctx.C[a.layer] || ctx.L[a.layer], [{ transform: "translateY(0) rotate(0)" }, { transform: `translateY(${-px}px) rotate(.4deg)` }],
-        { d: t.dur / 2, delay: begin, e: t.e, it: t.it === Infinity ? Infinity : t.it * 2, dir: "alternate", fill: "none", comp: "add" });
+      const card = a.layer === C.CARD_ID;
+      const it2 = t.it === Infinity ? Infinity : t.it * 2;
+      ctx.anim(card ? ctx.L[a.layer] : (ctx.C[a.layer] || ctx.L[a.layer]), [{ transform: "translateY(0) rotate(0)" }, { transform: `translateY(${-px}px) rotate(.4deg)` }],
+        { d: t.dur / 2, delay: begin, e: t.e, it: it2, dir: "alternate", fill: "none", comp: "add" });
+      if (card && ctx.cardShadow) ctx.anim(ctx.cardShadow, [{ transform: "scale(1)" }, { transform: `scale(${1 - px / 90})` }],
+        { d: t.dur / 2, delay: begin, e: t.e, it: it2, dir: "alternate", fill: "none", comp: "add" });
       return t.it === Infinity ? 0 : t.dur * t.it;
     } });
   registerMove({ id: "shake", group: "sinematik", label: "Sallanma ve titreşim", single: true, duration: 0.7, easing: "duz", loop: true, defRepeat: 0,
@@ -480,7 +484,14 @@
     run(ctx, a, def, begin) {
       const t = timing(a, def), el = ctx.L[a.layer];
       if (!el) return t.dur;
+      if (a.layer === C.CARD_ID && a.start !== "exit") placeCardAt(ctx, begin);   // K1: kartın 3D girişi
       const fade = P(a, def, "fade"), from = free3dPose(a, false), to = free3dPose(a, true);
+      if (a.layer === C.CARD_ID && ctx.cardShadow) {
+        // kart uzaktan/dönük gelirken gölge de ona göre belirir ya da kaybolur
+        const far = p => Math.max(0, Math.min(1, 1 - Math.abs(p.z) / 600)) * Math.max(0, Math.cos(p.rx * Math.PI / 180) * Math.cos(p.ry * Math.PI / 180));
+        const o0 = 0.5 * far(from) * (fade === "belir" ? 0 : 1), o1 = 0.5 * far(to) * (fade === "kaybol" ? 0 : 1);
+        if (Math.abs(o0 - o1) > 0.01) ctx.anim(ctx.cardShadow, [{ opacity: o0 }, { opacity: o1 }], { d: t.dur, delay: begin, e: t.e, fill: P(a, def, "hold") !== "normal" ? "both" : "forwards" });
+      }
       const k0 = { transform: free3dTransform(from) }, k1 = { transform: free3dTransform(to) };
       const hold = P(a, def, "hold") !== "normal";
       ctx.anim(el, [k0, k1], { d: t.dur, delay: begin, e: t.e, it: t.it, fill: hold ? "both" : "forwards", comp: "add" });
@@ -879,14 +890,25 @@
       return t.dur;
     } });
 
-  function revealCard(ctx, style, t, begin) {
-    if (!ctx.hasCard || ctx.__cardShown) return;
-    ctx.__cardShown = true;
-    // Kart her zaman bütün katmanların ÖNÜNDE belirir (yakınlaşan/çıkan katmanlar dahil). Öne alınıp
-    // kameranın ilerlemesi de hesaba katılarak, perspektif büyümesi kadar küçültülür → ekranda doğal boyutta.
+  // Kart her zaman bütün katmanların ÖNÜNDE belirir (yakınlaşan/çıkan katmanlar dahil). Öne alınıp
+  // kameranın ilerlemesi de hesaba katılarak, perspektif büyümesi kadar küçültülür → ekranda doğal boyutta.
+  function cardPlace(ctx) {
     const P = 1400 / Math.max(0.35, ctx.cfg.depth || 0.35), sf = ctx.scale(), camZ = ctx.__camZ || 0;
     const zc = Math.max(60, Math.min(300, (P - camZ) * 0.45 / sf));
     const k = Math.max(0.2, Math.min(1, (P - camZ - zc * sf) / (P - 60 * sf)));
+    return { zc, k };
+  }
+  // K1: kartın girişini Serbest 3D hareketi yapıyorsa kart o anda yerine oturur; görünmesini hareketin kendisi yönetir
+  function placeCardAt(ctx, begin) {
+    if (!ctx.hasCard || ctx.__cardShown) return;
+    ctx.__cardShown = true;
+    const { zc, k } = cardPlace(ctx), to = `translateY(0) translateZ(${zc}px) scale(${k})`;
+    ctx.anim(ctx.cardWrap, [{ opacity: 1, transform: to }, { opacity: 1, transform: to }], { d: 1, delay: begin, fill: "forwards" });
+  }
+  function revealCard(ctx, style, t, begin) {
+    if (!ctx.hasCard || ctx.__cardShown) return;
+    ctx.__cardShown = true;
+    const { zc, k } = cardPlace(ctx);
     const from = { belir: `translateZ(${zc - 160}px) scale(${k * 0.85})`, in: `translateY(-520px) translateZ(${zc}px) rotateX(18deg) scale(${k})` }[style] || `translateY(90px) translateZ(${zc - 20}px) scale(${k * 0.94})`;
     const to = style === "in" ? `translateY(0) translateZ(${zc}px) rotateX(0) scale(${k})` : `translateY(0) translateZ(${zc}px) scale(${k})`;
     ctx.anim(ctx.cardWrap, [{ opacity: 0, transform: from }, { opacity: 1, transform: to }], { d: t.dur, delay: begin, e: t.e, fill: "forwards" });
@@ -1109,7 +1131,10 @@
   function buildFreeModel(cfg) {
     const list = (Array.isArray(cfg.layers) ? cfg.layers : []).filter(l => l && l.id);
     const ids = {}; list.forEach(l => { ids[l.id] = true; });
-    const acts = (Array.isArray(cfg.actions) ? cfg.actions : []).filter(a => a && MOVES[a.move] && (MOVES[a.move].scene || ids[a.layer]));
+    const all = (Array.isArray(cfg.actions) ? cfg.actions : []).filter(a => a && MOVES[a.move] && (MOVES[a.move].scene || ids[a.layer] || (a.layer === C.CARD_ID && CARD_MOVES.includes(a.move))));
+    // K1: "kart çıkışında" hareketleri ayrı oynar (kart ekranda kalma süresi bitince / dokununca)
+    const exitActs = all.filter(a => a.start === "exit");
+    const acts = all.filter(a => a.start !== "exit");
     const uses = (id, flag) => acts.some(a => a.layer === id && MOVES[a.move][flag]);
     const slots = list.map((l, i) => {
       const b = l.box || { x: 40, y: 120, w: 320, h: 460 };
@@ -1146,6 +1171,12 @@
         },
         // A2.4: ilk adım çekme/kaydırma/basılı tutma ise açılış bu hareketle başlar (dokunma değil)
         waitStart: firstKind !== "tap" ? (ctx) => gate(ctx, firstKind, rest[0].gdir).then(() => { ctx.__gateOpen = true; }) : null,
+        exit: exitActs.length ? (ctx) => {
+          if (!ctx.__cardShown) return 0;
+          const sp = schedule(exitList(exitActs));
+          sp.items.forEach(it => { try { it.def.run(ctx, it.a, it.def, it.begin); } catch (e) { console.error("[Studio SEOZ] Hareket hatası:", it.a.move, e); } });
+          return sp.end;
+        } : null,
         async open(ctx) {
           const parts = rest.length ? chunks(rest) : [];
           for (let i = 0; i < parts.length; i++) {
@@ -1169,8 +1200,12 @@
       }]
     };
     const map = {}; list.forEach(l => { map[l.id] = l; });
-    return { layers: map, actions: acts, __free: model };
+    return { layers: map, actions: acts, exitActions: exitActs, __free: model };
   }
+
+  // K1: kartta kullanılabilen hareketler ve çıkış sırası (ilk hareket çıkış anında, sonrakiler birlikte/sonra)
+  const CARD_MOVES = ["card", "free3d", "float", "shake", "sheen", "spin", "zoom"];
+  function exitList(list) { return list.map((a, i) => Object.assign({}, a, { start: i === 0 ? "with" : (a.seq === "after" ? "after" : "with") })); }
 
   /* =================== HAZIR KURGULAR (A1 kapı senaryoları) =================== */
   const PRESETS = [
@@ -1242,7 +1277,7 @@
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: t + it.begin, end: t + it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: ci + 1 })));
       t += sp.end;
     });
-    const cardItem = items.find(it => it.def.isCard);
+    const cardItem = items.find(it => it.def.isCard || (it.a.layer === C.CARD_ID && it.def.free3d));
     const hasCard = !!(entry && (entry.cardSrc || ncfg.cardMode === "title")) && ncfg.cardMode !== "none";
     const cardStart = cardItem ? cardItem.begin : t;
     const cardShown = cardItem ? cardItem.end : (hasCard ? t + CARD_AUTO : t);
@@ -1250,8 +1285,16 @@
     const hold = dd === "tap" ? 3000 : Math.max(1, num(dd, 10)) * 1000;
     const end = Math.max(t, cardShown);
     const exitMs = Math.max(200, Math.min(4000, num(ncfg.exitDuration, 1) * 1000));
+    const cardEnd = end + (hasCard ? hold : 0);
+    let actsEnd = 0;
+    const ex = model && hasCard ? (ncfg.exitActions || []) : [];
+    if (ex.length) {
+      const sp = schedule(exitList(ex));
+      sp.items.forEach(it => items.push(Object.assign({}, it, { a: ex.find(x => x.id === it.a.id) || it.a, begin: cardEnd + it.begin, end: cardEnd + it.end, chunk: "exit" })));
+      actsEnd = sp.end;
+    }
     return { items, taps, firstTap: taps[0].time, cardStart, cardShown, hasCard, autoCard: !cardItem && hasCard, holdTap: dd === "tap",
-      exitAt: end + (hasCard ? hold : 0), exitMs, total: end + (hasCard ? hold : 0) + exitMs };
+      cardEnd, exitAt: cardEnd + actsEnd, exitMs, total: cardEnd + actsEnd + exitMs };
   }
 
   /* Zaman çizelgesi oynatıcısı: sahneyi "manual" kurar ve hareketleri negatif gecikmeyle
@@ -1272,11 +1315,12 @@
       };
       const pastTap = Tu >= p.firstTap;
       p.items.forEach(it => {
-        if (pastTap && it.loopForever) return;   // bekleme döngüleri ilk dokunuşta durur
+        if (pastTap && it.loopForever && it.chunk === 0) return;   // bekleme döngüleri ilk dokunuşta durur
         try { it.def.run(ctx, it.a, it.def, it.begin - Tu); } catch (e) { console.error(e); }
       });
       if (!pastTap) ctx.later(p.firstTap - Tu, () => {
-        hd.overlay.getAnimations({ subtree: true }).forEach(an => { if (an.effect && an.effect.getTiming().iterations === Infinity) an.cancel(); });
+        const cw = ctx.cardWrap;   // K1: kartın kendi sürekli hareketleri (süzülme, parlama) sürer
+        hd.overlay.getAnimations({ subtree: true }).forEach(an => { if (an.effect && an.effect.getTiming().iterations === Infinity && !(cw && an.effect.target && cw.contains(an.effect.target))) an.cancel(); });
       });
       if (p.autoCard) revealCard(ctx, "yuksel", { dur: CARD_AUTO, e: EASE.yavaslayarak }, p.cardStart - Tu);
       const t0 = performance.now();
@@ -1293,7 +1337,7 @@
         }));
         return ctl;
       }
-      ctl.timers.push(setTimeout(() => { if (!ctl.dead) hd.finish(false); }, Math.max(0, p.exitAt - Tu) * k));
+      ctl.timers.push(setTimeout(() => { if (!ctl.dead) hd.finish(false, { noActs: true }); }, Math.max(0, p.exitAt - Tu) * k));
       ctl.timers.push(setTimeout(() => { if (!ctl.dead && o.onEnd) o.onEnd(); }, Math.max(0, p.total - Tu) * k + 80));
       const tick = () => { if (ctl.dead) return; if (o.onTick) o.onTick(now()); ctl.raf = requestAnimationFrame(tick); };
       tick();
@@ -1303,5 +1347,5 @@
   }
 
   global.SeozCinemaFree = { registerMove, moves: () => ORDER.map(id => MOVES[id]), move: id => MOVES[id], movesByGroup, availability, EASE_LABELS,
-    PRESETS, presetOf, rolesOf, schedule, chunks, plan, runTimeline, isGate };
+    PRESETS, presetOf, rolesOf, schedule, chunks, plan, runTimeline, isGate, CARD_MOVES };
 })(window);

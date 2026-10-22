@@ -94,6 +94,12 @@
     const leftEl = $("[data-cs-left]"), rightEl = $("[data-cs-right]"), stageEl = $("[data-cs-stage]"), areaEl = $("[data-cs-area]");
 
     const layerById = id => cin.layers.find(l => l.id === id) || null;
+    // K1: iç kart, katman listesinde seçilebilen özel bir satırdır (gerçek katman değildir)
+    const CARD = C.CARD_ID || "__card";
+    const isCard = id => id === CARD;
+    const cardOn = () => (cin.cardMode || "auto") !== "none" && !presetOn();
+    const cardCfg = () => { cin.card = cin.card || {}; return cin.card; };
+    const layerName = id => isCard(id) ? "İç kart" : ((layerById(id) || {}).name || "");
     const L5 = global.SeozCinemaLibrary || null;
     const presetOn = () => !!(cin.preset && F.presetOf(cin.preset.id));
     function save() { if (cb.onChange) cb.onChange(); }
@@ -117,6 +123,11 @@
           <h3>Katmanlar <small>(üstteki önde)</small></h3>
           <button type="button" class="btn btn-gold cs-wide" data-cs-add>+ Görsel ekle (PNG, JPG, WebP)</button>
           <div class="cs-layers">
+            ${cardOn() ? (() => { const mv = layerMoves(CARD).length, k = cin.card || {};
+              const tags = [k.d3 ? "3D" : "", k.shadow ? "gölge" : "", mv ? mv + " hareket" : ""].filter(Boolean).join(" · ") || "giriş: otomatik";
+              return `<div class="cs-layer cs-cardrow${state.sel === CARD ? " is-on" : ""}" data-cs-sel="${CARD}" role="button" tabindex="0">
+                <span class="cs-thumb cs-thumb-card" data-cs-thumb="${CARD}"></span>
+                <span class="cs-layer-t"><strong>İç kart</strong><small>${tags}</small></span></div>`; })() : ""}
             ${front.map(l => {
               const mv = layerMoves(l.id).length, par = l.parent && layerById(l.parent);
               const tags = [l.backdrop ? "arka plan" : "", par ? "bağlı: " + esc(par.name) : "", mv ? mv + " hareket" : "", l.hidden ? "gizli" : ""].filter(Boolean).join(" · ") || "hareket yok";
@@ -212,7 +223,7 @@
             const m = F.move(a.move), l = layerById(a.layer);
             const st = (START_LABELS.find(s => s[0] === a.start) || START_LABELS[2])[1];
             return `<li class="${l && l.id === state.sel ? "is-on" : ""}" draggable="true" data-seq="${a.id}" title="Sürükleyerek sıralayın"><span class="cs-grip" aria-hidden="true">⋮⋮</span><button type="button" class="cs-seq-t" data-cs-sel="${a.layer}" data-cs-selact="${a.id}">
-                <strong>${esc(m ? m.label : a.move)}</strong><small>${esc(m && m.scene ? "tüm sahne · " : "")}${esc(l ? l.name : "")} · ${i === 0 ? "Başlangıç" : st}</small></button>
+                <strong>${esc(m ? m.label : a.move)}</strong><small>${esc(m && m.scene && !isCard(a.layer) ? "tüm sahne · " : "")}${esc(l ? l.name : layerName(a.layer))} · ${a.start === "exit" ? "Kart çıkışında" : (i === 0 ? "Başlangıç" : st)}</small></button>
               <span class="cs-row-btns"><button type="button" class="cs-ico" data-cs-aup="${a.id}" aria-label="Yukarı">▲</button><button type="button" class="cs-ico" data-cs-adown="${a.id}" aria-label="Aşağı">▼</button></span></li>`;
           }).join("")}</ol>` : `<p class="cs-hint">Bir katman seçip sağdaki "Hareket ekle" menüsünden hareket verin.</p>`}
           ${pre ? `<p class="cs-hint cs-note">Hazır kurgu seçiliyken bu liste kullanılmaz.</p>` : ""}
@@ -282,7 +293,10 @@
         ${m.note ? `<p class="cs-hint">${esc(m.note)}</p>` : ""}
         ${backWarnHTML(layerById(a.layer), m, a)}
         <label class="cs-row"><span>Başlat</span><select data-cs-af="${a.id}" data-key="start">
-          ${START_LABELS.map(([v, l]) => `<option value="${v}" ${a.start === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          ${START_LABELS.concat(isCard(a.layer) ? [["exit", "Kart çıkışında"]] : []).map(([v, l]) => `<option value="${v}" ${a.start === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        ${a.start === "exit" ? `<label class="cs-row"><span>Çıkışta sıra</span><select data-cs-af="${a.id}" data-key="seq">
+          <option value="with" ${a.seq !== "after" ? "selected" : ""}>Öncekiyle birlikte</option><option value="after" ${a.seq === "after" ? "selected" : ""}>Öncekinden sonra</option></select><span></span></label>
+          <p class="cs-hint">Kart ekranda kalma süresi bitince (ya da misafir dokununca) oynar; davetiyeye geçiş bundan sonra başlar.</p>` : ""}
         <label class="cs-row" data-gdir-row ${a.start === "pull" || a.start === "swipe" ? "" : "hidden"}><span>Parmak yönü</span><select data-cs-af="${a.id}" data-key="gdir">
           ${GDIRS.map(([v, l]) => `<option value="${v}" ${(a.gdir || "any") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <div class="cs-grid2">
@@ -314,7 +328,52 @@
           : `<p class="cs-hint">Açınca bu katmanı X/Y/Z ekseninde döndürebilir ve ona özel perspektif verebilirsiniz. Kapalıyken katman eskisi gibi görünür.</p>`}
         </section>`;
     }
+    /* K1 · İç kart paneli: 3D duruş, yumuşak gölge, gerçek arka yüz ve karta özel hareketler */
+    function cardPanelHTML() {
+      const k = cin.card || {}, n = norm(), mode = n.cardMode === "auto" ? (entry.cardSrc ? "image" : "title") : n.cardMode;
+      const acts = layerMoves(CARD);
+      const deg = key => Math.round(Number(k[key]) || 0);
+      const rot = (key, label) => `<label class="cs-row"><span>${label}</span><input type="range" min="-180" max="180" step="1" data-cs-k="${key}" value="${deg(key)}"><output data-cs-kout="${key}">${deg(key)}°</output></label>`;
+      const hasEntry = acts.some(a => a.start !== "exit" && (a.move === "card" || a.move === "free3d"));
+      const turns = acts.some(a => a.move === "spin") || acts.some(a => a.move === "free3d" && ["rx0", "rx1", "ry0", "ry1"].some(x => Math.abs(Number((a.params || {})[x]) || 0) > 90))
+        || (k.d3 && (Math.abs(Number(k.rx) || 0) > 90 || Math.abs(Number(k.ry) || 0) > 90));
+      const noBack = !(k.back === "image" && k.backSrc) && !(k.back === "monogram" && mode !== "image");
+      const warn = turns && noBack ? `<p class="cs-hint cs-warn">⚠ Kartın arka yüzü yok. Kart arkasını döndüğünde görünmez — sahte arka yüz oluşturulmaz. Aşağıdan bir arka yüz seçin.</p>` : "";
+      const moves = F.CARD_MOVES.map(id => F.move(id)).filter(Boolean);
+      return `
+        <section class="cs-sec">
+          <h3>İç kart</h3>
+          <p class="cs-hint">Kartın görseli, türü, boyutu ve ekranda kalma süresi soldaki "İç kart" bölümünde. Burada kartın 3D duruşunu, gölgesini, arka yüzünü ve hareketlerini ayarlarsınız.</p>
+        </section>
+        <section class="cs-sec">
+          <h3>Hareketler</h3>
+          ${hasEntry ? "" : `<p class="cs-hint">Giriş hareketi yok: kart, son hareketten sonra kendiliğinden aşağıdan yükselerek gelir.</p>`}
+          <select data-cs-addmove aria-label="Karta hareket ekle"><option value="">+ Karta hareket ekle…</option>
+            ${moves.map(m => { const used = m.id === "card" && acts.some(a => a.move === "card");
+              return `<option value="${m.id}" ${used ? "disabled" : ""}>${esc(m.id === "card" ? "Giriş: " + m.label : m.label)}${used ? " — zaten var" : ""}</option>`; }).join("")}</select>
+          ${warn}
+          <div class="cs-acts">${acts.map(actionHTML).join("") || `<p class="cs-hint">Karta henüz hareket verilmedi.</p>`}</div>
+        </section>
+        <section class="cs-sec cs-3d">
+          <h3>3D</h3>
+          <label class="cs-check"><input type="checkbox" data-cs-k="d3" ${k.d3 ? "checked" : ""}> 3D duruş</label>
+          ${k.d3 ? `${rot("rx", "X dönüşü")}${rot("ry", "Y dönüşü")}${rot("rz", "Z dönüşü")}
+            <label class="cs-row"><span>Perspektif</span><select data-cs-k="persp">${PERSP.map(([v, t]) => `<option value="${v}" ${String(k.persp || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select><span></span></label>` : ""}
+          <label class="cs-row"><span>Derinlik</span><input type="range" min="-300" max="300" step="1" data-cs-k="depth" value="${Number(k.depth) || 0}"><output data-cs-kout="depth">${Number(k.depth) || 0}</output></label>
+        </section>
+        <section class="cs-sec">
+          <h3>Gölge ve arka yüz</h3>
+          <label class="cs-check"><input type="checkbox" data-cs-k="shadow" ${k.shadow ? "checked" : ""}> Yumuşak gölge <small>(kart süzülünce gölge küçülüp açılır)</small></label>
+          <label class="cs-row"><span>Arka yüz</span><select data-cs-k="back">
+            <option value="" ${!k.back ? "selected" : ""}>Yok</option>
+            <option value="image" ${k.back === "image" ? "selected" : ""}>Yüklenen görsel</option>
+            ${mode !== "image" ? `<option value="monogram" ${k.back === "monogram" ? "selected" : ""}>Monogramlı (yazılı kart)</option>` : ""}</select><span></span></label>
+          ${k.back === "image" ? `<div class="cs-up"><button type="button" class="btn btn-outline" data-cs-kback-up>${k.backSrc ? "Arka yüzü değiştir" : "Arka yüz görseli yükle"}</button></div>` : ""}
+          <button type="button" class="btn btn-outline cs-reset" data-cs-kreset>Kartın 3D ayarlarını sıfırla</button>
+        </section>`;
+    }
     function renderRight() {
+      if (isCard(state.sel)) { rightEl.innerHTML = cardOn() ? cardPanelHTML() : `<section class="cs-sec"><p class="cs-hint">Kart kapalı ("Kart yok").</p></section>`; return; }
       const l = layerById(state.sel);
       if (!l) { rightEl.innerHTML = `<section class="cs-sec"><p class="cs-hint">Soldan "Görsel ekle" ile başlayın veya bir katman seçin.</p></section>`; return; }
       const L = C.layoutOf({ box: l.box, origin: "50% 50%" }, l, 1);
@@ -624,6 +683,14 @@
     function addAction(moveId, layerId) {
       const m = F.move(moveId); if (!m) return;
       const a = { id: uid("A"), layer: layerId, move: moveId, start: "after", delay: 0, duration: m.duration, easing: m.easing, params: {} };
+      if (isCard(layerId)) {
+        // kart hareketleri açılıştan sonra gelir; sürekli olanlar (süzülme) kartla birlikte sürer, bekleme bölümüne taşınmaz
+        if (m.loop) a.repeat = m.defRepeat != null ? m.defRepeat : 1;
+        if (moveId === "free3d") { a.params = { z0: -500, ry0: -40, s0: 70, fade: "belir" }; a.easing = "yavaslayarak"; }
+        a.start = m.loop && a.repeat === 0 ? "with" : (cin.actions.some(gateOf) ? "after" : "tap");
+        cin.actions.push(a); state.selAct = a.id;
+        save(); refreshAll(); return;
+      }
       if (m.loop) a.repeat = m.defRepeat != null ? m.defRepeat : 1;
       if (m.loop && a.repeat === 0) {
         // sürekli tekrarlanan bekleme hareketleri (süzülme, titreşim) ilk dokunuştan önce oynar
@@ -652,7 +719,8 @@
       toast("Kopyalandı · bir katman seçip “Yapıştır”a basın"); renderRight(); renderTimeline();
     }
     function pasteAction() {
-      if (!state.clip || !layerById(state.sel)) return;
+      if (!state.clip || !(layerById(state.sel) || isCard(state.sel))) return;
+      if (isCard(state.sel) && !F.CARD_MOVES.includes(state.clip.move)) { toast("Bu hareket iç karta uygulanamaz"); return; }
       const c = JSON.parse(JSON.stringify(state.clip)); c.id = uid("A"); c.layer = state.sel;
       const srcIdx = cin.actions.findIndex(x => x.id === state.clip.id);
       if (gateOf(c) && cin.actions.some(gateOf)) c.start = "with";
@@ -713,6 +781,10 @@
             ${rows.map(l => { const its = lanes(p.items.filter(it => it.a.layer === l.id)); const n = its.reduce((m, it) => Math.max(m, it._lane + 1), 1);
               return `<div class="cs-tl-row${state.sel === l.id ? " is-on" : ""}" data-tl-layer="${l.id}" style="height:${n * LANE + 6}px"><div class="cs-tl-name" data-cs-sel="${l.id}" title="${esc(l.name)}">${esc(l.name)}</div>
               <div class="cs-tl-track" style="width:${W}px">${its.map(bar).join("")}</div></div>`; }).join("")}
+            ${(() => { if (!p.hasCard) return ""; const its = lanes(p.items.filter(it => isCard(it.a.layer))); if (!its.length) return "";
+              const n = its.reduce((m, it) => Math.max(m, it._lane + 1), 1);
+              return `<div class="cs-tl-row${state.sel === CARD ? " is-on" : ""}" data-tl-layer="${CARD}" style="height:${n * LANE + 6}px"><div class="cs-tl-name" data-cs-sel="${CARD}" title="İç kartın hareketleri">İç kart · hareket</div>
+              <div class="cs-tl-track" style="width:${W}px">${its.map(bar).join("")}</div></div>`; })()}
             ${cardRow}
             <div class="cs-tl-overlay" style="width:${W}px">${taps}<div class="cs-phead" data-tl-head style="left:${state.time * pps}px"></div></div>
           </div>
@@ -739,6 +811,12 @@
         onTick: t => { state.time = t; updateHead(t); },
         onEnd: () => { state.playing = false; state.time = 0; rebuildStage(); renderTimeline(); } });
       renderTimeline();
+    }
+    // K1: iç kart seçiliyken sahne, kartın göründüğü anda donar (3D duruş ve gölge hemen görülsün)
+    function showCard() {
+      const { p, k } = tlPlan();
+      if (!isCard(state.sel) || !p || !p.hasCard || state.previewing) return rebuildStage();
+      seek((p.cardShown + 400) * k / 1000);
     }
     function tlPause() { const t = state.tl && state.tl.time ? state.tl.time() : state.time; state.time = t; tlStart(t, true); }
     function seek(t) { const { p, k } = tlPlan(); if (!p) return; state.time = clamp(t, 0, p.total * k / 1000); tlStart(state.time, true); }
@@ -769,7 +847,7 @@
       const { p, k } = tlPlan(); const it = p.items.find(x => x.a.id === id); if (!it) return;
       e.preventDefault();
       const resize = !!e.target.closest("[data-resize]"), x0 = e.clientX, left0 = barEl.offsetLeft, w0 = barEl.offsetWidth;
-      const chunkStart = it.chunk === 0 ? 0 : p.taps[it.chunk - 1].time;
+      const chunkStart = it.chunk === "exit" ? p.cardEnd : (it.chunk === 0 ? 0 : p.taps[it.chunk - 1].time);
       let moved = false;
       try { barEl.setPointerCapture(e.pointerId); } catch (err) { /* önemsiz */ }
       const mv = ev => {
@@ -786,7 +864,7 @@
         } else {
           const beginU = barEl.offsetLeft / state.zoom * 1000 / k;           // hız uygulanmamış ms
           const rel = Math.max(0, Math.round((beginU - chunkStart) / 100) / 10);
-          if (!gateOf(a)) a.start = "at";
+          if (!gateOf(a) && a.start !== "exit") a.start = "at";
           a.delay = rel;
         }
         const relayer = state.sel !== a.layer; state.selAct = id; state.sel = a.layer; save();
@@ -815,7 +893,7 @@
     }
     document.addEventListener("keydown", onCopyKeys);
 
-    function refreshAll() { renderSub(); renderLeft(); renderRight(); rebuildStage(); renderTimeline(); }
+    function refreshAll() { renderSub(); renderLeft(); renderRight(); if (isCard(state.sel)) showCard(); else rebuildStage(); renderTimeline(); }
 
     /* ---------- olaylar ---------- */
     root.addEventListener("click", (e) => {
@@ -837,7 +915,7 @@
       if (d.csAcopy) return copyAction(d.csAcopy);
       if (d.csPaste != null) return pasteAction();
       if (d.csSelact) { state.selAct = d.csSelact; }
-      if (d.csSel) { state.sel = d.csSel; renderLeft(); renderRight(); drawHandles(); renderTimeline(); return; }
+      if (d.csSel) { state.sel = d.csSel; renderLeft(); renderRight(); drawHandles(); renderTimeline(); if (isCard(d.csSel)) showCard(); return; }
       if (d.csView) { state.view = d.csView; return rebuildStage(); }
       if (d.csPlay != null) return togglePreview();
       if (d.csUp != null) return replaceImage(state.sel, false);
@@ -845,6 +923,8 @@
       if (d.csDelBack != null) { const l = layerById(state.sel); delete l.backSrc; delete l.backCheck; save(); return refreshAll(); }
       if (d.csCardUp != null) return pick(false, ([f]) => uploadCard(f));
       if (d.csCardDel != null) { entry.cardSrc = ""; delete cin.cardCheck; save(); return refreshAll(); }
+      if (d.csKbackUp != null) return pick(false, async ([f]) => { busy(true); try { const res = await process(f); const k = cardCfg(); k.back = "image"; k.backSrc = res.ref; } catch (err) { alert(err.message || "Görsel yüklenemedi"); } busy(false); save(); refreshAll(); });
+      if (d.csKreset != null) { const k = cardCfg(); ["d3", "rx", "ry", "rz", "persp", "depth"].forEach(x => delete k[x]); save(); renderLeft(); renderRight(); return rebuildStage(); }
       if (d.cs3dreset != null) { const l = layerById(state.sel); ["rx", "ry", "rz", "persp"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
       if (d.csReset != null) { const l = layerById(state.sel); ["x", "y", "scale", "origin", "depth", "thickness", "light"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
     });
@@ -879,6 +959,8 @@
       return `${clamp(isFinite(ox) ? ox : 50, -50, 150)}% ${clamp(isFinite(oy) ? oy : 50, -50, 150)}%`;
     }
     rightEl.addEventListener("input", (e) => {
+      const kk = e.target.dataset.csK;
+      if (kk && e.target.type === "range") { const o = rightEl.querySelector(`[data-cs-kout="${kk}"]`); if (o) o.textContent = e.target.value + (kk === "depth" ? "" : "°"); return; }
       const k = e.target.dataset.csL; if (!k) return;
       const v = Number(e.target.value), out = rightEl.querySelector(`[data-cs-lout="${k}"]`);
       if (k === "x" || k === "y") { if (isFinite(v)) setLayerLive(state.sel, { [k]: v }); }
@@ -891,7 +973,15 @@
     });
     rightEl.addEventListener("change", (e) => {
       const tg = e.target, l = layerById(state.sel);
-      if (tg.matches("[data-cs-addmove]")) { if (tg.value && l) addAction(tg.value, l.id); return; }
+      if (tg.dataset.csK) {   // K1: iç kart ayarları
+        const k = cardCfg(), key = tg.dataset.csK;
+        if (tg.type === "checkbox") k[key] = tg.checked;
+        else if (key === "back") { if (tg.value) k.back = tg.value; else delete k.back; }
+        else if (key === "persp") k.persp = tg.value ? Number(tg.value) : "";
+        else k[key] = Number(tg.value) || 0;
+        save(); renderLeft(); renderRight(); return showCard();
+      }
+      if (tg.matches("[data-cs-addmove]")) { if (tg.value && (l || isCard(state.sel))) addAction(tg.value, l ? l.id : state.sel); return; }
       if (tg.matches("[data-cs-lname]")) {
         l.name = tg.value.trim() || l.name; save(); renderSeq();
         const nm = leftEl.querySelector(`.cs-layer2[data-cs-sel="${l.id}"] .cs-layer-t strong`); if (nm) nm.textContent = l.name;
@@ -904,6 +994,7 @@
         if (key === "duration" && !a.duration) a.duration = 0.1;
         if (key === "speed" && !a.speed) a.speed = 1;
         save(); renderSeq(); renderSub(); renderTimeline();
+        if (key === "start" && isCard(a.layer)) { renderRight(); renderLeft(); return showCard(); }
         if (key === "start") { const card = tg.closest(".cs-act"), lab = card.querySelector('[data-key="delay"]').parentNode; lab.firstChild.textContent = a.start === "at" ? "Başlangıç (sn)" : "Gecikme (sn)";
           const gr = card.querySelector("[data-gdir-row]"); if (gr) gr.hidden = !(a.start === "pull" || a.start === "swipe"); }
         return;

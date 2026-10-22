@@ -107,7 +107,8 @@ body.cs-open{ overflow:hidden; }
 /* ---------- A2.1 Animasyon Stüdyosu ---------- */
 .cs-sec h3 small{ font-weight:500; text-transform:none; letter-spacing:0; }
 .cs-wide{ width:100%; margin-bottom:8px; }
-.cs-layer2{ position:relative; }
+.cs-layer2, .cs-cardrow{ position:relative; }
+.cs-cardrow{ border-style:dashed; }
 .cs-row-btns{ display:inline-flex; gap:2px; flex-shrink:0; }
 .cs-ico{ width:28px; height:28px; border:1px solid var(--line, #DCD5C6); background:#fff; border-radius:4px; cursor:pointer; font-size:11px; color:var(--ink, #23261F); padding:0; }
 .cs-ico:hover{ background:var(--paper-alt, #F0ECE2); }

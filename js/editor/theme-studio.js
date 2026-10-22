@@ -259,7 +259,7 @@
       return t;
     }
     let saveT = 0;
-    function save(rerender) { clearTimeout(saveT); saveT = setTimeout(() => { if (cb.onChange) cb.onChange(); }, 250); if (rerender !== false) preview(); renderSub(); }
+    function save(rerender) { clearTimeout(saveT); saveT = setTimeout(() => { if (cb.onChange) cb.onChange(); }, 250); markAfter(); if (rerender !== false) preview(); renderSub(); }
     function renderSub() {
       const t = th(), pk = t && t.pack && P.pack(t.pack);
       $("[data-ts-sub]").textContent = t ? (pk ? `${pk.label} · ${pk.variants[t.variant || 0].label}` : "Özel zemin") + ` · ${(t.bg && t.bg.layers || []).length} zemin katmanı` : "Henüz iç zemin yok — bir paket seçin ya da kendi zemininizi kurun";
@@ -447,18 +447,33 @@
     }
 
     /* ---------------- geri alma ---------------- */
+    /* Geri alma kaydı: { before, after }. "before" paket uygulanmadan önceki hâl, "after" bu
+       stüdyoda yapılan son değişiklikten sonraki hâl. Stüdyo dışında (editörde, Animasyon
+       Stüdyosu'nda) sonradan yapılan değişiklikler "after" ile karşılaştırılarak korunur. */
+    const partsOf = () => ({ layers: doc.layers, canvas: doc.canvas, theme: doc.theme || null, cinema: doc.entry && doc.entry.cinema ? doc.entry.cinema : null });
+    const same = (a, b) => JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b);
+    function writeUndo() { try { localStorage.setItem(UNDO_KEY(doc.id), state.undo); } catch (e) { /* çok büyükse yalnızca bellekte tutulur */ } }
     function snapshot() {
-      state.undo = JSON.stringify({ layers: doc.layers, canvas: doc.canvas, theme: doc.theme || null, cinema: doc.entry && doc.entry.cinema ? doc.entry.cinema : null });
-      try { localStorage.setItem(UNDO_KEY(doc.id), state.undo); } catch (e) { /* çok büyükse yalnızca bellekte tutulur */ }
+      const now = partsOf();
+      state.undo = JSON.stringify({ before: now, after: now });
+      writeUndo();
+    }
+    function markAfter() {
+      if (!state.undo) return;
+      try { const rec = JSON.parse(state.undo); rec.before = rec.before || rec; rec.after = partsOf(); state.undo = JSON.stringify({ before: rec.before, after: rec.after }); writeUndo(); } catch (e) { /* önemsiz */ }
     }
     function restore() {
       if (!state.undo) return;
-      const s = JSON.parse(state.undo);
+      const rec = JSON.parse(state.undo);
+      const s = rec.before || rec, after = rec.before ? rec.after : null, cur = partsOf();
+      const pageChanged = !!after && (!same(cur.layers, after.layers) || !same(cur.canvas, after.canvas));
+      if (pageChanged && !confirm("Paketi uyguladıktan sonra sayfada başka değişiklikler de yaptınız (yazı, modül, görsel).\n\nGeri alırsanız bu değişiklikler de geri alınır. Devam edilsin mi?")) return;
+      const cinemaChanged = !!after && !same(cur.cinema, after.cinema);
       doc.layers = s.layers; doc.canvas = s.canvas; if (s.theme) doc.theme = s.theme; else delete doc.theme;
-      if (s.cinema && doc.entry) doc.entry.cinema = s.cinema;
+      if (s.cinema && doc.entry && !cinemaChanged) doc.entry.cinema = s.cinema;   // açılışta sonradan yapılan değişiklikler korunur
       state.undo = null; try { localStorage.removeItem(UNDO_KEY(doc.id)); } catch (e) { /* önemsiz */ }
       state.pick = doc.theme && doc.theme.pack || null; state.variant = doc.theme && doc.theme.variant || 0; state.selBg = null;
-      toast("Önceki hâline döndürüldü"); renderPanel(); save();
+      toast(cinemaChanged ? "Önceki hâline döndürüldü · sinematik açılış ayarlarınız korundu" : "Önceki hâline döndürüldü"); renderPanel(); save();
     }
     function toast(text) {
       let t = root.querySelector(".cs-toast"); if (!t) { t = document.createElement("div"); t.className = "cs-toast"; t.setAttribute("role", "status"); root.appendChild(t); }

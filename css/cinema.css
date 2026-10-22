@@ -87,3 +87,22 @@
 /* A2.4 · çekme / kaydırma / basılı tutma ile açılan sahne */
 .sc-overlay.sc-gesture{ cursor:grab; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 .sc-overlay.sc-gesture:active{ cursor:grabbing; }
+
+/* K1 · İç kart 3D (yalnızca kartta 3D özelliği kullanılınca kurulur) */
+.sc-cardpose{ position:absolute; inset:0; transform-style:preserve-3d; }
+.sc-cardinner{ display:flex; align-items:center; justify-content:center; }
+.sc-anim > .sc-cardholder{ position:relative; inset:auto; width:100%; display:grid; transform-style:preserve-3d; }
+.sc-cardholder.is-img{ height:100%; }
+.sc-cardholder > .sc-card{ grid-area:1 / 1; }
+.sc-cardholder > .sc-card-back{ align-self:stretch; }
+/* görselli yüzler kartın kutusuna sabitlenir: uzun/dar bir arka yüz görseli kartın boyunu değiştiremez */
+.sc-cardholder > .sc-card-img{ position:absolute; inset:0; width:100%; height:100%; }
+.sc-cardholder > .sc-card-title{ min-height:380px; }
+.sc-cardholder > .sc-cardlit{ position:absolute; inset:0; }
+.sc-card-mono{ font-family:"Great Vibes","Alex Brush",cursive; font-size:96px; line-height:1; }
+.sc-anim > .sc-cardshadow, .sc-cardshadow{ position:absolute; inset:auto; pointer-events:none; opacity:.5; transform:translate3d(0, 18px, -24px) scale(.96); }
+.sc-cardshadow-box{ left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,.6); filter:blur(16px); border-radius:8px; }
+.sc-anim > img.sc-cardshadow-img{ inset:0; width:100%; height:100%; object-fit:contain; filter:brightness(0) blur(12px); }
+.sc-lite .sc-cardshadow{ filter:none; opacity:.22; }
+.sc-lite .sc-cardshadow-img{ filter:brightness(0); }
+.has-cardshadow .sc-card-img img{ filter:none; }

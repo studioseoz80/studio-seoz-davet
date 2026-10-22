@@ -16,7 +16,7 @@
 .th-m-nefes{ animation-name:thBreath; animation-direction:alternate; }
 .th-m-kayma{ animation-name:thDrift; animation-direction:alternate; animation-duration:calc(var(--th-sp, 8s) * 2); }
 .th-m-parilti{ animation-name:thTwinkle; animation-direction:alternate; animation-duration:calc(var(--th-sp, 8s) / 3); }
-.th-off .th-bl-m, .th-still .th-bl-m{ animation-play-state:paused; }
+.th-off .th-bl-m, .th-still .th-bl-m, .th-wait .th-bl-m{ animation-play-state:paused; }
 @keyframes thSway{ from{ transform:rotate(-3deg); } to{ transform:rotate(3deg); } }
 @keyframes thFloat{ from{ transform:translateY(-8px); } to{ transform:translateY(8px); } }
 @keyframes thSpin{ to{ transform:rotate(360deg); } }

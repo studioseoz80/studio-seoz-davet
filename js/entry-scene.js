@@ -390,7 +390,13 @@
     // Sinematik Açılış kendi motoruyla oynar (js/cinema/). Diğer 5 giriş
     // türü aşağıda, eskisiyle birebir aynı kodla çalışmaya devam eder.
     if (entry.type === "cinema") {
-      global.SeozCinema.play(doc, done);
+      // Hazırlık (K1): açılış ekranı TAMAMEN kalkınca davetiyeye haber verilir; İç Zemin'in
+      // parçacıkları, süs hareketleri ve "kaydırınca canlanma" o ana kadar bekler.
+      global.__seozEntryActive = true;
+      global.SeozCinema.play(doc, done, { onGone: () => {
+        global.__seozEntryActive = false;
+        try { global.dispatchEvent(new CustomEvent("seoz:entry-end")); } catch (e) { /* çok eski tarayıcı */ }
+      } });
       return;
     }
 

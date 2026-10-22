@@ -30,6 +30,14 @@
   const weak = () => { const n = global.navigator || {}; return (n.deviceMemory && n.deviceMemory <= 2) || (n.hardwareConcurrency && n.hardwareConcurrency <= 2); };
   function el(tag, cls, css) { const e = document.createElement(tag); if (cls) e.className = cls; if (css) Object.assign(e.style, css); return e; }
   function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
+  // Hazırlık (K1): sinematik açılış ekranı hâlâ üstteyse (müşteri sayfası), canlı hareketler
+  // açılış tamamen kalkınca başlar; böylece ilk saniyeler açılışın arkasında kaybolmaz.
+  function afterEntry(mode, st, fn) {
+    if (mode !== "view" || !global.__seozEntryActive) return fn();
+    const go = () => { global.removeEventListener("seoz:entry-end", go); if (!st.dead) fn(); };
+    global.addEventListener("seoz:entry-end", go);
+    st.cleanups.push(() => global.removeEventListener("seoz:entry-end", go));
+  }
 
   const MOTIONS = [["none", "Hareketsiz"], ["salinim", "Salınım (dal gibi)"], ["suzulme", "Süzülme"], ["donme", "Yavaş dönme"], ["nefes", "Nefes alma"], ["kayma", "Yatay kayma"], ["parilti", "Parıldama"]];
   const PARTICLES = [["none", "Yok"], ["kar", "Kar"], ["yaprak", "Çiçek yaprağı"], ["konfeti", "Konfeti"], ["atesbocegi", "Ateş böceği"], ["yildiz", "Yıldız"], ["balon", "Balon"], ["kalp", "Kalp"], ["parilti", "Altın parıltı"]];
@@ -207,7 +215,13 @@
       if (lc) root.appendChild(el("div", "th-fill th-light th-light-" + bg.light.type, lc));
       let pc = null, parts = null;
       const pt = bg.particles && bg.particles.type && bg.particles.type !== "none" ? bg.particles : null;
-      if (pt && !reduced()) { pc = el("canvas", "th-particles"); root.appendChild(pc); parts = Particles(pc, Object.assign({}, pt, { seconds: num(pt.seconds, 0) })); }
+      if (pt && !reduced()) {
+        pc = el("canvas", "th-particles"); root.appendChild(pc);
+        afterEntry(mode, st, () => {
+          parts = Particles(pc, Object.assign({}, pt, { seconds: num(pt.seconds, 0) })); st.particles = parts;
+          if (st.update) requestAnimationFrame(st.update);   // açılıştan sonra kurulduysa tuvali hemen yerine oturt
+        });
+      }
 
       // katmanların arkasına (zemin görselinin hemen üstüne) yerleştir
       const firstLayer = canvasEl.querySelector("[data-layer-id]");
@@ -216,6 +230,12 @@
 
       const rm = reduced();
       if (rm) canvasEl.classList.add("th-still");
+      // Hazırlık (K1): süs hareketleri açılış ekranı kalkana kadar duraklı bekler
+      if (mode === "view" && global.__seozEntryActive) {
+        canvasEl.classList.add("th-wait");
+        st.cleanups.push(() => canvasEl.classList.remove("th-wait"));
+        afterEntry(mode, st, () => canvasEl.classList.remove("th-wait"));
+      }
       // ekranda görünmeyen zemin hareketleri durur
       if (global.IntersectionObserver && !rm) {
         const io = new IntersectionObserver(ents => ents.forEach(e => e.target.classList.toggle("th-off", !e.isIntersecting)), { rootMargin: "120px" });
@@ -235,12 +255,13 @@
           const d = Number(n.dataset.depth), cy = n.offsetTop + n.offsetHeight / 2, mid = top + (vh / scale) / 2;
           n.style.transform = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
         });
-        if (pc && hgt > 0) {
+        if (pc && parts && hgt > 0) {
           pc.style.top = top + "px"; pc.style.height = Math.max(1, hgt) + "px";
           parts.resize(canvasEl.offsetWidth || 430, Math.max(1, hgt));
           if (r.bottom < 0 || r.top > vh) parts.pause(); else parts.resume();
         }
       }
+      st.update = update;
       const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
       if (deep.length || pc) {
         global.addEventListener("scroll", onScroll, { passive: true, capture: true });
@@ -248,7 +269,7 @@
         st.cleanups.push(() => { global.removeEventListener("scroll", onScroll, { capture: true }); global.removeEventListener("resize", onScroll); });
         requestAnimationFrame(update); setTimeout(update, 300);
       }
-      if (parts) st.cleanups.push(() => parts.destroy());
+      st.cleanups.push(() => { if (parts) parts.destroy(); });   // parçacıklar açılıştan sonra kurulabilir
       // telefon eğimiyle derinlik (isteğe bağlı): iPhone izin istediği için bir dokunuşla açılır
       if (bg.tilt && deep.length && mode === "view" && !rm && global.DeviceOrientationEvent) {
         const onTilt = e => { tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 30)); tiltY = Math.max(-1, Math.min(1, ((e.beta || 0) - 40) / 30)); onScroll(); };
@@ -267,9 +288,11 @@
     if (revealEls.length) {
       if (mode !== "view" || reduced() || !global.IntersectionObserver) revealEls.forEach(n => n.classList.add("th-in"));
       else {
-        const io = new IntersectionObserver(ents => ents.forEach(e => { if (e.isIntersecting) { e.target.classList.add("th-in"); io.unobserve(e.target); } }), { threshold: 0.15 });
-        revealEls.forEach(n => io.observe(n));
-        st.cleanups.push(() => io.disconnect());
+        afterEntry(mode, st, () => {
+          const io = new IntersectionObserver(ents => ents.forEach(e => { if (e.isIntersecting) { e.target.classList.add("th-in"); io.unobserve(e.target); } }), { threshold: 0.15 });
+          revealEls.forEach(n => io.observe(n));
+          st.cleanups.push(() => io.disconnect());
+        });
       }
     }
   }

@@ -234,6 +234,7 @@
       if (u.backSrc) out.push(u.backSrc);
     });
     if (entry && entry.cardSrc && cfg.cardMode !== "none" && cfg.cardMode !== "title") out.push(entry.cardSrc);
+    if (cfg.card && cfg.card.backSrc && cfg.cardMode !== "none") out.push(cfg.card.backSrc);
     if (cfg.brand && cfg.brand.logo) out.push(cfg.brand.logo);
     return out;
   }
@@ -484,6 +485,12 @@
     if (a.onResize) global.removeEventListener("resize", a.onResize);
     if (a.onKey) global.removeEventListener("keydown", a.onKey);
     if (a.overlay && a.overlay.parentNode) a.overlay.remove();
+    gone(a);
+  }
+  function gone(st) {
+    if (!st || st.__gone) return;
+    st.__gone = true;
+    if (st.onGone) { try { st.onGone(); } catch (e) { console.error(e); } }
   }
 
   function fitFrame(st) {
@@ -516,10 +523,88 @@
         h("div", "sc-card-orn sc-card-orn-b", { color: P.accent }, ["— ✦ —"])
       ]);
     }
-    wrap.appendChild(card);
     ctx.cardEl = card;
     if (c.cardSize && c.cardSize !== 100) wrap.style.scale = String(c.cardSize / 100);
+    if (!card3dOn(c)) { wrap.appendChild(card); return wrap; }   // eski kartlar: yapı birebir aynı
+    buildCard3d(ctx, wrap, card, mode);
     return wrap;
+  }
+  /* ---------------- K1 · İÇ KART 3D ----------------
+     İç kart, A2'nin katman altyapısını kullanan özel bir katman olur ("__card"):
+       wrap  (S) : görünme / kamera telafisi / kart boyutu  — eskisiyle aynı
+       pose      : kartın 3D duruşu (X/Y/Z dönüşü, perspektif, derinlik) — 3D-1 hesabı
+       carry (C) : süzülme, sallanma, belirme (saydamlık)
+       inner (L) : kartın kendi hareketleri (Serbest 3D, dönme, yakınlaşma)
+     Yumuşak gölge carry'nin içinde, kartın altında durur; kart süzülünce gölge küçülüp açılır.
+     Arka yüz: yalnızca GERÇEK bir arka yüz varsa (yüklenen görsel ya da yazılı kartın monogramlı
+     arkası) gösterilir; yoksa kart arkasını döndüğünde görünmez (sahte arka yüz yok). */
+  const CARD_ID = "__card";
+  function card3dOn(c) {
+    const k = c && c.card;
+    if (k && (k.d3 || k.shadow || k.back)) return true;
+    const onCard = list => Array.isArray(list) && list.some(a => a && a.layer === CARD_ID);
+    return onCard(c && c.actions) || onCard(c && c.exitActions);
+  }
+  function buildCard3d(ctx, wrap, card, mode) {
+    const c = ctx.cfg, k = c.card || {};
+    const pose = h("div", "sc-cardpose");
+    const carry = h("div", "sc-anim sc-carry sc-cardcarry");
+    const inner = h("div", "sc-anim sc-cardinner");
+    const holder = h("div", "sc-cardholder" + (mode === "image" ? " is-img" : ""));   // ön + arka yüz + ışık aynı ölçüde
+    const pz = Math.max(-300, Math.min(300, Number(k.depth) || 0));
+    const pp = poseOf(k);
+    if (pp || pz) pose.style.transform = (pz ? `translateZ(${pz}px) ` : "") + pp;
+    card.classList.add("sc-card-3d");
+    setHidden(card);
+    holder.appendChild(card);
+    // gerçek arka yüz (yoksa hiçbir şey uydurulmaz)
+    const backSrc = k.back === "image" && k.backSrc && !ctx.failed[k.backSrc] ? k.backSrc : "";
+    if (backSrc || (k.back === "monogram" && mode !== "image")) {
+      let back;
+      if (backSrc) back = h("div", "sc-card sc-card-img sc-card-back", null, [img(backSrc, "", "contain")]);
+      else {
+        const P = ctx.pal;
+        back = h("div", "sc-card sc-card-title sc-card-back", { background: P.paper || "#FBF7EF", color: P.accent || "#C9A45C", borderColor: P.accent || "#C9A45C" }, [
+          c.brand.logo ? h("div", "sc-card-logo", null, [img(c.brand.logo, "", "contain")]) : h("div", "sc-card-mono", null, [ctx.monogram])
+        ]);
+      }
+      back.style.transform = "rotateY(180deg)";
+      setHidden(back);
+      holder.appendChild(back);
+    }
+    // metalik ışık geçişi: kartın kendi şekli (görselde saydamlık maskesi, yazılı kartta dikdörtgen)
+    const lit = makeLit(ctx, { id: CARD_ID }, 1);
+    lit.classList.add("sc-cardlit");
+    lit.style.transform = "translateZ(.6px)";
+    setHidden(lit);
+    if (mode === "image") {
+      const url = URLS.get(ctx.entry.cardSrc);
+      if (url && MASK_OK.has(ctx.entry.cardSrc)) {
+        const m = `url("${url}")`;
+        Object.assign(lit.style, { WebkitMaskImage: m, maskImage: m, WebkitMaskSize: "contain", maskSize: "contain", WebkitMaskPosition: "center", maskPosition: "center", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat" });
+      }
+    }
+    holder.appendChild(lit);
+    inner.appendChild(holder);
+    // yumuşak gölge: kartın altında (carry içinde) durur; kartın kendi hareketleri gölgeyi taşımaz
+    if (k.shadow) {
+      const sh = mode === "image" && ctx.entry.cardSrc
+        ? img(ctx.entry.cardSrc, "sc-cardshadow sc-cardshadow-img", "contain")
+        : h("div", "sc-cardshadow sc-cardshadow-box");
+      carry.appendChild(sh);
+      ctx.cardShadow = sh;
+      wrap.classList.add("has-cardshadow");
+      // yazılı kartın yüksekliği içeriğe göre değişir: gölge ilk karede kartın ölçüsünü alır
+      const fit = () => { if (!holder.offsetHeight) return; Object.assign(sh.style, { left: holder.offsetLeft + "px", top: holder.offsetTop + "px", width: holder.offsetWidth + "px", height: holder.offsetHeight + "px" }); };
+      if (global.requestAnimationFrame) global.requestAnimationFrame(fit);
+    }
+    carry.appendChild(inner);
+    pose.appendChild(carry);
+    wrap.appendChild(pose);
+    wrap.classList.add("sc-cardwrap-3d");
+    ctx.L[CARD_ID] = inner; ctx.C[CARD_ID] = carry; ctx.S[CARD_ID] = wrap;
+    ctx.box[CARD_ID] = { x: 50, y: 90, w: 300, h: 520, s: (Number(c.cardSize) || 100) / 100 };
+    ctx.card3d = true;
   }
 
   /* ---------------- katmanlar (yuvalar) ----------------
@@ -849,6 +934,7 @@
     const st = { overlay, frame, fit, cam, view, backdrop, fxCanvas, anims: [], timers: [], reduced, scale: 1, failed: {}, ctx: null, dead: false };
     if (inBox) opts.container.appendChild(overlay); else document.body.appendChild(overlay);
     if (!opts.freeze) active = st;
+    st.onGone = opts.onGone || null;   // K1/Hazırlık: açılış ekranı tamamen kalkınca
 
     let phase = "loading", finished = false;
     function setPhase(p) { phase = p; overlay.dataset.scPhase = p; if (opts.onPhase) opts.onPhase(p); }
@@ -856,7 +942,7 @@
     const handle = {
       overlay, ctx: null, ready: null,
       stop: () => { if (active === st) stop(); },
-      finish: (fast) => finish(fast),
+      finish: (fast, fo) => finish(fast, fo),
       refit: () => fitFrame(st),
       destroy() { st.dead = true; if (active === st) stop(); else overlay.remove(); },
       // hizalama ekranı: bir katmanın yerleşimini canlı günceller (sahne yeniden kurulmaz)
@@ -883,15 +969,25 @@
       skip.addEventListener("click", (e) => { e.stopPropagation(); Sound.unlock(); finish(true); });
     }
 
-    function finish(fast) {
+    function finish(fast, fo) {
       if (finished || opts.freeze) return;
       finished = true;
       setPhase("exit");
       // davetiye, açılış ekranının ALTINDA hemen çizilir; açılış onun içine çözülür
       try { done(); } catch (e) { console.error(e); }
       const ctx = st.ctx;
-      const end = () => { if (active === st) stop(); else overlay.remove(); };
+      const end = () => { if (active === st) stop(); else { overlay.remove(); gone(st); } };
       if (!ctx) { end(); return; }
+      // K1: kartın çıkış hareketleri (varsa) önce oynar, davetiyeye geçiş onlardan sonra başlar
+      let actsMs = 0;
+      if (!fast && !reduced && !(fo && fo.noActs) && ctx.scenario && ctx.scenario.exit) {
+        try { actsMs = Math.max(0, Number(ctx.scenario.exit(ctx)) || 0); } catch (e) { console.error(e); }
+      }
+      if (actsMs > 0) { hint.style.display = "none"; st.timers.push(setTimeout(() => runExit(ctx, fast, end), actsMs * ctx.k)); return; }
+      runExit(ctx, fast, end);
+    }
+    function runExit(ctx, fast, end) {
+      if (ctx.dead && active !== st) return;
       // A2.3: davetiyeye geçiş biçimi ve süresi ayarlanabilir (varsayılan = A1'deki yakınlaşarak çözülme)
       const exitStyle = cfg.exitStyle === "fade" || cfg.exitStyle === "up" ? cfg.exitStyle : "zoom";
       const exitMs = Math.max(200, Math.min(4000, (Number(cfg.exitDuration) || 1) * 1000));
@@ -1065,7 +1161,7 @@
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
     normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active,
-    preload, sourcesOf, layoutOf, setV2Adapter, modelOf, applyLayout, honestBack, poseOf,
+    preload, sourcesOf, layoutOf, setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }
   };
