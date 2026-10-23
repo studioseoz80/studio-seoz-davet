@@ -97,3 +97,15 @@
 .ts-seq li{ display:flex; justify-content:space-between; gap:6px; align-items:center; }
 .ts-seq small{ color:var(--ink-soft, #6B6A5E); }
 .cs-warn{ color:#8A4B12; background:#FFF6E8; border:1px solid #F1D9B5; border-radius:6px; padding:6px 8px; }
+
+/* İç Zemin katmanları: döndürme tutamağı, gizli katman, hareket kartları, telefon yükü */
+.ts-sel-r{ position:absolute; left:50%; top:-26px; width:14px; height:14px; margin-left:-7px; background:#FFD24A; border:2px solid #222; border-radius:50%; cursor:grab; }
+.ts-sel-r::after{ content:""; position:absolute; left:50%; top:12px; width:2px; height:12px; margin-left:-1px; background:#FFD24A; }
+.ts-blrow.is-hidden .ts-bl{ opacity:.5; }
+.ts-ico.is-off{ opacity:.6; }
+.ts-mvcard .ts-act-h{ display:flex; gap:6px; align-items:center; }
+.ts-mvcard .ts-act-h select{ flex:1; min-width:0; }
+.ts-lbtns{ flex-wrap:wrap; }
+.ts-load{ font-size:.78rem; margin:6px 0; padding:6px 8px; border-radius:6px; background:#F2EFE6; }
+.ts-load-orta{ background:#FFF3D6; }
+.ts-load-agir{ background:#FCE3DE; }

@@ -10,6 +10,8 @@
 .th-bl{ position:absolute; pointer-events:none; will-change:transform; }
 .th-bl-m{ width:100%; height:100%; animation-duration:var(--th-sp, 8s); animation-iteration-count:infinite; animation-timing-function:ease-in-out; }
 .th-bl-img{ width:100%; height:100%; object-fit:contain; display:block; }
+.th-mv{ position:absolute; inset:0; }
+.th-bl.th-bl-still{ will-change:auto; }
 .th-m-salinim{ animation-name:thSway; animation-direction:alternate; }
 .th-m-suzulme{ animation-name:thFloat; animation-direction:alternate; }
 .th-m-donme{ animation-name:thSpin; animation-timing-function:linear; animation-duration:calc(var(--th-sp, 8s) * 4); }

@@ -106,6 +106,66 @@
     outer.appendChild(pose);
     return outer;
   }
+  /* =============== İç Zemin katmanları: sürekli hareketler, kaydırma efektleri, hafif kopya ===============
+     Hepsi İSTEĞE BAĞLI alanlardır; olmayan katman eskisi gibi, birebir aynı çizilir.
+       L.hidden            → katman çizilmez
+       L.moves = [{ id, type, dur, speed, dir, amp, delay, repeat }]  (aynı anda birden çok sürekli hareket)
+       L.scroll = { x, rot, scale, fade }  → kaydırınca yatay kayma (px), dönme (°), ölçek (%), saydamlaşma (%)
+       L.lite / L.liteW    → telefonda kullanılan hafif kopya (orijinal L.src korunur)
+     Hareketler tarayıcının kendi animasyon motoruyla (Web Animations) çalışır: yalnızca dönüşüm ve saydamlık
+     değişir, bu yüzden ekran kartında akıcıdır; ekran dışındayken durur. */
+  const MOVE_TYPES = [
+    ["sallanma", "Sallanma", { dur: 3, amp: 4, unit: "°" }],
+    ["suzulme", "Süzülme (yukarı-aşağı)", { dur: 4, amp: 10, unit: "px" }],
+    ["kayma", "Sağa-sola", { dur: 6, amp: 20, unit: "px" }],
+    ["donme", "Dönme", { dur: 20, amp: 360, unit: "°" }],
+    ["titresim", "Hafif titreşim", { dur: 0.5, amp: 2, unit: "px" }],
+    ["yakinlas", "Yakınlaşma", { dur: 4, amp: 6, unit: "%" }],
+    ["uzaklas", "Uzaklaşma", { dur: 4, amp: 6, unit: "%" }],
+    ["parilti", "Parıldama", { dur: 2, amp: 65, unit: "%" }]
+  ];
+  const moveDef = t => (MOVE_TYPES.find(m => m[0] === t) || [])[2] || null;
+  function moveSpec(m, L) {
+    const d = moveDef(m.type); if (!d) return null;
+    const amp = num(m.amp, d.amp), rev = m.dir === "ters", rep = Math.max(0, Math.round(num(m.repeat, 0)));
+    const cyc = Math.max(0.1, num(m.dur, d.dur)) / Math.max(0.1, num(m.speed, 1)) * 1000;   // bir tam tur (gidiş + dönüş)
+    const half = { duration: cyc / 2, iterations: rep ? rep * 2 : Infinity, direction: "alternate", easing: "ease-in-out" };
+    const kf2 = (a, b) => rev ? [b, a] : [a, b];
+    switch (m.type) {
+      case "sallanma": return { origin: L.origin || "50% 100%", kf: kf2({ transform: `rotate(${-amp}deg)` }, { transform: `rotate(${amp}deg)` }), t: half };
+      case "suzulme": return { kf: kf2({ transform: `translateY(${-amp}px)` }, { transform: `translateY(${amp}px)` }), t: half };
+      case "kayma": return { kf: kf2({ transform: `translateX(${-amp}px)` }, { transform: `translateX(${amp}px)` }), t: half };
+      case "yakinlas": return { kf: [{ transform: "scale(1)" }, { transform: `scale(${(1 + amp / 100).toFixed(3)})` }], t: half };
+      case "uzaklas": return { kf: [{ transform: "scale(1)" }, { transform: `scale(${Math.max(0.05, 1 - amp / 100).toFixed(3)})` }], t: half };
+      case "parilti": return { kf: [{ opacity: 1 }, { opacity: Math.max(0, 1 - amp / 100).toFixed(2) }], t: half };
+      case "donme": { const a = Math.max(1, Math.abs(amp)) * (rev ? -1 : 1);
+        return { origin: L.origin || "50% 50%", kf: [{ transform: "rotate(0deg)" }, { transform: `rotate(${a}deg)` }],
+          t: { duration: cyc, iterations: rep || Infinity, direction: Math.abs(amp) >= 360 ? "normal" : "alternate", easing: Math.abs(amp) >= 360 ? "linear" : "ease-in-out" } }; }
+      case "titresim": { const a = amp, s = rev ? -1 : 1;
+        return { kf: [{ transform: "translate(0,0)" }, { transform: `translate(${s * a}px,${-a / 2}px)` }, { transform: `translate(${-s * a}px,${a / 2}px)` }, { transform: `translate(${s * a / 2}px,${a}px)` }, { transform: "translate(0,0)" }],
+          t: { duration: cyc, iterations: rep || Infinity, direction: "normal", easing: "linear" } }; }
+      default: return null;
+    }
+  }
+  // her sürekli hareket kendi kutusunda: iç içe kutular hareketleri üst üste toplar (süzülme + sallanma birlikte)
+  function wrapMoves(L, body) {
+    const list = (Array.isArray(L.moves) ? L.moves : []).map(m => ({ m, sp: moveSpec(m, L) })).filter(x => x.sp);
+    if (!list.length) return { top: body, specs: [] };
+    let inner = body; const specs = [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const w = el("div", "th-mv"); if (list[i].sp.origin) w.style.transformOrigin = list[i].sp.origin;
+      w.appendChild(inner); inner = w;
+      specs.unshift({ el: w, sp: list[i].sp, delay: Math.max(0, num(list[i].m.delay, 0)) * 1000 });
+    }
+    return { top: inner, specs };
+  }
+  // telefonda, katmanın ekrandaki boyutuna yeten hafif kopya varsa o kullanılır; yoksa orijinal
+  function srcFor(L) {
+    if (!L.lite || !(num(L.liteW, 0) > 0)) return L.src;
+    const phone = (global.innerWidth || 1000) < 640, dpr = Math.min(3, global.devicePixelRatio || 1);
+    return phone && num(L.liteW, 0) >= num(L.w, 120) * dpr ? L.lite : L.src;
+  }
+  const hasScrollFx = L => !!(L && L.scroll && (num(L.scroll.x, 0) || num(L.scroll.rot, 0) || num(L.scroll.scale, 0) || num(L.scroll.fade, 0)));
   function buildBgLayer(L, mode, three, opt) {
     if (three) return buildBgLayer3(L, mode, opt || {});
     const outer = el("div", "th-bl" + (L.front ? " th-bl-front" : ""), {
@@ -113,6 +173,7 @@
       opacity: String(Math.max(0, Math.min(1, num(L.opacity, 1))))
     });
     outer.dataset.depth = String(Math.max(0, Math.min(1, num(L.depth, 0))));
+    if (L.id) outer.dataset.bl = L.id;
     const mid = el("div", "th-bl-m" + (L.motion && L.motion !== "none" ? " th-m-" + L.motion : ""));
     mid.style.setProperty("--th-sp", (8 / Math.max(0.2, num(L.speed, 1))).toFixed(2) + "s");
     if (L.motion === "salinim" || L.motion === "donme") mid.style.transformOrigin = L.origin || (L.motion === "salinim" ? "0% 100%" : "50% 50%");
@@ -120,12 +181,17 @@
     img.alt = ""; img.draggable = false;
     if (L.art) img.src = artURL(L.art, L.color, L.color2);
     else if (L.src) {
+      const src = srcFor(L);
       img.loading = "lazy"; img.decoding = "async";      // sayfanın altındaki zemin görselleri ekrana yaklaşınca yüklenir
-      img.dataset.srcRef = L.src;
-      if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(L.src).then(u => { if (u) img.src = u; });
-      else img.src = L.src;
+      img.dataset.srcRef = src;
+      if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) img.src = u; });
+      else img.src = src;
     }
-    mid.appendChild(img); outer.appendChild(mid);
+    const mv = wrapMoves(L, img);
+    mid.appendChild(mv.top); outer.appendChild(mid);
+    outer.__mv = mv.specs;
+    // yeni düzenleyiciyle kaydedilmiş zeminde: hiç kıpırdamayan katman ayrı ekran kartı katmanı tutmaz (bellek)
+    if (opt && opt.lv2 && !(num(L.depth, 0) > 0) && !(L.motion && L.motion !== "none") && !mv.specs.length && !hasScrollFx(L)) outer.classList.add("th-bl-still");
     return outer;
   }
   function buildBgLayer3(L, mode, opt) {
@@ -156,9 +222,10 @@
     const setSrc = (im, after) => {
       if (L.art) { im.src = artURL(L.art, L.color, L.color2); if (after) after(im.src); }
       else if (L.src) {
-        im.loading = "lazy"; im.decoding = "async"; im.dataset.srcRef = L.src;
-        if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(L.src).then(u => { if (u) { im.src = u; if (after) after(u); } });
-        else { im.src = L.src; if (after) after(L.src); }
+        const src = srcFor(L);
+        im.loading = "lazy"; im.decoding = "async"; im.dataset.srcRef = src;
+        if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) { im.src = u; if (after) after(u); } });
+        else { im.src = src; if (after) after(src); }
       }
     };
     // yumuşak gölge: görselin kendi şekli, BİR KEZ küçük bir tuvale bulanık çizilir; tarayıcı her karede
@@ -176,12 +243,15 @@
       if (lit) { const m = `url("${url}")`; Object.assign(lit.style, { WebkitMaskImage: m, maskImage: m }); }
       if (sh) softShadow(sh, url, num(L.w, 120), num(L.h, 120));
     });
-    const body = mid || img; if (mid) mid.appendChild(img);
+    const mv = wrapMoves(L, img);
+    const body = mid || mv.top; if (mid) mid.appendChild(mv.top);
     const host = anim || pose;
     host.appendChild(body); if (lit) host.appendChild(lit);
     if (anim) { carry.appendChild(anim); pose.appendChild(carry); }
     outer.appendChild(pose);
     outer.__th = { L: anim, C: carry, lit: lit ? { bar, k: 1 } : null };
+    outer.__mv = mv.specs;
+    outer.__fade = [img, sh, lit].filter(Boolean).map(e => ({ e, base: e === img ? op : e === sh ? Number(sh.style.opacity) : 1 }));
     return outer;
   }
   // görselin siluetini düşük çözünürlüklü tuvale çizer; CSS büyütmesi kenarları kendiliğinden yumuşatır
@@ -464,7 +534,9 @@ onmessage = e => { const m = e.data;
       const nodes = {};
       const bgActs = (Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && BG_MOVES.includes(a.move));
       const litIds = new Set(bgActs.filter(a => a.move === "sheen").map(a => a.layer)), actIds = new Set(bgActs.map(a => a.layer));
-      const bls = (Array.isArray(bg.layers) ? bg.layers : []).map(L => { const n = buildBgLayer(L, mode, three, { lit: litIds.has(L.id), act: actIds.has(L.id) }); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; return n; });
+      // gizlenen katman çizilmez; bg.lv = 2 yeni düzenleyiciyle kaydedilmiş zemini gösterir (eski zeminler aynen)
+      const lv2 = num(bg.lv, 0) >= 2;
+      const bls = (Array.isArray(bg.layers) ? bg.layers : []).filter(L => L && !L.hidden).map(L => { const n = buildBgLayer(L, mode, three, { lit: litIds.has(L.id), act: actIds.has(L.id), lv2 }); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; n.__L = L; return n; });
       if (three && !camF.childNodes.length) { stageF.remove(); stageF = null; }
       /* Hafif mod (yalnızca 3D zeminde): zayıf cihazda baştan, diğerlerinde gerektiğinde kendiliğinden açılır.
          Sis akışı durur, ışık parıltısı gizlenir, parçacık tuvali düşük çözünürlükte çizilir.
@@ -485,7 +557,7 @@ onmessage = e => { const m = e.data;
         afterEntry(mode, st, () => {
           const pcfg = Object.assign({}, pt, { seconds: num(pt.seconds, 0) });
           // 3D zeminli sayfada parçacıklar ayrı çalışanda çizilir (desteklenmezse eski yol); 2D sayfalar aynen eski yoldan
-          parts = (three && ParticlesOff(pc, pcfg)) || Particles(pc, pcfg); st.particles = parts;
+          parts = ((three || lv2) && ParticlesOff(pc, pcfg)) || Particles(pc, pcfg); st.particles = parts;   // yeni düzenle kaydedilen zeminde de
           if (st.lite) parts.quality(1);
           if (st.update) requestAnimationFrame(st.update);   // açılıştan sonra kurulduysa tuvali hemen yerine oturt
         });
@@ -509,10 +581,22 @@ onmessage = e => { const m = e.data;
         const io = new IntersectionObserver(ents => ents.forEach(e => {
           e.target.classList.toggle("th-off", !e.isIntersecting);
           if (three) e.target.getAnimations({ subtree: true }).forEach(a => { if (a.effect && a.effect.getTiming().iterations === Infinity) { try { e.isIntersecting ? a.play() : a.pause(); } catch (err) { /* önemsiz */ } } });
+          else (e.target.__anims || []).forEach(a => { if (a.playState === "finished") return; try { e.isIntersecting ? a.play() : a.pause(); } catch (err) { /* önemsiz */ } });
         }), { rootMargin: "120px" });
         bls.forEach(n => io.observe(n));
         st.cleanups.push(() => io.disconnect());
       }
+      // katmanların sürekli hareketleri (açılış ekranı kalkınca başlar; ekran dışındaysa duraklı başlar)
+      const movers = bls.filter(n => n.__mv && n.__mv.length);
+      if (movers.length && !rm) afterEntry(mode, st, () => {
+        movers.forEach(n => {
+          n.__anims = n.__mv.map(({ el: w, sp, delay }) => {
+            try { return w.animate(sp.kf, Object.assign({ delay, fill: "both" }, sp.t)); } catch (e) { return null; }
+          }).filter(Boolean);
+          if (n.classList.contains("th-off")) n.__anims.forEach(a => { try { a.pause(); } catch (e) { /* önemsiz */ } });
+        });
+        st.cleanups.push(() => movers.forEach(n => (n.__anims || []).forEach(a => { try { a.cancel(); } catch (e) { /* önemsiz */ } })));
+      });
       // otomatik hafif mod: açılıştan sonraki ilk ~25 saniyede kare hızı art arda 2 saniye 40'ın altında kalırsa
       if (three && mode === "view" && !rm && !st.lite && !global.__seozNoAutoLite) afterEntry(mode, st, () => {   // __seozNoAutoLite: yalnızca ölçüm için
         let frames = 0, t0 = 0, slow = 0, windows = 0, raf = 0, dead = false;
@@ -546,13 +630,13 @@ onmessage = e => { const m = e.data;
         });
       }
       // derinlik (kaydırınca farklı hızda kayma) + parçacık tuvalini görünen bölgeye taşıma
-      const deep = bls.filter(n => Number(n.dataset.depth) > 0);
+      const deep = bls.filter(n => Number(n.dataset.depth) > 0 || hasScrollFx(n.__L));
       let ticking = false, tiltX = 0, tiltY = 0;
       // önce bütün ölçüler okunur, sonra bütün yazmalar yapılır: okuma-yazma karışınca tarayıcı her
       // katmanda sayfayı yeniden ölçmek zorunda kalıyordu. Katman konumları müşteri sayfasında değişmez,
       // bu yüzden bir kez ölçülür (pencere boyu değişince yeniden).
       let geo = null;
-      const measure = () => deep.map(n => ({ n, d: Number(n.dataset.depth), cy: n.offsetTop + n.offsetHeight / 2 }));
+      const measure = () => deep.map(n => ({ n, d: Number(n.dataset.depth), cy: n.offsetTop + n.offsetHeight / 2, fx: hasScrollFx(n.__L) ? n.__L.scroll : null }));
       function update() {
         ticking = false;
         const r = canvasEl.getBoundingClientRect();
@@ -563,8 +647,26 @@ onmessage = e => { const m = e.data;
         const g = (mode === "view" && geo) || measure();
         if (mode === "view") geo = g;
         const mid = top + (vh / scale) / 2;
-        if (!rm) g.forEach(({ n, d, cy }) => {
-          n.style.transform = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
+        const halfV = Math.max(1, (vh / scale) / 2);
+        if (!rm) g.forEach(o => {
+          const { n, d, cy, fx } = o;
+          let tf;
+          if (!fx) tf = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
+          else {
+            // kaydırma efektleri: katman ekranın ortasındayken 0, ekranın kenarındayken tam değer
+            const p = Math.max(-2, Math.min(2, (cy - mid) / halfV));
+            tf = `translate3d(${(tiltX * d * 18 + p * num(fx.x, 0)).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)` +
+              (num(fx.rot, 0) ? ` rotate(${(p * num(fx.rot, 0)).toFixed(2)}deg)` : "") + (num(fx.scale, 0) ? ` scale(${Math.max(0.05, 1 + p * num(fx.scale, 0) / 100).toFixed(4)})` : "");
+            if (num(fx.fade, 0)) {
+              const k = Math.max(0, 1 - Math.min(1, Math.abs(p)) * Math.min(100, num(fx.fade, 0)) / 100);
+              if (o.lk !== k.toFixed(3)) {
+                o.lk = k.toFixed(3);
+                if (n.__fade) n.__fade.forEach(f => { f.e.style.opacity = (f.base * k).toFixed(3); });
+                else n.style.opacity = (Math.max(0, Math.min(1, num(n.__L.opacity, 1))) * k).toFixed(3);
+              }
+            }
+          }
+          if (o.lt !== tf) { o.lt = tf; n.style.transform = tf; }   // değişmeyen değer yeniden yazılmaz
         });
         if (three) {
           const oy = mid.toFixed(0) + "px";
@@ -578,7 +680,7 @@ onmessage = e => { const m = e.data;
         if (pc && parts && hgt > 0) {
           // 3D sayfada tuval yeniden yerleşim gerektirmeyen dönüşümle taşınır (görünüm aynı)
           const pe = parts.el || pc;   // çalışan açılamadıysa tuval yenilenmiş olabilir
-          if (three) pe.style.transform = `translate3d(0, ${top}px, 0)`; else pe.style.top = top + "px";
+          if (three || lv2) pe.style.transform = `translate3d(0, ${top}px, 0)`; else pe.style.top = top + "px";
           pe.style.height = Math.max(1, hgt) + "px";
           parts.resize(cw === 1 ? 430 : cw, Math.max(1, hgt));
           if (r.bottom < 0 || r.top > vh) parts.pause(); else parts.resume();
@@ -636,5 +738,5 @@ onmessage = e => { const m = e.data;
     if (global.SeozThemePresent) global.SeozThemePresent.apply(wrap, layer, mode);
   }
 
-  global.SeozTheme = { applyDocument, teardown, decorateLayer, Particles, artURL, MOTIONS, PARTICLES, LIGHTS, REVEALS, sectionGradient, use3d, BG_MOVES, CAMERAS };
+  global.SeozTheme = { applyDocument, teardown, decorateLayer, Particles, artURL, MOTIONS, PARTICLES, LIGHTS, REVEALS, sectionGradient, use3d, BG_MOVES, CAMERAS, MOVE_TYPES, moveSpec, srcFor };
 })(window);
