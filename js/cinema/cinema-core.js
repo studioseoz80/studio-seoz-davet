@@ -1029,7 +1029,7 @@
       st.fx = ctx.fx;
       // A2.3: "manual" = sahne ve parçacıklar hazır, oynatmayı zaman çizelgesi yönetir
       if (opts.manual) { setPhase("manual"); const ui = overlay.querySelector(".sc-ui"); if (ui) ui.style.display = "none"; return handle; }
-      if (cfg.start !== "auto") hint.style.display = "";
+      if (cfg.start !== "auto" && !(st.ctx && st.ctx.scenario && st.ctx.scenario.autoStart)) hint.style.display = "";
       startPlayback(ctx);
       return handle;
     });
@@ -1060,6 +1060,8 @@
         if (cfg.start === "auto") return ctx.wait(opts.autoDelay != null ? opts.autoDelay : 1600);
         // A2.4: senaryo kendi başlatma hareketini (çekme, kaydırma, basılı tutma) bekleyebilir
         if (!reduced && ctx.scenario.waitStart) return ctx.scenario.waitStart(ctx);
+        // açılış kendiliğinden sürebilir (iç kart adımı); misafir dokunursa beklemeden geçilir
+        if (!reduced && ctx.scenario.autoStart) return Promise.race([ctx.scenario.autoStart(ctx), new Promise(r => { tapResolve = r; })]).then(() => { tapResolve = null; });
         return new Promise(r => { tapResolve = r; });
       }
       function holdCard() {

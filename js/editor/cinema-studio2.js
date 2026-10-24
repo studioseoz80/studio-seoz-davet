@@ -687,7 +687,8 @@
         // kart hareketleri açılıştan sonra gelir; sürekli olanlar (süzülme) kartla birlikte sürer, bekleme bölümüne taşınmaz
         if (m.loop) a.repeat = m.defRepeat != null ? m.defRepeat : 1;
         if (moveId === "free3d") { a.params = { z0: -500, ry0: -40, s0: 70, fade: "belir" }; a.easing = "yavaslayarak"; }
-        a.start = m.loop && a.repeat === 0 ? "with" : (cin.actions.some(gateOf) ? "after" : "tap");
+        // iç kart, açılış animasyonu bitince kendiliğinden gelir (dokunuş beklemez)
+        a.start = m.loop && a.repeat === 0 ? "with" : "after";
         cin.actions.push(a); state.selAct = a.id;
         save(); refreshAll(); return;
       }
@@ -758,6 +759,7 @@
       const ticks = [];
       for (let t = 0; t <= Math.ceil(total); t++) ticks.push(`<span class="cs-tick" style="left:${t * pps}px">${t}</span>`);
       const taps = p.taps.map((tp, i) => { const nm = GATE_NAMES[tp.kind] || GATE_NAMES.tap, ic = { pull: "✋", swipe: "👉", hold: "☝️" }[tp.kind] || "👆";
+        if (tp.auto) return `<div class="cs-tap is-auto" data-kind="auto" style="left:${sec(tp.time) * pps}px" title="İç kart açılış bitince kendiliğinden gelir (misafir dokunursa hemen gelir)"><span>⏵ Kart</span></div>`;
         return `<div class="cs-tap" data-kind="${tp.kind || "tap"}" style="left:${sec(tp.time) * pps}px" title="${i === 0 ? "Misafirin ilk hareketi (açılış başlar): " + nm.toLowerCase() : "Misafiri bekler: " + nm.toLowerCase()}"><span>${ic} ${nm}${i ? " " + (i + 1) : ""}</span></div>`; }).join("");
       const cardRow = p.hasCard ? `<div class="cs-tl-row"><div class="cs-tl-name">İç kart</div><div class="cs-tl-track" style="width:${W}px">
           <div class="cs-bar g-kart is-fixed" style="left:${sec(p.cardStart) * pps}px;width:${Math.max(20, sec(p.exitAt - p.cardStart) * pps)}px" title="İç kart görünür; ${p.holdTap ? "misafir dokunana kadar" : "ayarlanan süre kadar"} ekranda kalır"><span>İç kart${p.holdTap ? " · dokunana kadar" : ` · ${fmt(sec(p.exitAt - p.cardShown))} sn ekranda`}</span></div>

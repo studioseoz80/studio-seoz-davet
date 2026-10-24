@@ -1147,6 +1147,7 @@
     const pre = firstTap > 0 ? acts.slice(0, firstTap) : [];   // ilk dokunuştan önceki hareketler = bekleme (dikkat) bölümü
     const rest = firstTap >= 0 ? acts.slice(firstTap) : acts;
     const firstKind = rest.length && isGate(rest[0]) ? rest[0].start : "tap";
+    const autoFirst = pre.length > 0 && autoGate(acts[firstTap]);
     const gestures = acts.some(a => isGate(a) && a.start !== "tap");
     const model = {
       id: "free", label: "Serbest stüdyo", icon: "🎬", concept: "none", slots,
@@ -1167,8 +1168,10 @@
         id: "custom", label: "Kendi kurgum",
         attention(ctx) {
           if (gestures) prepareGestures(ctx, firstKind);
-          if (pre.length) runChunk(ctx, pre);
+          if (pre.length) ctx.__preDone = runChunk(ctx, pre);
         },
+        // kart adımı ilk dokunuşsa: önceki hareketler bitince açılış kendiliğinden sürer (dokunmak yine hızlandırır)
+        autoStart: autoFirst ? (ctx) => (ctx.__preDone || Promise.resolve()).then(() => { ctx.__autoGo = true; }) : null,
         // A2.4: ilk adım çekme/kaydırma/basılı tutma ise açılış bu hareketle başlar (dokunma değil)
         waitStart: firstKind !== "tap" ? (ctx) => gate(ctx, firstKind, rest[0].gdir).then(() => { ctx.__gateOpen = true; }) : null,
         exit: exitActs.length ? (ctx) => {
@@ -1181,7 +1184,13 @@
           const parts = rest.length ? chunks(rest) : [];
           for (let i = 0; i < parts.length; i++) {
             const head = parts[i][0], kind = isGate(head) ? head.start : "tap";
-            if (i > 0 || (kind !== "tap" && !ctx.__gateOpen)) {
+            if (autoGate(head) && (i > 0 || autoFirst)) {
+              // iç kart: açılış animasyonu bitince kendiliğinden gelir
+              // misafir dokunarak başlattıysa beklemez (hızlandırma); kendiliğinden başladıysa önceki hareketlerin bitişini bekler
+              const tapped = i === 0 && ctx.cfg && ctx.cfg.start !== "auto" && !ctx.__autoGo;
+              if (i === 0 && ctx.__preDone && !tapped) await ctx.__preDone;
+              if (ctx.dead) return;
+            } else if (i > 0 || (kind !== "tap" && !ctx.__gateOpen)) {
               showTapHint(ctx, true, kind);
               if (kind === "tap") await ctx.waitTap(); else await gate(ctx, kind, head.gdir);
               showTapHint(ctx, false); if (ctx.dead) return;
@@ -1257,22 +1266,27 @@
      bekler; çizelgede bu bekleme sabit bir "dokunuş" aralığı olarak gösterilir.
      Bütün değerler motorun hızı uygulanmadan (ms) verilir; ekranda k ile çarpılır. */
   const TAP_GAP = 600, ATTENTION_MIN = 1500, CARD_AUTO = 1300;
+  /* İç kart adımı "Dokununca" olsa da açılış animasyonu bitince kart kendiliğinden gelir (misafir "Geç"e
+     basmak zorunda kalmaz). Kartın ÖNÜNDE hareket yoksa bu dokunuş açılışın kendisidir ve aynen beklenir. */
+  const autoGate = a => !!a && a.start === "tap" && (a.move === "card" || a.layer === C.CARD_ID);
   function plan(ncfg, entry) {
     const model = ncfg.__free, acts = model ? (ncfg.actions || []) : [];
     const firstTap = acts.findIndex(isGate);
     const pre = firstTap > 0 ? acts.slice(0, firstTap) : [];
     const rest = firstTap >= 0 ? acts.slice(firstTap) : acts;
+    const autoFirst = pre.length > 0 && autoGate(acts[firstTap]);
     const items = [], taps = [];
     let t = 0;
     if (pre.length) {
       const sp = schedule(pre);
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: it.begin, end: it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: 0 })));
-      t = Math.max(ATTENTION_MIN, sp.end);
+      // kart kendiliğinden geliyorsa: dokunuş beklenmez, önceki hareketler bitince başlar
+      t = autoFirst ? (ncfg.start === "auto" ? Math.max(1600, sp.end) : sp.end) : Math.max(ATTENTION_MIN, sp.end);
     } else t = ncfg.start === "auto" ? 1600 : 900;
-    taps.push({ time: t, first: true, kind: rest.length && isGate(rest[0]) ? rest[0].start : "tap" });
+    taps.push({ time: t, first: true, kind: rest.length && isGate(rest[0]) ? rest[0].start : "tap", auto: autoFirst });
     const parts = rest.length ? chunks(rest) : [];
     parts.forEach((list, ci) => {
-      if (ci > 0) { t += TAP_GAP; taps.push({ time: t, kind: list[0].start }); }
+      if (ci > 0) { const au = autoGate(list[0]); if (!au) t += TAP_GAP; taps.push({ time: t, kind: list[0].start, auto: au }); }
       const sp = schedule(list);
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: t + it.begin, end: t + it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: ci + 1 })));
       t += sp.end;
