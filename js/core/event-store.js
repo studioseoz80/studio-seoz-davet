@@ -123,7 +123,29 @@
     return u.href;
   }
 
+  /* ---------------- ANI ALBÜMÜ (Anı Yükle · Studio SEOZ depolaması) ---------------- */
+  const ALBUM_KEY_PREFIX = "seoz_album_panel_v1_";   // + slug (yalnızca editör tarayıcısı)
+  async function ownerMemorySync(slug) {
+    const r = await rpc("memory_owner_sync", { p_slug: slug }, true);
+    if (r && r.panel_token) safeSet(ALBUM_KEY_PREFIX + slug, r.panel_token);
+    return r;
+  }
+  async function ownerMemoryRotate(slug) {
+    const r = await rpc("memory_owner_rotate_token", { p_slug: slug }, true);
+    if (r && r.panel_token) safeSet(ALBUM_KEY_PREFIX + slug, r.panel_token);
+    return r;
+  }
+  function albumUrl(slug, token) {
+    token = token || safeGet(ALBUM_KEY_PREFIX + slug);
+    if (!slug || !token) return "";
+    let b; try { b = new URL(global.SeozCloudStore.customerUrl(slug)); } catch (e) { b = new URL("view.html", global.location.href); }
+    const u = new URL("album.html", b); u.hash = "k=" + token; return u.href;
+  }
+
   global.SeozEventStore = {
+    ownerMemorySync,
+    ownerMemoryRotate,
+    albumUrl,
     isConfigured,
     submitResponse,
     getOwnResponse,

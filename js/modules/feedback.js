@@ -178,7 +178,7 @@
   function submitToSeoz(data, ctx) {
     if (!cloudAvailable()) return Promise.resolve({ sent: false });
     let slug = "";
-    try { slug = new URLSearchParams(global.location.search).get("slug") || ""; } catch (e) { /* yok */ }
+    try { slug = (global.SeozCloudStore && global.SeozCloudStore.currentSlug ? global.SeozCloudStore.currentSlug() : new URLSearchParams(global.location.search).get("slug")) || ""; } catch (e) { /* yok */ }
     return global.SeozCloudStore.insertFeedback({
       invitation_slug: slug || null,
       doc_id: (ctx && ctx.docId) || null,

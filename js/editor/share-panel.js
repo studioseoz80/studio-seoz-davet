@@ -95,6 +95,9 @@
         </section>
         ${opts.panelUrl ? `<section class="sp-panel"><h4>Müşteri paneli</h4><p class="sp-note">Yalnızca etkinlik sahibine verin — davetlilerle paylaşmayın.</p>
           <div class="sp-link"><input readonly data-share-panel value="${esc(opts.panelUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-panel>Kopyala</button></div></section>` : ""}
+        ${opts.albumUrl || opts.albumMissing ? `<section class="sp-panel"><h4>Anı albümü</h4><p class="sp-note">Misafirlerin yüklediği fotoğraf ve videolar. Yalnızca etkinlik sahibine verin.</p>
+          ${opts.albumUrl ? `<div class="sp-link"><input readonly data-share-album value="${esc(opts.albumUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-album>Kopyala</button></div>`
+            : `<p class="sp-note sp-warn">Albüm linki bu tarayıcıda kayıtlı değil (başka tarayıcıdan oluşturulmuş olabilir).</p><button type="button" class="btn btn-outline" data-sp-album-new>Yeni albüm linki üret (eski link iptal olur)</button>`}</section>` : ""}
         ${opts.panelMissing ? `<p class="sp-note sp-warn">Müşteri paneli linki bu tarayıcıda kayıtlı değil. Katılım Formu ayarlarındaki "Yeni panel linki üret" ile yeni bir link oluşturabilirsiniz.</p>` : ""}
         <details class="sp-long"><summary>Eski (uzun) bağlantı</summary><input readonly value="${esc(opts.longUrl)}"><p class="sp-note">Daha önce gönderilen bağlantılar aynen çalışmaya devam eder.</p></details>
       </div>`;
@@ -107,6 +110,15 @@
     root.addEventListener("click", e => { if (e.target === root) close(); });
     $("[data-sp-close]").addEventListener("click", close);
     $("[data-sp-copy]").addEventListener("click", e => copy(opts.shortUrl, e.currentTarget));
+    if ($("[data-sp-copy-album]")) $("[data-sp-copy-album]").addEventListener("click", e => copy($("[data-share-album]").value, e.currentTarget));
+    if ($("[data-sp-album-new]")) $("[data-sp-album-new]").addEventListener("click", e => {
+      const b = e.currentTarget; b.disabled = true;
+      Promise.resolve(opts.onAlbumRotate && opts.onAlbumRotate()).then(u => {
+        if (!u) throw new Error("albüm linki alınamadı");
+        b.insertAdjacentHTML("beforebegin", `<div class="sp-link"><input readonly data-share-album value="${esc(u)}"><button type="button" class="btn btn-outline" data-sp-copy-album>Kopyala</button></div>`);
+        root.querySelector("[data-sp-copy-album]").addEventListener("click", ev => copy(u, ev.currentTarget)); b.remove();
+      }).catch(err => { b.disabled = false; alert("Yeni albüm linki üretilemedi: " + (err && err.message || "")); });
+    });
     if ($("[data-sp-copy-panel]")) $("[data-sp-copy-panel]").addEventListener("click", e => copy(opts.panelUrl, e.currentTarget));
     if ($("[data-sp-native]")) $("[data-sp-native]").addEventListener("click", () => navigator.share({ title: $("[data-sp-title]").value, text: $("[data-sp-desc]").value, url: opts.shortUrl }).catch(() => {}));
     const sync = () => { $("[data-sp-t]").textContent = $("[data-sp-title]").value || title; $("[data-sp-d]").textContent = $("[data-sp-desc]").value || DEFAULT_DESC; $("[data-sp-wa]").href = waLink(($("[data-sp-title]").value || title) + "\n" + opts.shortUrl); };

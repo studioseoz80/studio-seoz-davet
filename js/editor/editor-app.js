@@ -932,6 +932,22 @@
                 return result;
               });
           })
+          // ANI ALBÜMÜ: davetiyede "Studio SEOZ depolaması" yöntemli Anı Yükle varsa albüm açılır/güncellenir.
+          .then(result => {
+            const memLayers = (doc.layers || []).filter(l => l.type === "module" && l.moduleId === "guest-upload" && l.settings && l.settings.method === "seoz");
+            if (!memLayers.length || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerMemorySync) return result;
+            btn.textContent = "Anı albümü hazırlanıyor...";
+            return SeozEventStore.ownerMemorySync(result.slug)
+              .then(() => { result.albumUrl = SeozEventStore.albumUrl(result.slug); result.albumMissing = !result.albumUrl; return result; })
+              .catch(err => {
+                console.error("[Studio SEOZ] Anı albümü senkronu başarısız:", err);
+                const code = (err && (err.code || err.message)) || "";
+                alert("Davetiye yayınlandı, ancak Anı Yükle albümü hazırlanamadı:\n\n" +
+                  (code === "AUTH_REQUIRED" ? "Studio SEOZ girişi gerekli (☁ Giriş Yap)." : /memory_owner_sync|PGRST202|Could not find/i.test(code) ? "Supabase'de anı albümü kurulmamış (supabase/ani-yukleme.sql çalıştırılmalı)." : code) +
+                  "\n\nMisafirler bu durumda fotoğraf yükleyemez. Sorunu giderip tekrar Yayına Hazırla'ya basın (link değişmez).");
+                return result;
+              });
+          })
           .then(result => {
             const shortLink = result.shortUrl || result.url;
             showToast("Yayınlandı. Müşteri bağlantısı: " + shortLink);
@@ -949,6 +965,8 @@
             };
             SeozSharePanel.show({
               doc, shortUrl: shortLink, longUrl: result.url, panelUrl: panelLink, panelMissing,
+              albumUrl: result.albumUrl, albumMissing: result.albumMissing,
+              onAlbumRotate: () => SeozEventStore.ownerMemoryRotate(result.slug).then(() => SeozEventStore.albumUrl(result.slug)),
               onUpdate: (title, desc) => {
                 doc.meta.share = Object.assign({}, doc.meta.share, { title: title || undefined, description: desc || undefined });
                 return republish();

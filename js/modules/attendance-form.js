@@ -179,6 +179,7 @@
   }
 
   function currentSlug() {
+    if (global.SeozCloudStore && global.SeozCloudStore.currentSlug) return global.SeozCloudStore.currentSlug();   // kısa bağlantı da
     try { return new URLSearchParams(global.location.search).get("slug") || ""; } catch (e) { return ""; }
   }
 

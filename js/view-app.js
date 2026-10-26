@@ -31,6 +31,7 @@
 
   // SUPABASE: gerçek müşteri bağlantısı view.html?slug=...
   function getSlug() {
+    if (typeof SeozCloudStore !== "undefined" && SeozCloudStore.currentSlug) return SeozCloudStore.currentSlug() || null;
     const params = new URLSearchParams(window.location.search);
     if (params.get("slug")) return params.get("slug");
     // KISA BAĞLANTI: alan-adı/<slug> (bkz. functions/[slug].js). ?doc= varsa eski yöntem.
