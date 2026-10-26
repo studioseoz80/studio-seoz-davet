@@ -319,6 +319,19 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 .ix-ribbon.is-cut .ix-rib-r{ transform:rotate(-55deg) translateY(40px); opacity:0; }
 .ix-ribbon.is-cut .ix-rib-bow{ transform:translateY(80px) rotate(30deg); opacity:0; }
 .ix-ribbon.is-cut .ix-scissor{ transform:translate(-200px, -50%); opacity:0; transition:transform .5s, opacity .5s .3s; }
+/* kurdele (E1 · kendi görselleriyle) */
+.ix-k2on{ cursor:pointer; }
+.ix-k2{ position:absolute; inset:0; z-index:3; pointer-events:none; }
+.ix-k2-rib, .ix-k2-bow{ position:absolute; }
+.ix-k2-rib{ filter:drop-shadow(0 3px 4px rgba(0,0,0,.22)); }
+.ix-k2-full{ position:absolute; inset:0; width:100%; height:100%; object-fit:fill; display:block; }
+.ix-k2-half{ position:absolute; top:0; bottom:0; overflow:hidden; display:none; }
+.ix-k2-l{ transform-origin:0% 50%; } .ix-k2-r{ transform-origin:100% 50%; }
+.ix-k2-half img{ position:absolute; top:0; height:100%; max-width:none; display:block; }
+.ix-k2-bow{ filter:drop-shadow(0 4px 6px rgba(0,0,0,.25)); }
+.ix-k2-bow img{ width:100%; height:100%; object-fit:contain; display:block; }
+.ix-k2-sc{ position:absolute; top:50%; height:170%; aspect-ratio:2 / 1; transform:translate(-50%, -50%); opacity:0; z-index:2; }
+.ix-k2-sc img{ width:100%; height:100%; object-fit:contain; display:block; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
 /* kapı çal */
 .ix-kapi-cal .ix-result{ background:radial-gradient(circle, #FFF6DA, #FFFDF8 70%); border-radius:10px; inset:6% 16%; }
 .ix-door{ position:relative; width:68%; height:92%; perspective:900px; cursor:pointer; z-index:2; }

@@ -84,6 +84,9 @@
         return itemListHTML(field, value);
       case "url":
         return `<div class="field"><label>${field.label}</label><input type="url" data-mkey="${key}" value="${escapeHTML(value)}"></div>`;
+      // E1: modülün kendi düzenleme ekranını açan düğme (yalnızca bu tipi kullanan modüllerde)
+      case "action-button":
+        return `<div class="field"><button type="button" class="btn btn-gold" data-maction="${escapeHTML(field.action)}" style="width:100%;">${escapeHTML(field.label)}</button></div>`;
       case "checkbox":
         return `<div class="field"><label style="display:flex;align-items:center;gap:6px;">
           <input type="checkbox" data-mkey="${key}" ${value ? "checked" : ""} style="width:auto;">
@@ -366,6 +369,13 @@
           cb.onSettingsChange();
           render(containerEl, layer, cb); // önizlemeyi göstermek için paneli yeniden çiz
         }).catch(() => alert("Müzik dosyası yüklenemedi. Lütfen MP3, WAV veya OGG deneyin."));
+      });
+    });
+
+    containerEl.querySelectorAll("[data-maction]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const fn = moduleDef.panelActions && moduleDef.panelActions[btn.getAttribute("data-maction")];
+        if (fn) fn(layer, { onChange: cb.onSettingsChange, rerender: () => render(containerEl, layer, cb) });
       });
     });
 

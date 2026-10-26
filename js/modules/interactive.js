@@ -37,8 +37,11 @@
     fontFamily: "Cormorant Garamond",
     fontSize: 26
   };
+  // E1: kendi görselleriyle çalışan, Etkileşim Stüdyosu'ndan düzenlenen türler (diğerleri sonraki aşamalarda)
+  const STUDIO_KINDS = ["kurdele"];
   const SETTINGS_SCHEMA = [
-    { key: "kind", type: "select", label: "Nesne", options: KINDS.map(([value, label]) => ({ value, label })) },
+    { key: "kind", type: "select", label: "Nesne", options: KINDS.map(([value, label]) => ({ value, label })), reRenderPanel: true },
+    { key: "_studio", type: "action-button", label: "🎀 Etkileşim Stüdyosu: kendi görselleriniz, hareket, sürpriz", action: "studio", showIf: s => STUDIO_KINDS.indexOf(s.kind) >= 0 },
     { key: "title", type: "text", label: "Üstteki ipucu (boşsa hazır ipucu)" },
     { key: "resultType", type: "select", label: "Sonuç", options: [{ value: "mesaj", label: "Mesaj" }, { value: "gorsel", label: "Görsel" }, { value: "baglanti", label: "Bağlantı düğmesi" }, { value: "efekt", label: "Yalnızca efekt" }] },
     { key: "message", type: "textarea", label: "Mesaj (sayfanın içinde durur — gerçek bir sır yazmayın)" },
@@ -97,7 +100,8 @@
     const box = el("div", "ix-result");
     box.style.color = s.textColor; box.style.fontFamily = `"${s.fontFamily}", serif`; box.style.fontSize = Math.max(10, Number(s.fontSize) || 26) + "px";
     const imgs = refs(s);
-    if (s.resultType === "gorsel" && (imgs[1] || imgs[0])) { const im = el("img", "ix-result-img"); im.alt = ""; setImg(im, imgs[1] || imgs[0]); box.appendChild(im); }
+    const pic = s.resultImage || imgs[1] || imgs[0];   // Sürpriz fotoğrafı ayrı alanda (yoksa eski görsel listesi)
+    if (s.resultType === "gorsel" && pic) { const im = el("img", "ix-result-img"); im.alt = ""; setImg(im, pic); box.appendChild(im); }
     else if (s.resultType === "baglanti") {
       if (s.message) box.appendChild(el("div", "ix-result-t", null, esc(s.message).replace(/\n/g, "<br>")));
       const a = el("a", "ix-link", { background: s.color }, esc(s.linkText || "Aç"));
@@ -229,6 +233,7 @@
       root.addEventListener("contextmenu", e => e.preventDefault());
     },
     kurdele(root, s, live) {
+      if (s.parts && s.parts.ribbon && s.parts.ribbon.ref) return kurdele2(root, s, live);
       const imgs = refs(s);
       const under = el("div", "ix-under"); if (imgs[0]) { const im = el("img", "ix-under-img"); im.alt = ""; setImg(im, imgs[0]); under.appendChild(im); }
       under.appendChild(resultEl(s)); root.appendChild(under);
@@ -253,6 +258,98 @@
       });
     }
   };
+  /* ----------------------------- E1 · Kurdele Kes (kendi görselleriyle) -----------------------------
+     s.parts = { ribbon, bow, scissor, back }: { ref, nw, nh, x, y, w, rot }  (x, y: merkez %; w: genişlik %, kutuya göre)
+     s.cut   = { at, shape, fall, trigger, dur, speed, scissor }
+     Kesim anında kurdele görseli iki parçaya ayrılır (aynı görsel, kesim noktasından kırpılmış); her yarı kendi dış
+     ucundan menteşelenip iki yana sarkar ya da düşer. Hareketler yalnızca dönüşüm/saydamlık: telefonda akıcı. */
+  const CUT_DEFAULTS = { at: 38, shape: "v", fall: "sark", trigger: "dokun", dur: 1.6, speed: 1, scissor: true };
+  const PART_DEFAULTS = { ribbon: { x: 50, y: 50, w: 120, rot: 0 }, bow: { x: 50, y: 50, w: 34, rot: 0 }, scissor: { w: 0, rot: 0 }, back: {} };
+  const SCISSOR_SVG = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><defs><linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4F5F7"/><stop offset=".5" stop-color="#B9BEC5"/><stop offset="1" stop-color="#7D838B"/></linearGradient><linearGradient id="h" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E7C77C"/><stop offset="1" stop-color="#9C7A34"/></linearGradient></defs><path d="M58 30 L118 22 Q120 26 116 28 Z" fill="url(#m)" stroke="#5E646B" stroke-width=".8"/><path d="M58 30 L118 38 Q120 34 116 32 Z" fill="url(#m)" stroke="#5E646B" stroke-width=".8"/><ellipse cx="22" cy="17" rx="17" ry="12" fill="none" stroke="url(#h)" stroke-width="6"/><ellipse cx="22" cy="43" rx="17" ry="12" fill="none" stroke="url(#h)" stroke-width="6"/><path d="M37 21 L60 30 L37 39" fill="none" stroke="url(#h)" stroke-width="5" stroke-linejoin="round"/><circle cx="58" cy="30" r="3.2" fill="#6B5A2E"/></svg>`);
+  const clampN = (v, a, b, d) => { v = Number(v); return isFinite(v) ? Math.max(a, Math.min(b, v)) : d; };
+  function partOf(s, key) { const p = (s.parts || {})[key]; return p && p.ref ? Object.assign({}, PART_DEFAULTS[key], p) : null; }
+  function placePart(e, p) {
+    Object.assign(e.style, { left: clampN(p.x, -50, 150, 50) + "%", top: clampN(p.y, -50, 150, 50) + "%", width: clampN(p.w, 2, 300, 50) + "%",
+      transform: `translate(-50%, -50%) rotate(${clampN(p.rot, -180, 180, 0)}deg)` });
+    if (p.nw > 0 && p.nh > 0) e.style.aspectRatio = `${p.nw} / ${p.nh}`;
+  }
+  function kurdele2(root, s, live) {
+    const C = Object.assign({}, CUT_DEFAULTS, s.cut || {}), imgs = refs(s);
+    const at = clampN(C.at, 5, 95, 50), T = clampN(C.dur, 0.3, 8, 1.6) / clampN(C.speed, 0.25, 4, 1) * 1000;
+    root.classList.add("ix-k2on"); root.dataset.ixTrigger = C.trigger === "kaydir" ? "kaydir" : "dokun";
+    const back = partOf(s, "back"), under = el("div", "ix-under");
+    const bref = back ? back.ref : imgs[0];
+    if (bref) { const im = el("img", "ix-under-img"); im.alt = ""; setImg(im, bref); under.appendChild(im); }
+    under.appendChild(resultEl(s)); root.appendChild(under);
+    const stage = el("div", "ix-k2"); root.appendChild(stage);
+    const R = partOf(s, "ribbon"), rib = el("div", "ix-k2-rib"); placePart(rib, R); stage.appendChild(rib);
+    const full = el("img", "ix-k2-full"); full.alt = ""; full.draggable = false; setImg(full, R.ref); rib.appendChild(full);
+    const half = (side) => {
+      const h = el("div", "ix-k2-half ix-k2-" + side, side === "l" ? { left: "0", width: at + "%" } : { left: at + "%", width: (100 - at) + "%" });
+      const im = el("img"); im.alt = ""; im.draggable = false; setImg(im, R.ref);
+      if (side === "l") Object.assign(im.style, { left: "0", width: (10000 / at) + "%" });
+      else Object.assign(im.style, { left: (-at * 100 / (100 - at)) + "%", width: (10000 / (100 - at)) + "%" });
+      h.appendChild(im); rib.appendChild(h); return h;
+    };
+    const hl = half("l"), hr = half("r");
+    const B = partOf(s, "bow"); let bow = null;
+    if (B) { bow = el("div", "ix-k2-bow"); placePart(bow, B); const im = el("img"); im.alt = ""; im.draggable = false; setImg(im, B.ref); bow.appendChild(im); stage.appendChild(bow); }
+    let sc = null;
+    if (C.scissor !== false) {
+      const SP = partOf(s, "scissor");
+      sc = el("div", "ix-k2-sc", { left: at + "%" }); const im = el("img"); im.alt = ""; im.draggable = false;
+      if (SP) { setImg(im, SP.ref); if (SP.nw > 0 && SP.nh > 0) sc.style.aspectRatio = `${SP.nw} / ${SP.nh}`; } else im.src = SCISSOR_SVG;
+      sc.appendChild(im); rib.appendChild(sc);
+    }
+    if (!live) return;
+    let done = false;
+    // kesim kenarı: düz, zikzak ya da V (kurdele uçlarındaki klasik kesim)
+    function shapeEdges() {
+      const hpx = rib.offsetHeight || 20, v = Math.round(hpx * 0.42), z = Math.max(3, Math.round(hpx * 0.16)), n = 6;
+      if (C.shape === "v") {
+        hl.style.clipPath = `polygon(0 0, 100% 0, calc(100% - ${v}px) 50%, 100% 100%, 0 100%)`;
+        hr.style.clipPath = `polygon(0 0, 100% 0, 100% 100%, 0 100%, ${v}px 50%)`;
+      } else if (C.shape === "zikzak") {
+        const ptsL = [], ptsR = [];
+        for (let i = 0; i <= n; i++) { const y = (i / n * 100).toFixed(2) + "%"; ptsL.push((i % 2 ? `calc(100% - ${z}px)` : "100%") + " " + y); ptsR.push((i % 2 ? "0" : z + "px") + " " + y); }
+        hl.style.clipPath = `polygon(0 0, ${ptsL.join(", ")}, 0 100%)`;
+        hr.style.clipPath = `polygon(${ptsR.join(", ")}, 100% 100%, 100% 0)`;
+      }
+    }
+    const A = (e, kf, o) => { try { return e.animate(kf, Object.assign({ fill: "forwards" }, o)); } catch (er) { return null; } };
+    function cut() {
+      if (done || root.classList.contains("is-done")) return; done = true;
+      if (reduced()) { stage.style.opacity = "0"; reveal(root, s); return; }
+      const tSnip = sc ? T * 0.32 : 0;
+      if (sc) {
+        A(sc, [{ transform: "translate(-50%, -50%) translateX(260%) rotate(0deg)", opacity: 0 }, { opacity: 1, offset: 0.25 }, { transform: "translate(-50%, -50%) translateX(0) rotate(0deg)", opacity: 1 }], { duration: tSnip, easing: "cubic-bezier(.2,.7,.2,1)" });
+        A(sc, [{ transform: "translate(-50%, -50%) rotate(0deg) scaleY(1)" }, { transform: "translate(-50%, -50%) rotate(-8deg) scaleY(.82)" }, { transform: "translate(-50%, -50%) rotate(0deg) scaleY(1)" }], { duration: T * 0.12, delay: tSnip, easing: "ease-in-out", fill: "none" });
+        A(sc, [{ transform: "translate(-50%, -50%) translateX(0)", opacity: 1 }, { transform: "translate(-50%, -50%) translate(-220%, 40%) rotate(-12deg)", opacity: 0 }], { duration: T * 0.35, delay: tSnip + T * 0.12, easing: "ease-in" });
+      }
+      setTimeout(() => {
+        shapeEdges(); full.style.visibility = "hidden"; hl.style.display = hr.style.display = "block";
+        const fall = C.fall === "dus", d = T * 0.68, ease = fall ? "cubic-bezier(.55,0,.85,.4)" : "cubic-bezier(.3,.6,.25,1)";
+        // önce gerilim boşalır (hafif geri sıçrama), sonra her yarı kendi dış ucundan sarkar ya da düşer
+        const kfL = fall ? [{ transform: "none", opacity: 1 }, { transform: "translateX(-4%) rotate(-3deg)", offset: 0.12 }, { transform: "translateX(-6%) rotate(30deg) scaleY(.94)", offset: 0.45 }, { transform: "translate(-10%, 220%) rotate(80deg) scaleY(.9)", opacity: 0 }]
+          : [{ transform: "none" }, { transform: "translateX(-4%) rotate(-3deg)", offset: 0.12 }, { transform: "translateX(-3%) rotate(88deg) scaleY(.93)", offset: 0.62 }, { transform: "translateX(-3%) rotate(72deg) scaleY(.95)", offset: 0.82 }, { transform: "translateX(-3%) rotate(78deg) scaleY(.95)" }];
+        const kfR = kfL.map(k => Object.assign({}, k, { transform: k.transform.replace(/translateX\(-/g, "translateX(").replace(/translate\(-/g, "translate(").replace(/rotate\((-?)(\d+)deg\)/g, (m, sg, n) => `rotate(${sg ? "" : "-"}${n}deg)`) }));
+        A(hl, kfL, { duration: d, easing: ease });
+        A(hr, kfR, { duration: d * 1.04, delay: 30, easing: ease });
+        if (bow) A(bow, [{ transform: bow.style.transform, opacity: 1 }, { transform: bow.style.transform + " translateY(-8%) scale(1.04)", offset: 0.15 }, { transform: bow.style.transform + " translateY(240%) rotate(32deg)", opacity: 0 }], { duration: T * 0.7, easing: "cubic-bezier(.5,0,.9,.5)" });
+        setTimeout(() => reveal(root, s), T * 0.25);
+      }, tSnip + (sc ? T * 0.06 : 0));
+    }
+    root.__ixPlay = cut;
+    if (C.trigger === "kaydir") {
+      // parmakla kurdelenin üzerinden kaydırınca kesilir
+      let x0 = null, y0 = 0;
+      root.addEventListener("dragstart", e => e.preventDefault());   // fareyle kaydırırken tarayıcı görseli sürüklemeye kalkmasın
+      root.addEventListener("pointerdown", e => { x0 = e.clientX; y0 = e.clientY; try { root.setPointerCapture(e.pointerId); } catch (er) { /* önemsiz */ } });
+      root.addEventListener("pointermove", e => { if (x0 == null || done) return; if (Math.abs(e.clientX - x0) > 36 && Math.abs(e.clientX - x0) > Math.abs(e.clientY - y0)) { x0 = null; cut(); } });
+      ["pointerup", "pointercancel"].forEach(ev => root.addEventListener(ev, () => { x0 = null; }));
+      root.style.touchAction = "pan-y";
+    } else root.addEventListener("click", cut);
+  }
   function burstSmall(b, color) {
     for (let i = 0; i < 10; i++) {
       const d = el("i", "ix-shard"); d.style.background = color || "#F49AB0";
@@ -267,7 +364,7 @@
     const live = mode === "view";
     const root = el("div", "ix ix-" + kind);
     root.style.setProperty("--ix-c", s.color); root.style.setProperty("--ix-ink", s.textColor);
-    const hint = el("div", "ix-hint", null, esc(s.title || HINT[kind]));
+    const hint = el("div", "ix-hint", null, esc(s.title || (kind === "kurdele" && s.cut && s.cut.trigger === "kaydir" && s.parts && s.parts.ribbon && s.parts.ribbon.ref ? "Kurdeleyi kesmek için parmağınızla kaydırın" : HINT[kind])));
     try { BUILD[kind](root, s, live); } catch (e) { console.error("[Studio SEOZ] Etkileşim hatası:", e); }
     if (kind !== "konfeti") root.appendChild(hint);
     // klavye: Enter / Boşluk ile aynı sonuç (kazı-kazan ve mum için kısayol)
@@ -279,6 +376,7 @@
         if (kind === "kazi-kazan") { const cv = root.querySelector(".ix-scratch"); if (cv) cv.classList.add("is-gone"); reveal(root, s); }
         else if (kind === "mum") { const c = root.querySelector(".ix-cake"); if (c) c.classList.add("is-out"); setTimeout(() => reveal(root, s), 400); }
         else if (kind === "kapi-cal") { for (let i = 0; i < 3; i++) setTimeout(() => root.click(), i * 260); }
+        else if (root.__ixPlay) root.__ixPlay();
         else root.click();
       });
     }
@@ -293,12 +391,13 @@
     defaultLayerSize: { w: 300, h: 220 },
     settingsSchema: SETTINGS_SCHEMA,
     render: render,
+    panelActions: { studio(layer, h) { if (global.SeozInteractiveStudio) global.SeozInteractiveStudio.open(layer, h); } },
     validate: (s) => {
       s = Object.assign({}, DEFAULTS, s);
       if (s.resultType === "baglanti" && !String(s.linkUrl || "").trim()) return "Etkileşim: sonuç “Bağlantı” seçilmiş ama adres girilmemiş.";
-      if (s.resultType === "gorsel" && !refs(s).length) return "Etkileşim: sonuç “Görsel” seçilmiş ama görsel yüklenmemiş.";
+      if (s.resultType === "gorsel" && !refs(s).length && !s.resultImage) return "Etkileşim: sonuç “Görsel” seçilmiş ama görsel yüklenmemiş.";
       return null;
     }
   });
-  global.SeozInteractive = { KINDS, HINT, DEFAULTS };
+  global.SeozInteractive = { KINDS, HINT, DEFAULTS, STUDIO_KINDS, CUT_DEFAULTS, PART_DEFAULTS, render };
 })(window);
