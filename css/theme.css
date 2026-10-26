@@ -352,6 +352,9 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 
 /* E2 · Etkileşim Stüdyosu: kendi görselleriyle çalışan dokuz etkileşim (yalnızca ana parça yüklendiğinde) */
 .ix2on{ cursor:pointer; }
+/* kendi görselli etkileşimlerde ipucu her zeminde okunur: açık zeminli küçük etiket */
+.ix-k2on .ix-hint, .ix2on .ix-hint{ left:50%; right:auto; bottom:-28px; transform:translateX(-50%); white-space:nowrap; max-width:calc(100% + 60px); overflow:hidden; text-overflow:ellipsis;
+  padding:3px 10px; border-radius:999px; background:rgba(255,253,248,.88); color:#3A2E28; box-shadow:0 1px 4px rgba(0,0,0,.18); opacity:.95; }
 .ix2{ position:absolute; inset:0; }
 .ix2-back{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:12px; pointer-events:none; }
 .ix2-p{ position:absolute; }

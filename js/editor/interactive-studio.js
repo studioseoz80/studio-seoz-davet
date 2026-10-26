@@ -127,7 +127,8 @@
       ixRoot = I.render(Object.assign({}, s), "view");
       box.appendChild(ixRoot);
       ov.hidden = state.mode !== "edit";
-      $("[data-is-status]").textContent = state.mode === "edit" ? "Konumlandırma" : "Oynatma: müşterinin göreceği hâl";
+      const gh = ixRoot.querySelector(".ix-hint"), guest = kind === "kurdele" && M.trigger === "kaydir" ? "parmakla kaydırınca keser (tek dokunuş makası gösterir, ikinci dokunuş da keser)" : (gh ? gh.textContent : "");
+      $("[data-is-status]").textContent = (state.mode === "edit" ? "Konumlandırma" : "Oynatma: müşterinin göreceği hâl") + (guest ? " · Misafir: " + guest : "");
       if (play && ixRoot.__ixPlay) setTimeout(() => ixRoot && ixRoot.__ixPlay && ixRoot.__ixPlay(), 60);
       requestAnimationFrame(placeSel);
     }

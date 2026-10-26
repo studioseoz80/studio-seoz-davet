@@ -305,8 +305,12 @@
       if (SP) { setImg(im, SP.ref); if (SP.nw > 0 && SP.nh > 0) sc.style.aspectRatio = `${SP.nw} / ${SP.nh}`; } else im.src = SCISSOR_SVG;
       sc.appendChild(im); rib.appendChild(sc);
     }
+    const swipe = C.trigger === "kaydir", WAIT = "translate(-50%, -50%) translateX(28%)";
+    // kaydırma modunda makas kesim noktasının yanında bekler: misafir neyi, nereden keseceğini görür
+    if (sc && swipe) { sc.style.opacity = "1"; sc.style.transform = WAIT; }
     if (!live) return;
-    let done = false;
+    let done = false, idle = null;
+    if (sc && swipe && !reduced()) idle = AN(sc, [{ transform: WAIT }, { transform: WAIT + " scaleY(.86)", offset: 0.5 }, { transform: WAIT }], { duration: 1600, iterations: Infinity, easing: "ease-in-out", fill: "none" });
     // kesim kenarı: düz, zikzak ya da V (kurdele uçlarındaki klasik kesim)
     function shapeEdges() {
       const hpx = rib.offsetHeight || 20, v = Math.round(hpx * 0.42), z = Math.max(3, Math.round(hpx * 0.16)), n = 6;
@@ -325,8 +329,10 @@
       if (done || root.classList.contains("is-done")) return; done = true;
       if (reduced()) { stage.style.opacity = "0"; reveal(root, s); return; }
       const tSnip = sc ? T * 0.32 : 0;
+      if (idle) idle.cancel();
       if (sc) {
-        A(sc, [{ transform: "translate(-50%, -50%) translateX(260%) rotate(0deg)", opacity: 0 }, { opacity: 1, offset: 0.25 }, { transform: "translate(-50%, -50%) translateX(0) rotate(0deg)", opacity: 1 }], { duration: tSnip, easing: "cubic-bezier(.2,.7,.2,1)" });
+        A(sc, swipe ? [{ transform: WAIT + " rotate(0deg)", opacity: 1 }, { transform: "translate(-50%, -50%) translateX(0) rotate(0deg)", opacity: 1 }]
+          : [{ transform: "translate(-50%, -50%) translateX(260%) rotate(0deg)", opacity: 0 }, { opacity: 1, offset: 0.25 }, { transform: "translate(-50%, -50%) translateX(0) rotate(0deg)", opacity: 1 }], { duration: tSnip, easing: "cubic-bezier(.2,.7,.2,1)" });
         A(sc, [{ transform: "translate(-50%, -50%) rotate(0deg) scaleY(1)" }, { transform: "translate(-50%, -50%) rotate(-8deg) scaleY(.82)" }, { transform: "translate(-50%, -50%) rotate(0deg) scaleY(1)" }], { duration: T * 0.12, delay: tSnip, easing: "ease-in-out", fill: "none" });
         A(sc, [{ transform: "translate(-50%, -50%) translateX(0)", opacity: 1 }, { transform: "translate(-50%, -50%) translate(-220%, 40%) rotate(-12deg)", opacity: 0 }], { duration: T * 0.35, delay: tSnip + T * 0.12, easing: "ease-in" });
       }
@@ -352,6 +358,14 @@
       root.addEventListener("pointermove", e => { if (x0 == null || done) return; if (Math.abs(e.clientX - x0) > 36 && Math.abs(e.clientX - x0) > Math.abs(e.clientY - y0)) { x0 = null; cut(); } });
       ["pointerup", "pointercancel"].forEach(ev => root.addEventListener(ev, () => { x0 = null; }));
       root.style.touchAction = "pan-y";
+      let taps = 0;
+      root.addEventListener("click", () => {
+        if (done) return;
+        if (++taps >= 2) return cut();
+        const hint = root.querySelector(".ix-hint");
+        if (hint) A(hint, [{ transform: "translateX(-50%) scale(1)" }, { transform: "translateX(-50%) scale(1.08)", offset: 0.3 }, { transform: "translateX(-50%) scale(1)" }], { duration: 700, fill: "none" });
+        if (sc) { if (idle) idle.pause(); const a = A(sc, [{ transform: WAIT }, { transform: "translate(-50%, -50%) translateX(-12%)", offset: 0.45 }, { transform: WAIT }], { duration: 900, easing: "ease-in-out", fill: "none" }); if (a && idle) a.onfinish = () => { if (!done) idle.play(); }; }
+      });
     } else root.addEventListener("click", cut);
   }
   /* ======================= E2 · Diğer dokuz etkileşim (kendi görselleriyle) =======================
