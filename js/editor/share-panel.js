@@ -97,7 +97,8 @@
           <div class="sp-link"><input readonly data-share-panel value="${esc(opts.panelUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-panel>Kopyala</button></div></section>` : ""}
         ${(opts.polls || []).length ? `<section class="sp-panel"><h4>Anket sonuçları</h4><p class="sp-note">Canlı sonuç paneli (grafikler, yanıtlar, QR kod). Yalnızca anket sahibine verin.</p>
           ${opts.polls.map((p, i) => `<div class="sp-poll" data-sp-poll="${esc(p.layerId)}"><small>${esc(p.title)}</small>${p.url ? `<div class="sp-link"><input readonly data-share-poll value="${esc(p.url)}"><button type="button" class="btn btn-outline" data-sp-copy-poll>Kopyala</button></div>`
-            : `<p class="sp-note sp-warn">Sonuç paneli linki bu tarayıcıda kayıtlı değil.</p><button type="button" class="btn btn-outline" data-sp-poll-new>Yeni sonuç paneli linki üret (eski link iptal olur)</button>`}</div>`).join("")}</section>` : ""}
+            : `<p class="sp-note sp-warn">Sonuç paneli linki bu tarayıcıda kayıtlı değil.</p><button type="button" class="btn btn-outline" data-sp-poll-new>Yeni sonuç paneli linki üret (eski link iptal olur)</button>`}
+            ${opts.onPollView ? `<div class="sp-poll-view"><button type="button" class="btn btn-outline" data-sp-poll-view>Salt okunur sonuç linki üret</button><p class="sp-note">Yalnızca toplu oyları gösterir; isim, görüş ve yönetim düğmesi yoktur. Toplantı ekranı veya vitrin demosu için güvenle paylaşılabilir. Yeni link üretince eskisi iptal olur.</p></div>` : ""}</div>`).join("")}</section>` : ""}
         ${opts.albumUrl || opts.albumMissing ? `<section class="sp-panel"><h4>Anı albümü</h4><p class="sp-note">Misafirlerin yüklediği fotoğraf ve videolar. Yalnızca etkinlik sahibine verin.</p>
           ${opts.albumUrl ? `<div class="sp-link"><input readonly data-share-album value="${esc(opts.albumUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-album>Kopyala</button></div>`
             : `<p class="sp-note sp-warn">Albüm linki bu tarayıcıda kayıtlı değil (başka tarayıcıdan oluşturulmuş olabilir).</p><button type="button" class="btn btn-outline" data-sp-album-new>Yeni albüm linki üret (eski link iptal olur)</button>`}</section>` : ""}
@@ -116,6 +117,16 @@
     root.addEventListener("click", e => {
       const cp = e.target.closest("[data-sp-copy-poll]");
       if (cp) return copy(cp.parentNode.querySelector("input").value, cp);
+      const pv = e.target.closest("[data-sp-poll-view]");
+      if (pv) {
+        const pbox = pv.closest("[data-sp-poll]"); pv.disabled = true;
+        return Promise.resolve(opts.onPollView(pbox.dataset.spPoll)).then(u => {
+          if (!u) throw new Error("link alınamadı");
+          const old = pbox.querySelector("[data-share-poll-view]"); if (old) old.parentNode.remove();
+          pv.insertAdjacentHTML("beforebegin", `<div class="sp-link"><input readonly data-share-poll-view value="${esc(u)}"><button type="button" class="btn btn-outline" data-sp-copy-poll>Kopyala</button></div>`);
+          pv.disabled = false; pv.textContent = "Yeni salt okunur link üret (eskisi iptal olur)";
+        }).catch(err => { pv.disabled = false; alert("Salt okunur link üretilemedi: " + (err && err.message || "")); });
+      }
       const nw = e.target.closest("[data-sp-poll-new]"); if (!nw) return;
       const box = nw.closest("[data-sp-poll]"); nw.disabled = true;
       Promise.resolve(opts.onPollRotate && opts.onPollRotate(box.dataset.spPoll)).then(u => {

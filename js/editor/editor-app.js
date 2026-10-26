@@ -986,6 +986,7 @@
               albumUrl: result.albumUrl, albumMissing: result.albumMissing,
               polls: result.polls || [],
               onPollRotate: layerId => SeozEventStore.ownerPollRotate(result.slug, layerId).then(() => SeozEventStore.pollPanelUrl(result.slug, layerId)),
+              onPollView: layerId => SeozEventStore.ownerPollViewLink(result.slug, layerId),
               onAlbumRotate: () => SeozEventStore.ownerMemoryRotate(result.slug).then(() => SeozEventStore.albumUrl(result.slug)),
               onUpdate: (title, desc) => {
                 doc.meta.share = Object.assign({}, doc.meta.share, { title: title || undefined, description: desc || undefined });

@@ -16,6 +16,8 @@
 --   • RLS AÇIK; katılımcının (anon) tablolara doğrudan erişimi YOK. Yalnızca poll_submit çağrılabilir.
 --   • Yanıtlar sunucuda anketin kendi sorularına göre doğrulanır (bilinmeyen soru/seçenek, zorunlu soru, uzunluk).
 --   • Sonuç paneline yalnızca gizli link (anket-panel.html#k=...) ile girilir; anahtarın SHA-256 özeti saklanır.
+--   • İsteğe bağlı SALT OKUNUR sonuç linki (anket-sonuc.html#g=...): yalnızca toplu oy sayıları; isim/görüş
+--     göstermez, anketi kapatamaz, yanıt silemez. Vitrin demosu gibi herkese açık yerlerde bu kullanılır.
 --
 -- Ön koşul: katilim-faz-a.sql (seoz_private.new_token / hash_token).
 -- Nasıl çalıştırılır: Supabase → SQL Editor → tamamını yapıştır → Run. Tekrar çalıştırmak güvenlidir.
@@ -43,10 +45,13 @@ create table if not exists public.poll_surveys (
   max_responses           integer not null default 5000 check (max_responses between 1 and 50000),
   panel_token_hash        text unique,
   panel_token_rotated_at  timestamptz,
+  view_token_hash         text unique,
   created_at              timestamptz not null default now(),
   updated_at              timestamptz not null default now(),
   unique (invitation_slug, layer_id)
 );
+-- Salt okunur sonuç linki (herkese gösterilebilir; yönetim yetkisi YOK). Eski kurulumlar için de eklenir.
+alter table public.poll_surveys add column if not exists view_token_hash text unique;
 create table if not exists public.poll_responses (
   id                uuid primary key default gen_random_uuid(),
   survey_id         uuid not null references public.poll_surveys(id) on delete cascade,
@@ -221,6 +226,58 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
+-- 5b) SALT OKUNUR SONUÇ LİNKİ (anket-sonuc.html#g=...) -----------------------------------------
+--   • Yalnızca toplu sonuçları verir: her seçeneğin oy sayısı ve toplam yanıt. İsim, görüş metni,
+--     yanıt listesi ve yanıt kimliği VERMEZ.
+--   • Anketi kapatamaz, yanıt silemez; yönetim paneli anahtarıyla (panel_token) hiçbir ilgisi yoktur.
+--   • Sahip istediği an yeni link üretir; eski salt okunur link anında geçersiz olur.
+create or replace function seoz_private.survey_by_view_token(p_token text)
+returns public.poll_surveys language sql stable security definer set search_path = '' as $$
+  select s.* from public.poll_surveys s
+  where p_token is not null and char_length(p_token) between 20 and 200 and s.view_token_hash = seoz_private.hash_token(p_token)
+$$;
+revoke all on function seoz_private.survey_by_view_token(text) from public, anon, authenticated;
+
+create or replace function public.poll_owner_view_token(p_slug text, p_layer_id text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_token text := seoz_private.new_token(); v_id uuid;
+begin
+  if not public.seoz_is_owner() then raise exception 'not_owner'; end if;
+  update public.poll_surveys set view_token_hash = seoz_private.hash_token(v_token), updated_at = now()
+   where invitation_slug = p_slug and layer_id = p_layer_id returning id into v_id;
+  if v_id is null then raise exception 'survey_not_found'; end if;
+  return jsonb_build_object('survey_id', v_id, 'view_token', v_token);
+end $$;
+
+create or replace function public.poll_view_get(p_token text)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare sv public.poll_surveys%rowtype;
+begin
+  select * into sv from seoz_private.survey_by_view_token(p_token);
+  if sv.id is null then raise exception 'invalid_token'; end if;
+  return jsonb_build_object(
+    'title', sv.form_schema->>'title',
+    'invitation_title', (select p.document_data->'meta'->>'title' from public.published_invitations p where p.slug = sv.invitation_slug),
+    'is_open', sv.is_open,
+    'total', (select count(*) from public.poll_responses r where r.survey_id = sv.id),
+    'last_at', (select max(r.updated_at) from public.poll_responses r where r.survey_id = sv.id),
+    'questions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', q->>'id', 'text', q->>'text', 'type', coalesce(q->>'type', 'choice'),
+        'required', coalesce((q->>'required')::boolean, true),
+        'answered', (select count(*) from public.poll_responses r where r.survey_id = sv.id
+                      and r.answers ? (q->>'id') and r.answers->(q->>'id') not in ('null'::jsonb, '[]'::jsonb, '""'::jsonb)),
+        'options', coalesce((
+          select jsonb_agg(jsonb_build_object('id', o->>'id', 'text', o->>'text', 'count',
+                   (select count(*) from public.poll_responses r where r.survey_id = sv.id
+                      and (r.answers->(q->>'id') = to_jsonb(o->>'id')
+                           or (jsonb_typeof(r.answers->(q->>'id')) = 'array' and r.answers->(q->>'id') ? (o->>'id')))))
+                 order by oi)
+            from jsonb_array_elements(coalesce(q->'options', '[]'::jsonb)) with ordinality as ox(o, oi)), '[]'::jsonb))
+        order by qi)
+        from jsonb_array_elements(coalesce(sv.form_schema->'questions', '[]'::jsonb)) with ordinality as qx(q, qi)), '[]'::jsonb));
+end $$;
+
 -- 6) Yetkiler ------------------------------------------------------------------------------------
 revoke all on function public.poll_submit(text, text, jsonb, text)          from public, anon, authenticated;
 revoke all on function public.poll_get_own(text, text, text)               from public, anon, authenticated;
@@ -229,6 +286,8 @@ revoke all on function public.poll_owner_rotate_token(text, text)           from
 revoke all on function public.poll_panel_get(text)                          from public, anon, authenticated;
 revoke all on function public.poll_panel_set_open(text, boolean)            from public, anon, authenticated;
 revoke all on function public.poll_panel_delete_response(text, uuid)        from public, anon, authenticated;
+revoke all on function public.poll_owner_view_token(text, text)            from public, anon, authenticated;
+revoke all on function public.poll_view_get(text)                          from public, anon, authenticated;
 grant execute on function public.poll_submit(text, text, jsonb, text)          to anon, authenticated;
 grant execute on function public.poll_get_own(text, text, text)               to anon, authenticated;
 grant execute on function public.poll_owner_sync(text, text, jsonb)            to authenticated;
@@ -236,6 +295,8 @@ grant execute on function public.poll_owner_rotate_token(text, text)           t
 grant execute on function public.poll_panel_get(text)                          to anon, authenticated;
 grant execute on function public.poll_panel_set_open(text, boolean)            to anon, authenticated;
 grant execute on function public.poll_panel_delete_response(text, uuid)        to anon, authenticated;
+grant execute on function public.poll_owner_view_token(text, text)            to authenticated;
+grant execute on function public.poll_view_get(text)                          to anon, authenticated;
 
 commit;
 notify pgrst, 'reload schema';

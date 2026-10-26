@@ -48,6 +48,8 @@ cp css/album.css "$OUT/css/album.css"
 # Anket sonuç paneli (anket-panel.html#k=...): "Studio SEOZ sistemi" yöntemli anketler.
 cp anket-panel.html "$OUT/anket-panel.html"
 cp css/anket-panel.css "$OUT/css/anket-panel.css"
+# Salt okunur anket sonuçları (anket-sonuc.html#g=...): yalnızca toplu oylar; herkese gösterilebilir.
+cp anket-sonuc.html "$OUT/anket-sonuc.html"
 
 if [ -d assets ]; then cp -R assets "$OUT/assets"; fi
 cp _headers.public "$OUT/_headers"

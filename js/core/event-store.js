@@ -166,6 +166,13 @@
     if (r && r.panel_token) safeSet(POLL_PANEL_PREFIX + slug + "_" + layerId, r.panel_token);
     return r;
   }
+  // Salt okunur sonuç linki: her çağrı YENİ link üretir (eskisi geçersiz olur). Yalnızca toplu oylar görünür.
+  async function ownerPollViewLink(slug, layerId) {
+    const r = await rpc("poll_owner_view_token", { p_slug: slug, p_layer_id: layerId }, true);
+    if (!r || !r.view_token) return "";
+    let b; try { b = new URL(global.SeozCloudStore.customerUrl(slug)); } catch (e) { b = new URL("view.html", global.location.href); }
+    const u = new URL("anket-sonuc.html", b); u.hash = "g=" + r.view_token; return u.href;
+  }
   function pollPanelUrl(slug, layerId, token) {
     token = token || safeGet(POLL_PANEL_PREFIX + slug + "_" + layerId);
     if (!slug || !token) return "";
@@ -180,6 +187,7 @@
     ownerPollSync,
     ownerPollRotate,
     pollPanelUrl,
+    ownerPollViewLink,
     ownerMemorySync,
     ownerMemoryRotate,
     albumUrl,

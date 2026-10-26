@@ -518,7 +518,7 @@
       if (q.get("slug")) return q.get("slug");
       if (q.get("doc")) return "";
       const m = global.location.pathname.toLowerCase().match(/^\/([a-z0-9][a-z0-9-]{1,78}[a-z0-9])\/?$/);
-      return m && ["view", "index", "panel", "album", "anket", "anket-panel"].indexOf(m[1]) < 0 ? m[1] : "";
+      return m && ["view", "index", "panel", "album", "anket", "anket-panel", "anket-sonuc"].indexOf(m[1]) < 0 ? m[1] : "";
     } catch (e) { return ""; }
   }
 

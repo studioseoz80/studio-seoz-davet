@@ -3,6 +3,9 @@
 -- DİKKAT: anket yanıtları silinir. Katılım, masa planı ve diğer yapılara dokunmaz.
 -- =============================================================================
 begin;
+drop function if exists public.poll_view_get(text);
+drop function if exists public.poll_owner_view_token(text, text);
+drop function if exists seoz_private.survey_by_view_token(text);
 drop function if exists public.poll_panel_delete_response(text, uuid);
 drop function if exists public.poll_panel_set_open(text, boolean);
 drop function if exists public.poll_panel_get(text);
