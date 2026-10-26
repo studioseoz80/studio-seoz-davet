@@ -350,6 +350,86 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 @keyframes ixKnock{ 30%{ transform:translateX(-3px) rotate(-.6deg); } 60%{ transform:translateX(3px) rotate(.6deg); } }
 @media (prefers-reduced-motion: reduce){ .ix-balloon, .ix-gift, .ix-flame{ animation:none !important; } }
 
+/* E2 · Etkileşim Stüdyosu: kendi görselleriyle çalışan dokuz etkileşim (yalnızca ana parça yüklendiğinde) */
+.ix2on{ cursor:pointer; }
+.ix2{ position:absolute; inset:0; }
+.ix2-back{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:12px; pointer-events:none; }
+.ix2-p{ position:absolute; }
+.ix2-in{ position:relative; width:100%; height:100%; }
+.ix2-p img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; max-width:none; pointer-events:none; -webkit-user-drag:none; }
+.ix2on .ix-result{ inset:8%; opacity:0; transform:none; background:none; box-shadow:none; border-radius:0; padding:0; z-index:2; pointer-events:none; transition:opacity .6s .1s; }
+.ix2on.is-done .ix-result{ opacity:1; pointer-events:auto; }
+/* kazı-kazan */
+.ix2-scr{ z-index:2; touch-action:none; cursor:crosshair; }
+.ix2-scr-under{ position:absolute; inset:0; background:#FFFDF8; -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; }
+.ix2on .ix2-scr-under .ix-result{ opacity:1; }
+.ix2-scr-cv{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+.ix2-frame{ pointer-events:none; }
+.ix2-coin{ position:absolute; left:0; top:0; width:22%; aspect-ratio:1; opacity:0; pointer-events:none; z-index:3; transition:opacity .2s; filter:drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.ix2-coin.is-on{ opacity:1; }
+.ix2-dust{ position:absolute; width:3px; height:3px; border-radius:1px; pointer-events:none; z-index:3; }
+/* zarf */
+.ix2-letter-in.is-paper{ background:#FFFDF8; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,.18); }
+.ix2on .ix2-letter .ix-result{ inset:10%; }
+.ix2-flap-in{ transform-style:preserve-3d; transform-origin:50% 0; }
+.ix2-flap-in.has-b .ix2-face{ -webkit-backface-visibility:hidden; backface-visibility:hidden; }
+.ix2-flap-in .ix2-face-b{ transform:rotateX(180deg); }
+.ix2-seal, .ix2-lid, .ix2-bow{ filter:drop-shadow(0 3px 4px rgba(0,0,0,.22)); }
+/* balon */
+.ix2-bal{ border:0; padding:0; background:none; cursor:pointer; z-index:3; -webkit-tap-highlight-color:transparent; }
+.ix2-frag{ position:absolute; inset:0; pointer-events:none; }
+.ix2-popring{ position:absolute; left:50%; top:42%; width:60%; aspect-ratio:1; border-radius:50%; border:2px solid rgba(255,255,255,.9); pointer-events:none; }
+/* hediye */
+.ix2-grp{ position:absolute; inset:0; z-index:3; }
+.ix2-glow{ position:absolute; z-index:2; width:60%; aspect-ratio:1; border-radius:50%; opacity:0; pointer-events:none; transform:translate(-50%,-50%);
+  background:radial-gradient(circle, rgba(255,246,206,.95) 0, rgba(255,214,120,.55) 30%, rgba(255,200,90,0) 68%); }
+.ix2-glow::after{ content:""; position:absolute; inset:-30%; background:repeating-conic-gradient(rgba(255,236,170,.35) 0 6deg, rgba(255,236,170,0) 6deg 18deg);
+  -webkit-mask:radial-gradient(circle, #000 0, transparent 62%); mask:radial-gradient(circle, #000 0, transparent 62%); }
+.ix2-gift-res{ position:absolute; inset:0; z-index:4; pointer-events:none; }
+.ix2-gift-res .ix-result{ transform:translateY(18%) scale(.7); transition:opacity .7s, transform .9s cubic-bezier(.2,.8,.2,1); }
+.ix2on.is-done .ix2-gift-res .ix-result{ transform:none; }
+/* konfeti */
+.ix2-cbtn{ border:0; padding:0; background:none; cursor:pointer; z-index:3; -webkit-tap-highlight-color:transparent; }
+.ix2on .ix-result.ix-after{ inset:auto 0 -6px 0; transition:opacity .5s .3s; }
+/* fotoğraf çevir */
+.ix2-card{ transform-style:preserve-3d; }
+.ix2-cface{ position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden; }
+.ix2-cmask, .ix2-cct{ position:absolute; inset:0; -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; }
+.ix2-cct.is-paper{ background:#FFFDF8; }
+.ix2-p .ix2-rear{ object-fit:cover; }
+.ix2on .ix2-cface .ix-result{ inset:10%; }
+.ix2-cshadow{ position:absolute; left:6%; right:6%; bottom:-7%; height:14%; border-radius:50%; background:radial-gradient(ellipse, rgba(0,0,0,.28), rgba(0,0,0,0) 70%); pointer-events:none; }
+/* dilek feneri */
+.ix2-lan{ pointer-events:none; }
+.ix2-lglow{ position:absolute; left:50%; top:55%; width:220%; aspect-ratio:1; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(255,200,110,.55) 0, rgba(255,170,70,.18) 35%, rgba(255,160,60,0) 65%); }
+.ix2-dl-btn{ z-index:5; }
+/* mum */
+.ix2-fl{ pointer-events:none; }
+.ix2-lean, .ix2-fl-in{ position:absolute; inset:0; transform-origin:50% 100%; }
+.ix2-fl-o{ position:absolute; inset:0; border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;
+  background:radial-gradient(ellipse at 50% 78%, #FFFBEA 0 16%, #FFE07A 34%, #FFAE3C 58%, rgba(240,110,30,.85) 70%, rgba(240,110,30,0) 74%); }
+.ix2-fl-c{ position:absolute; left:34%; right:34%; bottom:2%; height:30%; border-radius:50%; background:radial-gradient(ellipse at 50% 70%, rgba(90,130,255,.75), rgba(90,130,255,0) 70%); }
+.ix2-halo{ position:absolute; left:50%; top:60%; width:520%; aspect-ratio:1; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(255,196,110,.42) 0, rgba(255,180,90,.14) 35%, rgba(255,170,80,0) 65%); }
+.ix2-smoke{ position:absolute; left:50%; bottom:6%; width:40%; aspect-ratio:1; margin-left:-20%; border-radius:50%; background:radial-gradient(circle, rgba(150,150,150,.55), rgba(150,150,150,0) 70%); opacity:0; pointer-events:none; }
+.ix2-ember{ position:absolute; left:50%; bottom:0; width:16%; aspect-ratio:1; margin-left:-8%; border-radius:50%; background:#FF8A2A; box-shadow:0 0 6px 2px rgba(255,120,40,.7); pointer-events:none; }
+.ix2-ring{ position:absolute; right:4%; top:4%; width:30px; height:30px; border-radius:50%; background:conic-gradient(var(--ix-c) calc(var(--p, 0) * 360deg), rgba(0,0,0,.1) 0); opacity:0; transition:opacity .2s; z-index:7; pointer-events:none; }
+.ix2-ring i{ position:absolute; inset:5px; border-radius:50%; background:#fff; }
+.ix2-ring.is-on{ opacity:1; }
+.ix2on .ix-result.ix2-mum-res{ background:rgba(255,253,248,.92); border-radius:12px; z-index:6; padding:6px; }
+/* kapı çal */
+.ix2-dgrp{ position:absolute; inset:0; z-index:3; }
+.ix2-door{ perspective:1100px; }
+.ix2-leaf{ position:absolute; top:0; height:100%; overflow:hidden; -webkit-backface-visibility:hidden; backface-visibility:hidden; }
+.ix2-leaf.h-l{ transform-origin:0 50%; } .ix2-leaf.h-r{ transform-origin:100% 50%; }
+.ix2-leaf.is-split > img{ width:200%; right:auto; object-fit:fill; }
+.ix2-leaf.is-split.h-r > img{ left:-100%; }
+.ix2-dlight{ z-index:1; opacity:0; pointer-events:none; background:radial-gradient(ellipse at 50% 55%, rgba(255,232,170,.85), rgba(255,210,130,.35) 45%, rgba(255,200,120,0) 75%); }
+.ix2-knocker .ix2-in{ transform-origin:50% 12%; }
+.ix2-dframe{ pointer-events:none; }
+.ix2on .ix-knocks{ z-index:7; }
+
 /* İç Zemin 3D (yalnızca 3D özelliği kullanılan zeminlerde) */
 .th-stage{ position:absolute; inset:0; pointer-events:none; }
 .th-cam{ position:absolute; inset:0; transform-style:preserve-3d; will-change:transform; }

@@ -32,3 +32,14 @@
 .is-sel-k{ position:absolute; right:-9px; bottom:-9px; width:16px; height:16px; background:#FFD24A; border:2px solid #222; border-radius:3px; cursor:nwse-resize; pointer-events:auto; }
 .is-hint{ margin:0; font-size:.78rem; color:#7A7466; }
 @media (max-width: 800px){ .is-body{ grid-template-columns:1fr; grid-template-rows:auto 1fr; } .is-panel{ max-height:45vh; } }
+/* E2 · on tür için ek parçalar */
+.is-sel-r{ position:absolute; left:50%; top:-26px; width:14px; height:14px; margin-left:-7px; background:#fff; border:2px solid #222; border-radius:50%; cursor:grab; pointer-events:auto; }
+.is-sel-r::after{ content:""; position:absolute; left:50%; top:12px; width:2px; height:12px; margin-left:-1px; background:#FFD24A; }
+.is-sel.no-rot .is-sel-r{ display:none; }
+.is-main{ font-style:normal; font-size:.66rem; font-weight:700; color:#8A6A22; background:#F6EBCF; border-radius:999px; padding:1px 6px; margin-left:4px; vertical-align:middle; }
+.is-chips{ display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+.is-chip{ min-width:32px; height:30px; padding:0 10px; border:1px solid #E2DCCD; border-radius:999px; background:#fff; font:600 .78rem/1 inherit; cursor:pointer; color:inherit; }
+.is-chip.is-on{ border-color:#C9A45C; background:#FBF3E0; box-shadow:0 0 0 2px rgba(201,164,92,.25); }
+.is-chip.is-del{ color:#A33A3A; }
+.is-chip[disabled]{ opacity:.5; cursor:default; }
+.is-row input[type=number]{ grid-column:2 / span 2; }
