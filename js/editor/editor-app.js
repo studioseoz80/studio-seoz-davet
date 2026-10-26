@@ -948,6 +948,24 @@
                 return result;
               });
           })
+          // ANKET (Studio SEOZ sistemi): her anket için kayıt + soruların son hali; sonuç paneli linki.
+          .then(result => {
+            const polls = (doc.layers || []).filter(l => l.type === "module" && l.moduleId === "poll" && l.settings && l.settings.responseMethod === "seoz");
+            if (!polls.length || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerPollSync) return result;
+            btn.textContent = "Anket kaydediliyor...";
+            const def = SeozModuleRegistry.getModule("poll");
+            result.polls = [];
+            return polls.reduce((ch, l, i) => ch.then(() => SeozEventStore.ownerPollSync(result.slug, l.id, def.buildServerForm(l.settings)).then(() => {
+              result.polls.push({ layerId: l.id, title: l.settings.title || ("Anket " + (i + 1)), url: SeozEventStore.pollPanelUrl(result.slug, l.id) });
+            })), Promise.resolve()).then(() => result).catch(err => {
+              console.error("[Studio SEOZ] Anket senkronu başarısız:", err);
+              const code = (err && (err.code || err.message)) || "";
+              alert("Davetiye yayınlandı, ancak anket kaydı yapılamadı:\n\n" +
+                (code === "AUTH_REQUIRED" ? "Studio SEOZ girişi gerekli (☁ Giriş Yap)." : /poll_owner_sync|PGRST202|Could not find/i.test(code) ? "Supabase'de anket sistemi kurulmamış (supabase/anket.sql çalıştırılmalı)." : code) +
+                "\n\nBu durumda yanıtlar kaydedilemez. Sorunu giderip tekrar Yayına Hazırla'ya basın (link değişmez).");
+              return result;
+            });
+          })
           .then(result => {
             const shortLink = result.shortUrl || result.url;
             showToast("Yayınlandı. Müşteri bağlantısı: " + shortLink);
@@ -966,6 +984,8 @@
             SeozSharePanel.show({
               doc, shortUrl: shortLink, longUrl: result.url, panelUrl: panelLink, panelMissing,
               albumUrl: result.albumUrl, albumMissing: result.albumMissing,
+              polls: result.polls || [],
+              onPollRotate: layerId => SeozEventStore.ownerPollRotate(result.slug, layerId).then(() => SeozEventStore.pollPanelUrl(result.slug, layerId)),
               onAlbumRotate: () => SeozEventStore.ownerMemoryRotate(result.slug).then(() => SeozEventStore.albumUrl(result.slug)),
               onUpdate: (title, desc) => {
                 doc.meta.share = Object.assign({}, doc.meta.share, { title: title || undefined, description: desc || undefined });

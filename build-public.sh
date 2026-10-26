@@ -45,6 +45,9 @@ cp -R js/panel "$OUT/js/panel"
 # Müşteri anı albümü (album.html#k=...): Anı Yükle "Studio SEOZ depolaması" ile yüklenenler.
 cp album.html "$OUT/album.html"
 cp css/album.css "$OUT/css/album.css"
+# Anket sonuç paneli (anket-panel.html#k=...): "Studio SEOZ sistemi" yöntemli anketler.
+cp anket-panel.html "$OUT/anket-panel.html"
+cp css/anket-panel.css "$OUT/css/anket-panel.css"
 
 if [ -d assets ]; then cp -R assets "$OUT/assets"; fi
 cp _headers.public "$OUT/_headers"

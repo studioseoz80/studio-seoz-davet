@@ -142,7 +142,44 @@
     const u = new URL("album.html", b); u.hash = "k=" + token; return u.href;
   }
 
+  /* ---------------- ANKET (Studio SEOZ sistemi) ---------------- */
+  const POLL_VOTE_PREFIX = "seoz_poll_vote_v1_";    // + slug + "_" + layerId (katılımcının tarayıcısı)
+  const POLL_PANEL_PREFIX = "seoz_poll_panel_v1_";  // + slug + "_" + layerId (yalnızca editör tarayıcısı)
+  async function pollSubmit(slug, layerId, payload) {
+    const k = POLL_VOTE_PREFIX + slug + "_" + (layerId || "");
+    const r = await rpc("poll_submit", { p_slug: slug, p_layer_id: layerId, p_payload: payload, p_voter_token: safeGet(k) || null });
+    if (r && r.voter_token) safeSet(k, r.voter_token);
+    return r;
+  }
+  const pollHasVoted = (slug, layerId) => !!safeGet(POLL_VOTE_PREFIX + slug + "_" + (layerId || ""));
+  async function pollGetOwn(slug, layerId) {
+    const tok = safeGet(POLL_VOTE_PREFIX + slug + "_" + (layerId || ""));
+    return tok ? rpc("poll_get_own", { p_slug: slug, p_layer_id: layerId, p_voter_token: tok }) : null;
+  }
+  async function ownerPollSync(slug, layerId, form) {
+    const r = await rpc("poll_owner_sync", { p_slug: slug, p_layer_id: layerId, p_form: form }, true);
+    if (r && r.panel_token) safeSet(POLL_PANEL_PREFIX + slug + "_" + layerId, r.panel_token);
+    return r;
+  }
+  async function ownerPollRotate(slug, layerId) {
+    const r = await rpc("poll_owner_rotate_token", { p_slug: slug, p_layer_id: layerId }, true);
+    if (r && r.panel_token) safeSet(POLL_PANEL_PREFIX + slug + "_" + layerId, r.panel_token);
+    return r;
+  }
+  function pollPanelUrl(slug, layerId, token) {
+    token = token || safeGet(POLL_PANEL_PREFIX + slug + "_" + layerId);
+    if (!slug || !token) return "";
+    let b; try { b = new URL(global.SeozCloudStore.customerUrl(slug)); } catch (e) { b = new URL("view.html", global.location.href); }
+    const u = new URL("anket-panel.html", b); u.hash = "k=" + token; return u.href;
+  }
+
   global.SeozEventStore = {
+    pollSubmit,
+    pollHasVoted,
+    pollGetOwn,
+    ownerPollSync,
+    ownerPollRotate,
+    pollPanelUrl,
     ownerMemorySync,
     ownerMemoryRotate,
     albumUrl,

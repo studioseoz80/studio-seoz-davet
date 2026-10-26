@@ -1,0 +1,365 @@
+{
+ "schemaVersion": 1,
+ "id": "doc_demo_site_anketi",
+ "meta": {
+  "title": "Yeşilvadi Sitesi — Karar Anketi",
+  "eventType": "bos-sayfa",
+  "createdAt": "2026-10-26T19:00:00.000Z",
+  "updatedAt": "2026-10-26T19:00:00.000Z",
+  "share": {
+   "title": "Yeşilvadi Sitesi — Karar Anketi",
+   "description": "Toplantılar uzuyor, kararlar erteleniyor. Artık zaman kaybetmeyin! Oyunuzu 3 dakikada verin."
+  }
+ },
+ "canvas": {
+  "baseWidth": 430,
+  "minHeight": 1880,
+  "background": {
+   "type": "color",
+   "value": "#F3F0E8",
+   "scale": 100,
+   "heightPercent": 100,
+   "offsetX": 50,
+   "offsetY": 50
+  }
+ },
+ "entry": {
+  "type": "none",
+  "pngSrc": "",
+  "videoSrc": "",
+  "cardSrc": "",
+  "cardOnlySrc": "",
+  "cardDisplayDuration": 10,
+  "desktopWidthPx": 420,
+  "mobileWidthPercent": 90,
+  "desktopCardWidthPx": null,
+  "mobileCardWidthPercent": null,
+  "allowReplayForGuest": false
+ },
+ "layers": [
+  {
+   "id": "layer_demo_t1",
+   "type": "text",
+   "x": 30,
+   "y": 44,
+   "w": 370,
+   "z": 1,
+   "rotation": 0,
+   "content": {
+    "text": "YEŞİLVADİ SİTESİ YÖNETİMİ",
+    "fontFamily": "Manrope",
+    "fontSize": 13,
+    "color": "#2F5D50",
+    "bold": true,
+    "italic": false,
+    "underline": false,
+    "align": "center",
+    "lineHeight": 1.35,
+    "letterSpacing": 3,
+    "metallic": "none"
+   },
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   }
+  },
+  {
+   "id": "layer_demo_t2",
+   "type": "text",
+   "x": 30,
+   "y": 76,
+   "w": 370,
+   "z": 1,
+   "rotation": 0,
+   "content": {
+    "text": "Kararı birlikte verelim",
+    "fontFamily": "Cormorant Garamond",
+    "fontSize": 38,
+    "color": "#1F3A33",
+    "bold": true,
+    "italic": false,
+    "underline": false,
+    "align": "center",
+    "lineHeight": 1.1,
+    "letterSpacing": 0,
+    "metallic": "none"
+   },
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   }
+  },
+  {
+   "id": "layer_demo_t3",
+   "type": "text",
+   "x": 30,
+   "y": 178,
+   "w": 370,
+   "z": 1,
+   "rotation": 0,
+   "content": {
+    "text": "“Toplantılar uzuyor, kararlar erteleniyor.\nArtık zaman kaybetmeyin!”",
+    "fontFamily": "Cormorant Garamond",
+    "fontSize": 19,
+    "color": "#2F5D50",
+    "bold": false,
+    "italic": true,
+    "underline": false,
+    "align": "center",
+    "lineHeight": 1.3,
+    "letterSpacing": 0,
+    "metallic": "none"
+   },
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   }
+  },
+  {
+   "id": "layer_demo_t4",
+   "type": "text",
+   "x": 30,
+   "y": 268,
+   "w": 370,
+   "z": 1,
+   "rotation": 0,
+   "content": {
+    "text": "Genel kurula gelemeyen komşularımız dahil herkesin sesi duyulsun. Anket yaklaşık 3 dakika sürer; sonuçlar yönetime anında, grafiklerle ulaşır.",
+    "fontFamily": "Manrope",
+    "fontSize": 15,
+    "color": "#3D4F49",
+    "bold": false,
+    "italic": false,
+    "underline": false,
+    "align": "center",
+    "lineHeight": 1.5,
+    "letterSpacing": 0,
+    "metallic": "none"
+   },
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   }
+  },
+  {
+   "id": "layer_demo_t5",
+   "type": "text",
+   "x": 30,
+   "y": 398,
+   "w": 370,
+   "z": 1,
+   "rotation": 0,
+   "content": {
+    "text": "Anketin kapanmasına",
+    "fontFamily": "Manrope",
+    "fontSize": 14,
+    "color": "#2F5D50",
+    "bold": true,
+    "italic": false,
+    "underline": false,
+    "align": "center",
+    "lineHeight": 1.3,
+    "letterSpacing": 1,
+    "metallic": "none"
+   },
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   }
+  },
+  {
+   "id": "layer_demo_sayac",
+   "type": "module",
+   "moduleId": "countdown",
+   "x": 65,
+   "y": 430,
+   "w": 300,
+   "h": 120,
+   "z": 5,
+   "rotation": 0,
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   },
+   "settings": {
+    "title": "",
+    "boxColor": "#2F5D50",
+    "metallic": "none",
+    "textColor": "#ffffff",
+    "titleSize": 16,
+    "fontFamily": "Manrope",
+    "numberSize": 24,
+    "targetDate": "2026-12-15",
+    "targetTime": "23:59",
+    "boxBorderColor": "#D9E4DE"
+   }
+  },
+  {
+   "id": "layer_demo_anket",
+   "type": "module",
+   "moduleId": "poll",
+   "x": 20,
+   "y": 560,
+   "w": 390,
+   "h": 900,
+   "z": 10,
+   "rotation": 0,
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   },
+   "settings": {
+    "title": "Yönetim Kurulu Karar Anketi",
+    "description": "Her daire tek yanıt verir. Yanıtınızı anket kapanana kadar değiştirebilirsiniz.",
+    "responseMethod": "seoz",
+    "collectName": "required",
+    "nameLabel": "Blok / Daire No (ör. B-12)",
+    "submitButtonText": "Oyumu Gönder",
+    "questions": [
+     {
+      "id": "q_aidat",
+      "type": "yesno",
+      "required": true,
+      "text": "2027 aidatının %15 artırılmasını onaylıyor musunuz?",
+      "options": [
+       {
+        "id": "yes",
+        "text": "Evet"
+       },
+       {
+        "id": "no",
+        "text": "Hayır"
+       }
+      ]
+     },
+     {
+      "id": "q_bahce",
+      "type": "choice",
+      "required": true,
+      "text": "Bahçe düzenlemesi için hangi seçeneği tercih edersiniz?",
+      "options": [
+       {
+        "id": "o_peyzaj",
+        "text": "Peyzaj tamamen yenilensin"
+       },
+       {
+        "id": "o_cocuk",
+        "text": "Çocuk oyun alanı eklensin"
+       },
+       {
+        "id": "o_koru",
+        "text": "Mevcut düzen korunsun"
+       }
+      ]
+     },
+     {
+      "id": "q_oncelik",
+      "type": "multi",
+      "required": true,
+      "text": "Öncelikli ortak alan işleri hangileri olmalı?",
+      "options": [
+       {
+        "id": "o_asansor",
+        "text": "Asansör bakımı"
+       },
+       {
+        "id": "o_otopark",
+        "text": "Otopark aydınlatması"
+       },
+       {
+        "id": "o_kamera",
+        "text": "Güvenlik kamerası"
+       },
+       {
+        "id": "o_spor",
+        "text": "Spor alanı"
+       }
+      ]
+     },
+     {
+      "id": "q_gun",
+      "type": "choice",
+      "required": false,
+      "text": "Genel kurul toplantısı hangi gün yapılsın?",
+      "options": [
+       {
+        "id": "o_cmt",
+        "text": "Cumartesi 14:00"
+       },
+       {
+        "id": "o_paz",
+        "text": "Pazar 11:00"
+       },
+       {
+        "id": "o_hici",
+        "text": "Fark etmez"
+       }
+      ]
+     }
+    ],
+    "commentFields": [
+     {
+      "id": "c_gorus",
+      "title": "Yönetime iletmek istediğiniz görüş veya öneri",
+      "placeholder": "Kısa bir not bırakabilirsiniz (isteğe bağlı)."
+     }
+    ],
+    "textColor": "#1F3A33",
+    "buttonColor": "#2F5D50",
+    "fontFamily": "Manrope",
+    "fontSize": 16,
+    "metallic": "none"
+   }
+  },
+  {
+   "id": "layer_demo_t9",
+   "type": "text",
+   "x": 30,
+   "y": 1800,
+   "w": 370,
+   "z": 1,
+   "rotation": 0,
+   "content": {
+    "text": "Sonuçlar yalnızca site yönetiminin gizli panelinde görünür. · made by studioSEOZ",
+    "fontFamily": "Manrope",
+    "fontSize": 12,
+    "color": "#7A8A84",
+    "bold": false,
+    "italic": false,
+    "underline": false,
+    "align": "center",
+    "lineHeight": 1.35,
+    "letterSpacing": 0,
+    "metallic": "none"
+   },
+   "desktopOverride": {
+    "enabled": false,
+    "x": null,
+    "y": null,
+    "w": null,
+    "h": null
+   }
+  }
+ ]
+}

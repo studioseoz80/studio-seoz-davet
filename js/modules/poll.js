@@ -82,6 +82,25 @@
 
   const SETTINGS_SCHEMA = []; // Bu modülün TÜM ayarları özel panelden (poll-panel.js) yönetilir.
 
+  /* SORU TÜRLERİ (Görev 3): q.type = "choice" (tek seçim, varsayılan — eski kayıtlar) | "yesno" (Evet/Hayır) | "multi" (birden çok seçim)
+     q.required: eski kayıtlarda alan yoktur → ZORUNLU sayılır (eski davranış: tüm sorular yanıtlanmalı). */
+  const YESNO = [{ id: "yes", text: "Evet" }, { id: "no", text: "Hayır" }];
+  const qType = q => (q && (q.type === "yesno" || q.type === "multi") ? q.type : "choice");
+  const qRequired = q => !(q && q.required === false);
+  const qOptions = q => (qType(q) === "yesno" ? (q.options && q.options.length === 2 ? q.options : YESNO) : (q.options || []));
+  const optText = (q, id) => { const o = qOptions(q).find(x => x.id === id); return o ? o.text : ""; };
+  const answerText = (q, v) => (Array.isArray(v) ? v.map(id => optText(q, id)).filter(Boolean).join(", ") : optText(q, v));
+  // Sunucuya gönderilen soru şeması (supabase/anket.sql bunu doğrular)
+  function buildServerForm(settings) {
+    const s = Object.assign({}, DEFAULTS, settings);
+    return {
+      title: s.title || "",
+      collectName: s.collectName || "off",
+      questions: (s.questions || []).map(q => ({ id: q.id, text: q.text || "", type: qType(q), required: qRequired(q), options: qOptions(q).map(o => ({ id: o.id, text: o.text || "" })) })),
+      comments: (Array.isArray(s.commentFields) ? s.commentFields : []).map(c => ({ id: c.id, title: c.title || "" }))
+    };
+  }
+
   /* ---------------------------------------------------------------------------
      YANIT YÖNTEMİ
      "google-form" | "whatsapp" | "none"   ("seoz" = Supabase, sonraki aşama)
@@ -89,7 +108,7 @@
      birebir eskisi gibidir: pollFormUrl doluysa "google-form", boşsa "none".
      ------------------------------------------------------------------------ */
   function getResponseMethod(s) {
-    if (s.responseMethod === "google-form" || s.responseMethod === "whatsapp" || s.responseMethod === "none") {
+    if (s.responseMethod === "google-form" || s.responseMethod === "whatsapp" || s.responseMethod === "none" || s.responseMethod === "seoz") {
       return s.responseMethod;
     }
     return s.pollFormUrl ? "google-form" : "none";
@@ -145,10 +164,7 @@
   }
 
   function buildSummary(questions, answers, commentValues) {
-    const parts = questions.map(q => {
-      const chosen = (q.options || []).find(o => o.id === answers[q.id]);
-      return `${q.text}: ${chosen ? chosen.text : ""}`;
-    });
+    const parts = questions.map(q => `${q.text}: ${answerText(q, answers[q.id])}`);
     commentValues.forEach(c => { if (c.value) parts.push(`${c.title}: ${c.value}`); });
     return parts.join(" | ");
   }
@@ -187,8 +203,7 @@
     const lines = [];
     if (s.title) lines.push(`*${s.title}*`, "");
     questions.forEach((q, i) => {
-      const chosen = (q.options || []).find(o => o.id === answers[q.id]);
-      lines.push(`${questions.length > 1 ? (i + 1) + ". " : ""}${q.text}`, `→ ${chosen ? chosen.text : ""}`);
+      lines.push(`${questions.length > 1 ? (i + 1) + ". " : ""}${q.text}`, `→ ${answerText(q, answers[q.id]) || "—"}`);
     });
     commentValues.forEach(c => { if (c.value) lines.push("", `${c.title}:`, c.value); });
     if (participantName) lines.push("", `Ad Soyad: ${participantName}`);
@@ -281,6 +296,7 @@
     // SORULAR — her soru kendi bloğunda; bloklar arasında belirgin boşluk
     // ve ince bir ayırıcı çizgi. Soru → şıkları → boşluk → sonraki soru.
     const answers = {};
+    const restylers = [];
     const numbered = questions.length > 1;
 
     function sectionBlock(withRule) {
@@ -308,9 +324,17 @@
       const qLabel = document.createElement("span");
       qLabel.textContent = q.text || "";
       qText.appendChild(qLabel);
+      const multi = qType(q) === "multi";
+      if (method === "seoz" || q.required === false || multi) {   // yeni ayarlar kullanılmadıkça eski görünüm aynen
+        const tag = document.createElement("span");
+        tag.textContent = multi ? (qRequired(q) ? "(birden çok seçilebilir) *" : "(birden çok seçilebilir, isteğe bağlı)") : (qRequired(q) ? "*" : "(isteğe bağlı)");
+        Object.assign(tag.style, { fontWeight: "400", fontSize: (fs - 3) + "px", opacity: ".7", alignSelf: "center" });
+        if (qRequired(q) && !multi) { tag.style.color = accent; tag.style.opacity = "1"; tag.style.fontWeight = "700"; }
+        qText.appendChild(tag);
+      }
       qWrap.appendChild(qText);
 
-      const opts = q.options || [];
+      const opts = qOptions(q);
       const grid = document.createElement("div");
       grid.setAttribute("role", "group");
       Object.assign(grid.style, {
@@ -349,18 +373,26 @@
           transition: "background .15s ease, color .15s ease, border-color .15s ease"
         });
         optBtn.addEventListener("click", () => {
-          answers[q.id] = opt.id;
+          if (multi) {   // birden çok seçim: dokundukça açılır/kapanır
+            const cur = Array.isArray(answers[q.id]) ? answers[q.id] : [];
+            answers[q.id] = cur.indexOf(opt.id) >= 0 ? cur.filter(x => x !== opt.id) : cur.concat(opt.id);
+          } else answers[q.id] = opt.id;
+          restyle();
+        });
+        optBtn.__opt = opt.id;
+        optionButtons.push(optBtn);
+        grid.appendChild(optBtn);
+      });
+      function restyle() {
           optionButtons.forEach(b => {
-            const on = b === optBtn;
+            const on = multi ? (answers[q.id] || []).indexOf(b.__opt) >= 0 : answers[q.id] === b.__opt;
             b.setAttribute("aria-pressed", on ? "true" : "false");
             b.style.background = on ? buttonBackground(s) : "transparent";
             b.style.color = on ? "#fff" : accent;
             b.style.borderColor = on ? "transparent" : T.optBorder;
           });
-        });
-        optionButtons.push(optBtn);
-        grid.appendChild(optBtn);
-      });
+      }
+      restylers.push(restyle);
 
       qWrap.appendChild(grid);
       wrap.appendChild(qWrap);
@@ -410,7 +442,7 @@
       const nameWrap = sectionBlock(commentInputs.length === 0);
       nameWrap.style.gap = "6px";
       const nameLabel = document.createElement("label");
-      nameLabel.textContent = "Ad Soyad" + (s.collectName === "optional" ? " (isteğe bağlı)" : "");
+      nameLabel.textContent = (s.nameLabel || "Ad Soyad") + (s.collectName === "optional" ? " (isteğe bağlı)" : "");
       Object.assign(nameLabel.style, { fontSize: (fs - 1) + "px", fontWeight: "600" });
       nameInput = document.createElement("input");
       nameInput.type = "text";
@@ -467,9 +499,10 @@
         showStatus("Lütfen adınızı girin.", true);
         return;
       }
-      const unanswered = questions.filter(q => !answers[q.id]);
+      const empty = q => !answers[q.id] || (Array.isArray(answers[q.id]) && !answers[q.id].length);
+      const unanswered = questions.filter(q => qRequired(q) && empty(q));
       if (unanswered.length > 0) {
-        showStatus("Lütfen tüm soruları yanıtlayın.", true);
+        showStatus(questions.some(q => !qRequired(q)) ? "Lütfen zorunlu (*) soruları yanıtlayın." : "Lütfen tüm soruları yanıtlayın.", true);
         return;
       }
 
@@ -485,6 +518,31 @@
         }
         openWhatsApp(s.pollWhatsappNumber, buildWhatsAppMessage(s, questions, answers, commentValues, participantName));
         showStatus("WhatsApp açıldı. Yanıtınızı iletmek için WhatsApp'ta Gönder'e dokunun.", false);
+        return;
+      }
+
+      // STUDIO SEOZ SİSTEMİ: yanıt Supabase'e güvenli kaydedilir; aynı tarayıcıdan yeniden gönderim yanıtı günceller.
+      if (method === "seoz") {
+        const slug = global.SeozCloudStore && global.SeozCloudStore.currentSlug ? global.SeozCloudStore.currentSlug() : "";
+        if (!slug || !global.SeozEventStore || !global.SeozEventStore.pollSubmit) {
+          showStatus(mode === "edit" || !slug ? "Bu bir önizleme: yanıtlar yayınlanan davetiyede kaydedilir." : "Anket şu anda kullanılamıyor.", !slug ? false : true);
+          return;
+        }
+        submitBtn.disabled = true; submitBtn.style.opacity = ".6"; showStatus("Gönderiliyor...", false);
+        const comments = {};
+        commentInputs.forEach(c => { if (c.el.value.trim()) comments[c.el.getAttribute("data-poll-comment-id")] = c.el.value.trim(); });
+        global.SeozEventStore.pollSubmit(slug, ctx && ctx.layerId, { answers, comments, name: participantName })
+          .then(r => {
+            submitBtn.disabled = false; submitBtn.style.opacity = "1";
+            showStatus(r && r.updated ? "Yanıtınız güncellendi. Teşekkür ederiz." : "Yanıtınız kaydedildi. Teşekkür ederiz.", false);
+            submitBtn.textContent = "Yanıtımı güncelle";
+          })
+          .catch(err => {
+            submitBtn.disabled = false; submitBtn.style.opacity = "1";
+            const c = String((err && (err.code || err.message)) || "");
+            showStatus(/closed/.test(c) ? "Bu anket yanıtlara kapatıldı." : /required/.test(c) ? "Lütfen zorunlu soruları yanıtlayın." : /full/.test(c) ? "Anket yanıt sınırına ulaştı." :
+              c === "network" ? "Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin." : "Yanıt gönderilemedi. Lütfen biraz sonra tekrar deneyin.", true);
+          });
         return;
       }
 
@@ -508,6 +566,30 @@
     footer.appendChild(statusEl);
     wrap.appendChild(footer);
 
+    if (mode !== "edit" && method === "seoz") {
+      const slug = global.SeozCloudStore && global.SeozCloudStore.currentSlug ? global.SeozCloudStore.currentSlug() : "";
+      if (slug && global.SeozEventStore && global.SeozEventStore.pollHasVoted && global.SeozEventStore.pollHasVoted(slug, ctx && ctx.layerId)) {
+        submitBtn.textContent = "Yanıtımı güncelle";
+        showStatus("Bu ankete daha önce katıldınız; yeniden gönderirseniz yanıtınız güncellenir.", false);
+        // önceki yanıt formda işaretli gelir (yalnızca bu tarayıcının gizli anahtarıyla okunur)
+        if (global.SeozEventStore.pollGetOwn) global.SeozEventStore.pollGetOwn(slug, ctx && ctx.layerId).then(own => {
+          if (!own) return;
+          Object.keys(own.answers || {}).forEach(k => { answers[k] = own.answers[k]; });
+          restylers.forEach(f => f());
+          commentInputs.forEach(c => { const v = (own.comments || {})[c.el.getAttribute("data-poll-comment-id")]; if (v && !c.el.value) c.el.value = v; });
+          if (nameInput && own.name && !nameInput.value) nameInput.value = own.name;
+        }).catch(() => { /* önceki yanıt okunamazsa form boş kalır */ });
+      }
+    }
+    // QR / bağlantı ile doğrudan ankete gelme: ...#anket (ilk anket) veya #anket-2 (ikinci anket)
+    if (mode !== "edit" && /^#anket(-\d+)?$/.test(String(global.location.hash || ""))) {
+      setTimeout(() => {
+        const all = Array.from(document.querySelectorAll(".seoz-poll"));
+        const m = String(global.location.hash).match(/-(\d+)$/), target = all[m ? +m[1] - 1 : 0];
+        if (target === wrap) { wrap.scrollIntoView({ behavior: "smooth", block: "start" }); wrap.animate && wrap.animate([{ boxShadow: `0 0 0 3px ${accent}` }, { boxShadow: "0 0 0 0 transparent" }], { duration: 2200 }); }
+      }, 400);
+    }
+
     return wrap;
   }
 
@@ -518,6 +600,7 @@
     if (method === "none") msgs.push("Anket: yanıt yöntemi seçilmemiş — yanıtlar hiçbir yere gönderilmeyecek.");
     if (method === "google-form" && (!s.pollFormUrl || !s.pollFormFieldId)) msgs.push("Anket: Google Form bağlantısı veya cevap alan kimliği eksik.");
     if (method === "whatsapp" && !String(s.pollWhatsappNumber || "").replace(/[^0-9]/g, "")) msgs.push("Anket: WhatsApp numarası girilmemiş.");
+    (s.questions || []).forEach((q, i) => { if (!String(q.text || "").trim()) msgs.push(`Anket: ${i + 1}. sorunun metni boş.`); else if (qType(q) !== "yesno" && qOptions(q).filter(o => String(o.text || "").trim()).length < 2) msgs.push(`Anket: "${q.text}" sorusunda en az iki seçenek olmalı.`); });
     return msgs.length ? msgs.join(" ") : null;
   }
 
@@ -532,6 +615,8 @@
     settingsSchema: SETTINGS_SCHEMA,
     render: render,
     validate: validate,
-    getResponseMethod: getResponseMethod
+    getResponseMethod: getResponseMethod,
+    buildServerForm: buildServerForm,
+    qType, qRequired, qOptions, YESNO
   });
 })(window);

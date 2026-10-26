@@ -17,3 +17,4 @@
 .sp-row{ display:flex; flex-wrap:wrap; gap:8px; } .sp-row .btn{ flex:1 1 180px; }
 .sp-long{ margin-top:12px; font-size:.8rem; } .sp-long input{ width:100%; margin-top:6px; padding:8px; border:1px solid #DDD5C4; border-radius:8px; font:inherit; }
 @media (max-width: 480px){ .sp-card{ padding:16px 14px; } .sp-link{ flex-direction:column; } }
+.sp-poll{ margin:8px 0; } .sp-poll small{ display:block; font-weight:700; margin-bottom:4px; }

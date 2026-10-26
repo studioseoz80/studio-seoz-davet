@@ -15,6 +15,8 @@
   function uid(prefix) {
     return prefix + "_" + Math.random().toString(36).slice(2, 9);
   }
+  const YESNO = [{ id: "yes", text: "Evet" }, { id: "no", text: "Hayır" }];
+  const qType = q => (q && (q.type === "yesno" || q.type === "multi") ? q.type : "choice");
 
   function render(containerEl, layer, cb) {
     const s = layer.settings;
@@ -64,6 +66,11 @@
         </select>
       </div>
 
+      <div class="field" style="margin-top:10px;" data-name-label-wrap ${s.collectName === "off" ? 'hidden' : ""}>
+        <label>Ad alanının etiketi</label>
+        <input type="text" data-poll-name-label placeholder="Ad Soyad" value="${escAttr(s.nameLabel || "")}">
+      </div>
+
       <div class="field" style="margin-top:10px;">
         <label>Gönder Butonu Yazısı</label>
         <input type="text" data-poll-submit-text value="${escAttr(s.submitButtonText)}">
@@ -75,7 +82,7 @@
           <option value="google-form" ${method === "google-form" ? "selected" : ""}>Google Form (müşterinin kendi formu)</option>
           <option value="whatsapp" ${method === "whatsapp" ? "selected" : ""}>WhatsApp</option>
           <option value="none" ${method === "none" ? "selected" : ""}>Gönderim yok (yalnızca görünüm)</option>
-          <option value="seoz" disabled>Studio SEOZ sistemi (yakında)</option>
+          <option value="seoz" ${method === "seoz" ? "selected" : ""}>Studio SEOZ sistemi (sonuç paneli + grafikler)</option>
         </select>
         <p style="font-size:.72rem;color:var(--ink-soft);margin-top:6px;">
           Google Form ve WhatsApp yöntemlerinde yanıtlar doğrudan müşteriye
@@ -110,6 +117,14 @@
           WhatsApp açılır; mesajı katılımcı kendisi gönderir. Bu numara
           yalnızca ankete aittir, RSVP numarasıyla paylaşılmaz. Küçük gruplar
           için uygundur — yanıtlar tek bir listede toplanmaz.
+        </p>
+      </div>
+
+      <div class="field" data-method-block="seoz" style="margin-top:10px;${method === "seoz" ? "" : "display:none;"}">
+        <p style="font-size:.72rem;color:var(--ink-soft);">
+          Yanıtlar Studio SEOZ'un güvenli veritabanına kaydedilir. "Yayına Hazırla"dan sonra
+          müşteriye özel <b>sonuç paneli linki</b> verilir: canlı sonuçlar, grafikler, yanıt listesi,
+          Excel/CSV ve ankete doğrudan götüren QR kod. Aynı telefondan yeniden gönderim yanıtı günceller.
         </p>
       </div>
 
@@ -161,7 +176,10 @@
       s.description = e.target.value; cb.onSettingsChange();
     });
     containerEl.querySelector("[data-poll-collect-name]").addEventListener("change", (e) => {
-      s.collectName = e.target.value; cb.onSettingsChange();
+      s.collectName = e.target.value; containerEl.querySelector("[data-name-label-wrap]").hidden = s.collectName === "off"; cb.onSettingsChange();
+    });
+    containerEl.querySelector("[data-poll-name-label]").addEventListener("input", (e) => {
+      s.nameLabel = e.target.value; cb.onSettingsChange();
     });
     containerEl.querySelector("[data-poll-submit-text]").addEventListener("input", (e) => {
       s.submitButtonText = e.target.value; cb.onSettingsChange();
@@ -234,6 +252,15 @@
             <button type="button" data-q-down="${q.id}" class="btn-icon" title="Aşağı taşı" ${qi === s.questions.length - 1 ? "disabled" : ""}>↓</button>
             <button type="button" data-q-remove="${q.id}" class="btn-icon btn-danger" title="Soruyu sil" ${s.questions.length <= 1 ? "disabled" : ""}>🗑</button>
           </div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select data-q-type="${q.id}" style="flex:1;min-width:140px;">
+              <option value="choice" ${qType(q) === "choice" ? "selected" : ""}>Çoktan seçmeli (tek seçim)</option>
+              <option value="multi" ${qType(q) === "multi" ? "selected" : ""}>Çoktan seçmeli (birden çok)</option>
+              <option value="yesno" ${qType(q) === "yesno" ? "selected" : ""}>Evet / Hayır</option>
+            </select>
+            <label style="display:flex;gap:4px;align-items:center;font-size:.76rem;white-space:nowrap;"><input type="checkbox" data-q-req="${q.id}" ${q.required === false ? "" : "checked"}> Zorunlu</label>
+          </div>
+          ${qType(q) === "yesno" ? `<p style="font-size:.72rem;color:var(--ink-soft);margin-top:6px;">Seçenekler: Evet / Hayır</p>` : `
           <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
             ${(q.options || []).map(o => `
               <div style="display:flex;gap:6px;align-items:center;">
@@ -242,7 +269,7 @@
               </div>
             `).join("")}
           </div>
-          <button type="button" data-add-option="${q.id}" class="btn btn-outline" style="width:100%;margin-top:8px;font-size:.78rem;padding:6px;">+ Seçenek Ekle</button>
+          <button type="button" data-add-option="${q.id}" class="btn btn-outline" style="width:100%;margin-top:8px;font-size:.78rem;padding:6px;">+ Seçenek Ekle</button>`}
         </div>
       `).join("");
 
@@ -259,6 +286,16 @@
           s.questions = s.questions.filter(x => x.id !== q.id);
           renderQuestions(); cb.onSettingsChange();
         });
+        host.querySelector(`[data-q-type="${q.id}"]`).addEventListener("change", (e) => {
+          const prev = qType(q); q.type = e.target.value;
+          if (q.type === "yesno") { if (prev !== "yesno") q._choiceOptions = q.options; q.options = YESNO.map(o => Object.assign({}, o)); }
+          else if (prev === "yesno") { q.options = q._choiceOptions && q._choiceOptions.length ? q._choiceOptions : [{ id: uid("o"), text: "" }, { id: uid("o"), text: "" }]; delete q._choiceOptions; }
+          renderQuestions(); cb.onSettingsChange();
+        });
+        host.querySelector(`[data-q-req="${q.id}"]`).addEventListener("change", (e) => {
+          q.required = e.target.checked; cb.onSettingsChange();
+        });
+        if (qType(q) === "yesno") return;
         host.querySelector(`[data-add-option="${q.id}"]`).addEventListener("click", () => {
           q.options.push({ id: uid("o"), text: "" });
           renderQuestions(); cb.onSettingsChange();

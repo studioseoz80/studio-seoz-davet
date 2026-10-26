@@ -257,14 +257,16 @@
 
     // ---- Format bilgisini yaz (EC seviyesi L = 01, maske deseni = 0) ----
     const formatBits = computeFormatBits(0b01, 0);
-    // 15 bit -> iki bölgeye (spec'e göre) yazılır.
-    for (let i = 0; i <= 5; i++) setModule(8, i, !!((formatBits >> i) & 1), true);
-    setModule(8, 7, !!((formatBits >> 6) & 1), true);
+    // 15 bit -> iki bölgeye (spec'e göre) yazılır. setModule(SATIR, SÜTUN).
+    // DÜZELTME (Görev 3): önceki sürümde satır/sütun yer değiştirmişti; biçim bilgisi ters diziliyor ve
+    // kod standart okuyucularla (telefon kamerası) okunamıyordu.
+    for (let i = 0; i <= 5; i++) setModule(i, 8, !!((formatBits >> i) & 1), true);
+    setModule(7, 8, !!((formatBits >> 6) & 1), true);
     setModule(8, 8, !!((formatBits >> 7) & 1), true);
-    setModule(7, 8, !!((formatBits >> 8) & 1), true);
-    for (let i = 9; i <= 14; i++) setModule(14 - i, 8, !!((formatBits >> i) & 1), true);
-    for (let i = 0; i <= 7; i++) setModule(size - 1 - i, 8, !!((formatBits >> i) & 1), true);
-    for (let i = 8; i <= 14; i++) setModule(8, size - 15 + i, !!((formatBits >> i) & 1), true);
+    setModule(8, 7, !!((formatBits >> 8) & 1), true);
+    for (let i = 9; i <= 14; i++) setModule(8, 14 - i, !!((formatBits >> i) & 1), true);
+    for (let i = 0; i <= 7; i++) setModule(8, size - 1 - i, !!((formatBits >> i) & 1), true);
+    for (let i = 8; i <= 14; i++) setModule(size - 15 + i, 8, !!((formatBits >> i) & 1), true);
 
     // null kalan (kullanılmayan reserved) hücreleri false yap.
     for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (modules[r][c] === null) modules[r][c] = false;

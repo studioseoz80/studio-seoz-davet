@@ -1,0 +1,19 @@
+/* Anket sonuç paneli (anket-panel.html) — panel.css üzerine */
+.ak-live{ display:inline-flex; align-items:center; gap:6px; font-size:.8rem; color:var(--ok); font-weight:700; }
+.ak-live i{ width:8px; height:8px; border-radius:50%; background:var(--ok); animation:akPulse 1.6s ease-in-out infinite; }
+@keyframes akPulse{ 50%{ opacity:.25; } }
+.ak-cards{ grid-template-columns:repeat(3, 1fr); }
+.ak-qtype{ display:inline-block; font-size:.7rem; font-weight:700; letter-spacing:.04em; color:var(--gold); background:var(--gold-soft); border-radius:999px; padding:1px 8px; margin-left:6px; vertical-align:middle; }
+.ak-share{ display:grid; grid-template-columns:auto 1fr; gap:16px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin:14px 0; }
+.ak-share canvas{ width:132px; height:132px; image-rendering:pixelated; border:6px solid #fff; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+.ak-share input{ width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#FBF8F2; font-size:.86rem; }
+.ak-share-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.ak-comments{ display:flex; flex-direction:column; gap:8px; }
+.ak-comment{ background:#FBF8F2; border-radius:10px; padding:10px 12px; font-size:.9rem; }
+.ak-comment small{ display:block; color:var(--soft); font-size:.76rem; margin-top:4px; }
+.ak-table-wrap{ overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); }
+.ak-table{ width:100%; border-collapse:collapse; font-size:.84rem; min-width:560px; }
+.ak-table th,.ak-table td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.ak-table th{ color:var(--soft); font-weight:700; font-size:.78rem; }
+.ak-sec-title{ font-size:1.05rem; font-weight:700; margin:22px 0 10px; }
+@media (max-width:640px){ .ak-cards{ grid-template-columns:repeat(3, 1fr); } .ak-share{ grid-template-columns:1fr; justify-items:center; text-align:center; } .pn-charts{ grid-template-columns:1fr; } }

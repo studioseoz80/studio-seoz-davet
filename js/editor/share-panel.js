@@ -95,6 +95,9 @@
         </section>
         ${opts.panelUrl ? `<section class="sp-panel"><h4>Müşteri paneli</h4><p class="sp-note">Yalnızca etkinlik sahibine verin — davetlilerle paylaşmayın.</p>
           <div class="sp-link"><input readonly data-share-panel value="${esc(opts.panelUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-panel>Kopyala</button></div></section>` : ""}
+        ${(opts.polls || []).length ? `<section class="sp-panel"><h4>Anket sonuçları</h4><p class="sp-note">Canlı sonuç paneli (grafikler, yanıtlar, QR kod). Yalnızca anket sahibine verin.</p>
+          ${opts.polls.map((p, i) => `<div class="sp-poll" data-sp-poll="${esc(p.layerId)}"><small>${esc(p.title)}</small>${p.url ? `<div class="sp-link"><input readonly data-share-poll value="${esc(p.url)}"><button type="button" class="btn btn-outline" data-sp-copy-poll>Kopyala</button></div>`
+            : `<p class="sp-note sp-warn">Sonuç paneli linki bu tarayıcıda kayıtlı değil.</p><button type="button" class="btn btn-outline" data-sp-poll-new>Yeni sonuç paneli linki üret (eski link iptal olur)</button>`}</div>`).join("")}</section>` : ""}
         ${opts.albumUrl || opts.albumMissing ? `<section class="sp-panel"><h4>Anı albümü</h4><p class="sp-note">Misafirlerin yüklediği fotoğraf ve videolar. Yalnızca etkinlik sahibine verin.</p>
           ${opts.albumUrl ? `<div class="sp-link"><input readonly data-share-album value="${esc(opts.albumUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-album>Kopyala</button></div>`
             : `<p class="sp-note sp-warn">Albüm linki bu tarayıcıda kayıtlı değil (başka tarayıcıdan oluşturulmuş olabilir).</p><button type="button" class="btn btn-outline" data-sp-album-new>Yeni albüm linki üret (eski link iptal olur)</button>`}</section>` : ""}
@@ -110,6 +113,17 @@
     root.addEventListener("click", e => { if (e.target === root) close(); });
     $("[data-sp-close]").addEventListener("click", close);
     $("[data-sp-copy]").addEventListener("click", e => copy(opts.shortUrl, e.currentTarget));
+    root.addEventListener("click", e => {
+      const cp = e.target.closest("[data-sp-copy-poll]");
+      if (cp) return copy(cp.parentNode.querySelector("input").value, cp);
+      const nw = e.target.closest("[data-sp-poll-new]"); if (!nw) return;
+      const box = nw.closest("[data-sp-poll]"); nw.disabled = true;
+      Promise.resolve(opts.onPollRotate && opts.onPollRotate(box.dataset.spPoll)).then(u => {
+        if (!u) throw new Error("link alınamadı");
+        nw.insertAdjacentHTML("beforebegin", `<div class="sp-link"><input readonly data-share-poll value="${esc(u)}"><button type="button" class="btn btn-outline" data-sp-copy-poll>Kopyala</button></div>`);
+        const w = box.querySelector(".sp-warn"); if (w) w.remove(); nw.remove();
+      }).catch(err => { nw.disabled = false; alert("Yeni link üretilemedi: " + (err && err.message || "")); });
+    });
     if ($("[data-sp-copy-album]")) $("[data-sp-copy-album]").addEventListener("click", e => copy($("[data-share-album]").value, e.currentTarget));
     if ($("[data-sp-album-new]")) $("[data-sp-album-new]").addEventListener("click", e => {
       const b = e.currentTarget; b.disabled = true;
