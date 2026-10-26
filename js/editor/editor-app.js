@@ -933,18 +933,31 @@
               });
           })
           .then(result => {
-            showToast("Yayınlandı. Müşteri bağlantısı: " + result.url);
-            // prompt kutusu bağlantıyı seçilebilir/kopyalanabilir gösterir.
-            prompt("Yayınlandı. Müşteri bağlantısı:", result.url);
-            // KATILIM FORMU (Faz B): müşteriye özel panel linki ayrıca gösterilir.
+            const shortLink = result.shortUrl || result.url;
+            showToast("Yayınlandı. Müşteri bağlantısı: " + shortLink);
+            // KATILIM FORMU (Faz B): müşteriye özel panel linki aynı pencerede gösterilir.
+            let panelLink = null, panelMissing = false;
             if (result.attendanceSynced && typeof SeozEventStore !== "undefined") {
-              const panelLink = SeozEventStore.panelUrl(result.slug);
-              if (panelLink) {
-                prompt("Müşteri paneli linki (yalnızca etkinlik sahibine verin — davetlilerle paylaşmayın):", panelLink);
-              } else {
-                alert("Müşteri paneli linki bu tarayıcıda kayıtlı değil (davetiye başka bir tarayıcıdan yayınlanmış olabilir).\n\nKatılım Formu ayarlarındaki \"Yeni panel linki üret\" ile yeni bir link oluşturabilirsiniz.");
-              }
+              panelLink = SeozEventStore.panelUrl(result.slug);
+              panelMissing = !panelLink;
             }
+            // PAYLAŞIM: kısa bağlantı, Kopyala, WhatsApp'ta paylaş, önizleme kartı (bkz. share-panel.js)
+            if (typeof SeozSharePanel === "undefined") { prompt("Yayınlandı. Müşteri bağlantısı:", shortLink); return; }
+            const republish = () => {
+              SeozStorage.saveDraft(doc); SeozPublish.publishDocument(doc.id);
+              return SeozPublish.publishToCloud(doc.id, () => {});
+            };
+            SeozSharePanel.show({
+              doc, shortUrl: shortLink, longUrl: result.url, panelUrl: panelLink, panelMissing,
+              onUpdate: (title, desc) => {
+                doc.meta.share = Object.assign({}, doc.meta.share, { title: title || undefined, description: desc || undefined });
+                return republish();
+              },
+              onCover: (file, title, desc) => SeozImageUtils.processImageFile(file).then(r => {
+                doc.meta.share = Object.assign({}, doc.meta.share, { custom: r.ref, title: title || undefined, description: desc || undefined });
+                return SeozSharePanel.prepare(doc);
+              }).then(republish)
+            });
           })
           .catch(err => {
             console.error("[Studio SEOZ] Supabase yayını başarısız:", err);
@@ -990,7 +1003,11 @@
         );
         if (!proceed) return;
       }
-      doPublish();
+      // Paylaşım kapağı (WhatsApp önizlemesi) yayından önce hazırlanır; olmazsa yayın yine yapılır.
+      if (typeof SeozSharePanel !== "undefined" && SeozPublish.isCloudConfigured()) {
+        const pb = appRoot.querySelector("[data-publish]"); pb.disabled = true;
+        SeozSharePanel.prepare(doc).catch(() => {}).then(() => { pb.disabled = false; doPublish(); });
+      } else doPublish();
     });
 
     /* ---------------- İLK ÇİZİM ---------------- */

@@ -32,7 +32,11 @@
   // SUPABASE: gerçek müşteri bağlantısı view.html?slug=...
   function getSlug() {
     const params = new URLSearchParams(window.location.search);
-    return params.get("slug");
+    if (params.get("slug")) return params.get("slug");
+    // KISA BAĞLANTI: alan-adı/<slug> (bkz. functions/[slug].js). ?doc= varsa eski yöntem.
+    if (params.get("doc")) return null;
+    const m = window.location.pathname.toLowerCase().match(/^\/([a-z0-9][a-z0-9-]{1,78}[a-z0-9])\/?$/);
+    return m && ["view", "index", "panel"].indexOf(m[1]) < 0 ? m[1] : null;
   }
 
   function showMessage(html) {

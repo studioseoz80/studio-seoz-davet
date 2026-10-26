@@ -447,7 +447,17 @@
       throw new Error("Davetiye kaydedilemedi: " + detail);
     }
 
-    return { slug: slug, url: customerUrl(slug), mediaCount: refs.length };
+    return { slug: slug, url: customerUrl(slug), shortUrl: shortUrl(slug), mediaCount: refs.length };
+  }
+
+  // KISA BAĞLANTI: alan-adı/<slug> (functions/[slug].js sayfayı ve paylaşım önizlemesini sunar).
+  // Eski view.html?slug= bağlantıları aynen çalışmaya devam eder.
+  function shortUrl(slug) {
+    let base = String(cfg().shortBaseUrl || "").trim();
+    try {
+      if (!base) base = new URL(String(cfg().publicViewUrl || "").trim() || "view.html", global.location.href).origin + "/";
+      return new URL(String(slug), base.replace(/\/*$/, "/")).href;
+    } catch (e) { return customerUrl(slug); }
   }
 
   function customerUrl(slug) {
@@ -514,6 +524,7 @@
     slugifyTitle,
     publishSnapshot,
     customerUrl,
+    shortUrl,
     loadPublishedBySlug
   };
 })(window);

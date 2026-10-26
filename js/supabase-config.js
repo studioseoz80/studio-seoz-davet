@@ -32,5 +32,10 @@ window.SEOZ_SUPABASE_CONFIG = {
   // tam adres. ör. "https://davet.studioseoz.com/view.html"
   // Boş bırakılırsa editörün açık olduğu adresteki view.html kullanılır
   // (bu, yalnızca editör de aynı sitede yayındaysa doğru olur).
- publicViewUrl: "https://seoz-davet.pages.dev/view.html"
+ publicViewUrl: "https://seoz-davet.pages.dev/view.html",
+
+  // KISA BAĞLANTI: davetiyeler "<bu adres><slug>" olarak paylaşılır (ör. https://davet.studioseoz.com/kina-8vsgeh).
+  // Önce alan adı Cloudflare'de müşteri projesine (seoz-davet) bağlanmalı; sonra buraya yazılır.
+  // Boşsa kısa bağlantı publicViewUrl'in alan adıyla üretilir (ör. https://seoz-davet.pages.dev/kina-8vsgeh).
+  shortBaseUrl: ""
 };

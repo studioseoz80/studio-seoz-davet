@@ -1,0 +1,19 @@
+/* Yayın sonrası paylaşım penceresi (yalnızca editör) */
+.sp-root{ position:fixed; inset:0; z-index:1300; background:rgba(20,16,12,.55); display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto; }
+.sp-card{ position:relative; width:min(520px, 100%); max-height:calc(100vh - 32px); overflow:auto; background:#FBF9F4; border-radius:16px; padding:20px 18px 18px; box-shadow:0 20px 60px rgba(0,0,0,.3); font-family:var(--f-body, "Manrope", sans-serif); color:#23261F; }
+.sp-card h3{ margin:0 0 4px; font-size:1.2rem; } .sp-card h4{ margin:14px 0 8px; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; color:#6B6455; }
+.sp-x{ position:absolute; right:10px; top:8px; border:0; background:none; font-size:26px; line-height:1; cursor:pointer; color:#6B6455; }
+.sp-note{ margin:4px 0 8px; font-size:.8rem; color:#7A7466; line-height:1.4; } .sp-warn{ color:#9A4A2A; }
+.sp-link{ display:flex; gap:8px; } .sp-link input{ flex:1; min-width:0; font:600 .95rem/1.2 inherit; padding:10px 12px; border:1px solid #DDD5C4; border-radius:10px; background:#fff; }
+.sp-actions{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px; }
+.sp-actions .btn{ text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+.sp-wa{ background:#1FA855; color:#fff; border:0; font-weight:700; flex:1 1 200px; min-height:44px; }
+.sp-wa:hover{ background:#178F48; }
+.sp-prev label{ display:flex; flex-direction:column; gap:4px; font-size:.8rem; margin:8px 0; }
+.sp-prev input, .sp-prev textarea{ font:inherit; padding:8px 10px; border:1px solid #DDD5C4; border-radius:8px; background:#fff; }
+.sp-wa-card{ display:flex; flex-direction:column; border-radius:10px; overflow:hidden; background:#E7F6E9; border:1px solid #CFE8D3; }
+.sp-img{ aspect-ratio:1200 / 630; background:#2a2420 center / cover no-repeat; display:flex; align-items:center; justify-content:center; color:#bbb; font-size:.8rem; }
+.sp-txt{ display:flex; flex-direction:column; gap:2px; padding:8px 10px; } .sp-txt b{ font-size:.9rem; } .sp-txt small{ color:#4A5348; font-size:.78rem; } .sp-txt i{ font-style:normal; color:#7A8578; font-size:.72rem; }
+.sp-row{ display:flex; flex-wrap:wrap; gap:8px; } .sp-row .btn{ flex:1 1 180px; }
+.sp-long{ margin-top:12px; font-size:.8rem; } .sp-long input{ width:100%; margin-top:6px; padding:8px; border:1px solid #DDD5C4; border-radius:8px; font:inherit; }
+@media (max-width: 480px){ .sp-card{ padding:16px 14px; } .sp-link{ flex-direction:column; } }
