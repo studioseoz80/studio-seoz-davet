@@ -39,3 +39,29 @@ window.SEOZ_SUPABASE_CONFIG = {
   // Boşsa kısa bağlantı publicViewUrl'in alan adıyla üretilir (ör. https://seoz-davet.pages.dev/kina-8vsgeh).
   shortBaseUrl: ""
 };
+
+/* ÖNİZLEME KORUMASI — Cloudflare'in dal önizleme adreslerinde (ör. animasyon-uyum.studio-seoz-davet.pages.dev)
+   canlı veritabanına ve depoya YAZMA engellenir: yayınlama, katılım/anket gönderme, dosya yükleme, giriş
+   bağlantısı çalışmaz; yayındaki davetiyeleri OKUMA ve okuma amaçlı sorgular çalışır. Gerçek (canlı) adreslerde
+   (studio-seoz-davet.pages.dev, seoz-davet.pages.dev, kendi alan adınız) ve bilgisayarda bu blok hiçbir şey yapmaz. */
+(function () {
+  var h = location.hostname;
+  if (!(/\.pages\.dev$/.test(h) && h.split(".").length > 3)) return;
+  window.SEOZ_PREVIEW = true;
+  var READ_RPC = /\/rest\/v1\/rpc\/[a-z_]*(_get|_get_own|_accepts)$/;
+  var realFetch = window.fetch;
+  window.fetch = function (input, init) {
+    var url = String(input && input.url ? input.url : input), method = String((init && init.method) || (input && input.method) || "GET").toUpperCase();
+    if (/supabase\.co\//.test(url) && method !== "GET" && method !== "HEAD" && !READ_RPC.test(url.split("?")[0])) {
+      console.warn("[Studio SEOZ] Önizleme: canlı veriye yazma kapalı →", method, url.split("?")[0]);
+      return Promise.reject(new Error("Önizleme sürümünde yayınlama ve veri kaydı kapalıdır."));
+    }
+    return realFetch.apply(this, arguments);
+  };
+  document.addEventListener("DOMContentLoaded", function () {
+    var b = document.createElement("div");
+    b.textContent = "ÖNİZLEME · yayın ve veri kaydı kapalı";
+    b.setAttribute("style", "position:fixed;left:8px;bottom:8px;z-index:2147483000;background:rgba(122,31,43,.92);color:#fff;font:600 11px/1.2 Manrope,system-ui,sans-serif;letter-spacing:.04em;padding:5px 9px;border-radius:999px;pointer-events:none");
+    document.body.appendChild(b);
+  });
+})();
