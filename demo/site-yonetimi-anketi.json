@@ -231,7 +231,7 @@
    },
    "settings": {
     "title": "Yönetim Kurulu Karar Anketi",
-    "description": "Her daire tek yanıt verir. Yanıtınızı anket kapanana kadar değiştirebilirsiniz.",
+    "description": "Her telefondan bir yanıt alınır; Blok / Daire No sonuç panelinde görünür. Yanıtınızı anket kapanana kadar değiştirebilirsiniz.",
     "responseMethod": "seoz",
     "collectName": "required",
     "nameLabel": "Blok / Daire No (ör. B-12)",

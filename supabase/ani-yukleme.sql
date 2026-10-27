@@ -14,7 +14,9 @@
 -- Güvenlik modeli:
 --   • İki tabloda da RLS AÇIK; misafirin (anon) tablolara doğrudan erişimi YOK.
 --   • Misafir yalnızca AÇIK albümü olan davetiyenin klasörüne dosya EKLEYEBİLİR; listeleyemez,
---     değiştiremez, silemez. Dosya adları tahmin edilemez (rastgele).
+--     değiştiremez, silemez, üzerine yazamaz. Dosya adı 128 bit rastgele olmak ZORUNDA (kural
+--     başka adları reddeder); dosya bağlantısı yalnızca albüm paneline (gizli link) verilir.
+--   • Yalnızca resim/video türleri (SVG/HTML yok), dosya başına en çok 25 MB, albüm başına en çok 2000 dosya.
 --   • Albümü yalnızca gizli panel linki (album.html#k=...) sahibi görür; anahtarın yalnızca
 --     SHA-256 özeti saklanır. Studio SEOZ anahtarı yenileyerek eski linki anında iptal edebilir.
 --
@@ -84,6 +86,7 @@ create policy "ani-yukleme misafir yukler" on storage.objects for insert to anon
   with check (
     bucket_id = 'ani-yukleme'
     and array_length(storage.foldername(name), 1) = 1
+    and storage.filename(name) ~ '^[0-9a-z]{6,12}-[A-Za-z0-9_-]{22}\.(jpg|png|webp|gif|heic|heif|mp4|mov|webm)$'
     and public.memory_album_accepts((storage.foldername(name))[1])
   );
 
@@ -92,7 +95,8 @@ create or replace function public.memory_register(p_slug text, p_path text, p_mi
 returns jsonb language plpgsql security definer set search_path = '' as $$
 begin
   if not public.memory_album_accepts(p_slug) then raise exception 'album_closed'; end if;
-  if p_path is null or left(p_path, char_length(p_slug) + 1) <> p_slug || '/' or p_path like '%..%' then raise exception 'invalid_path'; end if;
+  if p_path is null or left(p_path, char_length(p_slug) + 1) <> p_slug || '/' or p_path like '%..%'
+     or substr(p_path, char_length(p_slug) + 2) !~ '^[0-9a-z]{6,12}-[A-Za-z0-9_-]{22}\.(jpg|png|webp|gif|heic|heif|mp4|mov|webm)$' then raise exception 'invalid_path'; end if;
   if not exists (select 1 from storage.objects o where o.bucket_id = 'ani-yukleme' and o.name = p_path) then raise exception 'file_not_found'; end if;
   insert into public.memory_uploads (invitation_slug, object_path, mime, size_bytes, guest_name)
   values (p_slug, p_path, left(p_mime, 80), p_size, nullif(left(btrim(coalesce(p_name, '')), 80), ''))

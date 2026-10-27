@@ -123,7 +123,10 @@
     const ext = ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic", "image/heif": "heif", "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm" })[type];
     if (!ext) throw fail("type");
     if (blob.size > MAX_MB.seoz * 1048576) throw fail("too_large");
-    const rnd = Array.from(global.crypto && global.crypto.getRandomValues ? global.crypto.getRandomValues(new Uint8Array(12)) : Array.from({ length: 12 }, () => Math.random() * 256 | 0)).map(b => (b % 36).toString(36)).join("");
+    // Tahmin edilemez dosya adı: 16 bayt (128 bit) güvenli rastgele → 22 karakter (A-Z a-z 0-9 - _).
+    // Sunucudaki depolama kuralı yalnızca bu biçimdeki adları kabul eder.
+    if (!(global.crypto && global.crypto.getRandomValues)) throw fail("server", { detail: "crypto_unavailable" });
+    const rnd = btoa(String.fromCharCode.apply(null, global.crypto.getRandomValues(new Uint8Array(16)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     const path = `${slug}/${Date.now().toString(36)}-${rnd}.${ext}`;
     let res;
     try {

@@ -16,5 +16,7 @@ drop function if exists public.memory_register(text, text, text, bigint, text);
 drop function if exists public.memory_album_accepts(text);
 drop table if exists public.memory_uploads;
 drop table if exists public.memory_albums;
+-- Bucket yalnızca İÇİ BOŞSA kaldırılır (dosya varsa yerinde kalır).
+delete from storage.buckets b where b.id = 'ani-yukleme' and not exists (select 1 from storage.objects o where o.bucket_id = 'ani-yukleme');
 commit;
 notify pgrst, 'reload schema';
