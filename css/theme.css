@@ -449,3 +449,34 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 @media (prefers-reduced-motion: reduce){ .th-fog-band{ animation:none; } }
 .th-lite3 .th-fog-band{ animation:none; }
 .th-lite3 .th-lit{ display:none; }
+
+/* =============================================================================
+   ✨ SAHNE UYUMU (core/motion.js) — yalnızca .th-nat (belgede motion açıkken).
+   Sürekli hareketler saf sinüs eğrisiyle döner (uçlarda takılma yok), genlik
+   karakterin enerjisiyle (--th-amp) ölçeklenir; dönme sabit hızla akar.
+   ========================================================================= */
+.th-nat .th-bl-m{ animation-timing-function:cubic-bezier(.37,0,.63,1); }
+.th-nat .th-m-donme{ animation-timing-function:linear; }
+.th-nat .th-m-salinim{ animation-name:thSwayN; }
+.th-nat .th-m-suzulme{ animation-name:thFloatN; }
+.th-nat .th-m-nefes{ animation-name:thBreathN; }
+.th-nat .th-m-kayma{ animation-name:thDriftN; }
+@keyframes thSwayN{ from{ transform:rotate(calc(-3deg * var(--th-amp, 1))); } to{ transform:rotate(calc(3deg * var(--th-amp, 1))); } }
+@keyframes thFloatN{ from{ transform:translateY(calc(-8px * var(--th-amp, 1))); } to{ transform:translateY(calc(8px * var(--th-amp, 1))); } }
+@keyframes thBreathN{ from{ transform:scale(calc(1 - .04 * var(--th-amp, 1))); } to{ transform:scale(calc(1 + .05 * var(--th-amp, 1))); } }
+@keyframes thDriftN{ from{ transform:translateX(calc(-22px * var(--th-amp, 1))); } to{ transform:translateX(calc(22px * var(--th-amp, 1))); } }
+.th-nat .th-rv{ transition-timing-function:cubic-bezier(.22,.61,.36,1); }
+
+/* ✨ Sahne uyumu — hazır çizimli etkileşimler (.ix-nat yalnızca belgede motion açıkken eklenir) */
+.ix-nat .ix-flame{ animation:ixFlickerN 1.3s linear infinite; }
+.ix-nat .ix-candle:nth-child(3) .ix-flame{ animation-duration:1.55s; animation-delay:-.4s; }
+.ix-nat .ix-candle:nth-child(4) .ix-flame{ animation-duration:1.2s; animation-delay:-.9s; }
+@keyframes ixFlickerN{ 0%,100%{ transform:scale(1,1) skewX(0); } 18%{ transform:scale(.97,1.07) skewX(-2deg); } 37%{ transform:scale(1.02,.95) skewX(1.5deg); } 55%{ transform:scale(.98,1.1) skewX(-1deg); } 76%{ transform:scale(1.01,.97) skewX(2deg); } }
+.ix-nat .ix-flame{ animation-timing-function:cubic-bezier(.37,0,.63,1); }
+.ix-nat .ix-cake.is-blowing .ix-flame{ animation:ixBlow .5s cubic-bezier(.37,0,.63,1) infinite alternate; }
+.ix-nat .ix-cake.is-out .ix-flame{ transition:opacity .3s cubic-bezier(.55,.085,.68,.53), transform .3s cubic-bezier(.55,.085,.68,.53); }
+.ix-nat .ix-cake.is-out .ix-candle:nth-child(3) .ix-flame{ transition-delay:.15s; }
+.ix-nat .ix-cake.is-out .ix-candle:nth-child(4) .ix-flame{ transition-delay:.3s; }
+.ix-nat .ix-rib-l, .ix-nat .ix-rib-r{ transition:transform 1s cubic-bezier(.45,.05,.25,1), opacity .5s .55s; }
+.ix-nat .ix-balloon{ animation-timing-function:cubic-bezier(.37,0,.63,1); }
+.ix-nat .ix-door-l, .ix-nat .ix-door-r{ transition-timing-function:cubic-bezier(.45,.05,.25,1); }

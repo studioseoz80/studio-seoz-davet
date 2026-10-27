@@ -261,3 +261,16 @@
   font-size: .76rem;
   cursor: pointer;
 }
+
+/* ✨ SAHNE UYUMU — klasik zarf ve çift kanat (yalnızca .seoz-entry-nat; belgede motion açıkken).
+   Zarf kart yükselirken hafifçe aşağı oturur ve geç solar (kart zarfın içinden çıkıyormuş gibi);
+   kanatlar ağırlığıyla açılıp yumuşakça durur. */
+.seoz-entry-nat .seoz-entry-image.opening{
+  transition: transform .75s cubic-bezier(.45,.05,.25,1), opacity .5s cubic-bezier(.55,.06,.68,.19) .2s, filter .6s ease;
+  transform: translateY(16px) scale(.96);
+}
+.seoz-entry-nat .seoz-entry-card{ transition: transform .85s cubic-bezier(.22,.61,.36,1), opacity .35s cubic-bezier(.22,.61,.36,1); }
+.seoz-entry-nat .seoz-entry-card.leaving,
+.seoz-entry-nat .seoz-entry-card-inline.leaving{ transition: transform .5s cubic-bezier(.55,.06,.68,.19), opacity .45s ease; }
+.seoz-entry-nat .seoz-entry-wing{ transition: transform 2.2s cubic-bezier(.45,.05,.25,1); }
+.seoz-entry-nat .seoz-entry-hint{ animation-timing-function: cubic-bezier(.37,0,.63,1); }

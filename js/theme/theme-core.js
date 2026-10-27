@@ -125,7 +125,34 @@
     ["parilti", "Parıldama", { dur: 2, amp: 65, unit: "%" }]
   ];
   const moveDef = t => (MOVE_TYPES.find(m => m[0] === t) || [])[2] || null;
-  function moveSpec(m, L) {
+  /* ✨ Sahne uyumunda sürekli hareketler: duruştan başlar (açılış kalkınca sıçrama yok), saf sinüsle
+     döner (uçlarda takılma yok), her katman kendi evresinde ve hafif farklı hızda akar (hepsi aynı anda
+     aynı yöne kımıldamaz), genlik karakterin enerjisiyle ölçeklenir. */
+  function moveSpecNat(m, L, prof) {
+    const d = moveDef(m.type), M = global.SeozMotion; if (!d || !M) return null;
+    const ph = M.phase((L.id || "") + "|" + (m.id || m.type)), en = prof.energy;
+    const amp = num(m.amp, d.amp) * (m.type === "donme" ? 1 : en), rev = m.dir === "ters" ? -1 : 1, rep = Math.max(0, Math.round(num(m.repeat, 0)));
+    // evre ve ±%8 hız farkı yalnızca SÜREKLİ harekette: sayılı tekrarlar kullanıcının verdiği sürede başlayıp biter
+    const cyc = Math.max(0.1, num(m.dur, d.dur)) / Math.max(0.1, num(m.speed, 1)) * 1000 * (rep ? 1 : 0.92 + 0.16 * ph);
+    const loop = { duration: cyc, iterations: rep || Infinity, easing: "linear" };
+    const lag = rep || num(m.delay, 0) > 0 ? 0 : Math.round(ph * cyc * 0.5);
+    const P = f => M.pendulumKF(amp * rev, f);
+    switch (m.type) {
+      case "sallanma": return { origin: L.origin || "50% 100%", kf: P(v => `rotate(${v.toFixed(2)}deg)`), t: loop, lag };
+      case "suzulme": return { kf: P(v => `translateY(${v.toFixed(2)}px)`), t: loop, lag };
+      case "kayma": return { kf: P(v => `translateX(${v.toFixed(2)}px)`), t: loop, lag };
+      case "yakinlas": case "uzaklas": { const k = m.type === "yakinlas" ? 1 + amp / 100 : Math.max(0.05, 1 - amp / 100);
+        return { kf: [{ transform: "scale(1)", easing: M.CURVES.sinus }, { transform: `scale(${k.toFixed(3)})`, offset: 0.5, easing: M.CURVES.sinus }, { transform: "scale(1)" }], t: loop, lag }; }
+      case "parilti": return { kf: [{ opacity: 1, easing: M.CURVES.sinus }, { opacity: Math.max(0, 1 - amp / 100).toFixed(2), offset: 0.5, easing: M.CURVES.sinus }, { opacity: 1 }], t: loop, lag };
+      case "donme": { const a = Math.max(1, Math.abs(num(m.amp, d.amp))) * rev;
+        if (Math.abs(a) >= 360) return { origin: L.origin || "50% 50%", kf: [{ transform: "rotate(0deg)" }, { transform: `rotate(${a}deg)` }], t: loop, lag };
+        return { origin: L.origin || "50% 50%", kf: [{ transform: "rotate(0deg)", easing: M.CURVES.sinus }, { transform: `rotate(${a}deg)`, offset: 0.5, easing: M.CURVES.sinus }, { transform: "rotate(0deg)" }], t: loop, lag }; }
+      case "titresim": return { kf: M.jitterKF(amp, 6, (L.id || "") + m.id, 0.5), t: Object.assign({}, loop, { duration: Math.max(cyc, 1400) }), lag };
+      default: return null;
+    }
+  }
+  function moveSpec(m, L, prof) {
+    if (prof) { const n = moveSpecNat(m, L, prof); if (n) return n; }
     const d = moveDef(m.type); if (!d) return null;
     const amp = num(m.amp, d.amp), rev = m.dir === "ters", rep = Math.max(0, Math.round(num(m.repeat, 0)));
     const cyc = Math.max(0.1, num(m.dur, d.dur)) / Math.max(0.1, num(m.speed, 1)) * 1000;   // bir tam tur (gidiş + dönüş)
@@ -148,14 +175,14 @@
     }
   }
   // her sürekli hareket kendi kutusunda: iç içe kutular hareketleri üst üste toplar (süzülme + sallanma birlikte)
-  function wrapMoves(L, body) {
-    const list = (Array.isArray(L.moves) ? L.moves : []).map(m => ({ m, sp: moveSpec(m, L) })).filter(x => x.sp);
+  function wrapMoves(L, body, prof) {
+    const list = (Array.isArray(L.moves) ? L.moves : []).map(m => ({ m, sp: moveSpec(m, L, prof) })).filter(x => x.sp);
     if (!list.length) return { top: body, specs: [] };
     let inner = body; const specs = [];
     for (let i = list.length - 1; i >= 0; i--) {
       const w = el("div", "th-mv"); if (list[i].sp.origin) w.style.transformOrigin = list[i].sp.origin;
       w.appendChild(inner); inner = w;
-      specs.unshift({ el: w, sp: list[i].sp, delay: Math.max(0, num(list[i].m.delay, 0)) * 1000 });
+      specs.unshift({ el: w, sp: list[i].sp, delay: Math.max(0, num(list[i].m.delay, 0)) * 1000 + (list[i].sp.lag || 0) });
     }
     return { top: inner, specs };
   }
@@ -164,6 +191,15 @@
     if (!L.lite || !(num(L.liteW, 0) > 0)) return L.src;
     const phone = (global.innerWidth || 1000) < 640, dpr = Math.min(3, global.devicePixelRatio || 1);
     return phone && num(L.liteW, 0) >= num(L.w, 120) * dpr ? L.lite : L.src;
+  }
+  // ✨ CSS ile çalışan eski hareketler: her katman kendi evresinde (negatif gecikme = döngünün ortasından başlar;
+  // sayfa ilk çizildiği an zaten hareketli olduğundan sıçrama görünmez), hızı ±%8 farklı, genliği karakterle
+  function natCSS(mid, L, prof) {
+    const ph = global.SeozMotion ? global.SeozMotion.phase(L.id || L.src || L.art) : 0.5;
+    const base = 8 / Math.max(0.2, num(L.speed, 1)) * (0.92 + 0.16 * ph);
+    mid.style.setProperty("--th-sp", base.toFixed(2) + "s");
+    mid.style.setProperty("--th-amp", String(prof.energy));
+    mid.style.animationDelay = (-ph * base).toFixed(2) + "s";
   }
   const hasScrollFx = L => !!(L && L.scroll && (num(L.scroll.x, 0) || num(L.scroll.rot, 0) || num(L.scroll.scale, 0) || num(L.scroll.fade, 0)));
   function buildBgLayer(L, mode, three, opt) {
@@ -177,6 +213,7 @@
     const mid = el("div", "th-bl-m" + (L.motion && L.motion !== "none" ? " th-m-" + L.motion : ""));
     mid.style.setProperty("--th-sp", (8 / Math.max(0.2, num(L.speed, 1))).toFixed(2) + "s");
     if (L.motion === "salinim" || L.motion === "donme") mid.style.transformOrigin = L.origin || (L.motion === "salinim" ? "0% 100%" : "50% 50%");
+    if (opt && opt.prof && L.motion && L.motion !== "none") natCSS(mid, L, opt.prof);
     const img = el("img", "th-bl-img", { transform: `${L.flip ? "scaleX(-1) " : ""}rotate(${num(L.rotate, 0)}deg)` });
     img.alt = ""; img.draggable = false;
     if (L.art) img.src = artURL(L.art, L.color, L.color2);
@@ -187,7 +224,7 @@
       if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) img.src = u; });
       else img.src = src;
     }
-    const mv = wrapMoves(L, img);
+    const mv = wrapMoves(L, img, opt && opt.prof);
     mid.appendChild(mv.top); outer.appendChild(mid);
     outer.__mv = mv.specs;
     // yeni düzenleyiciyle kaydedilmiş zeminde: hiç kıpırdamayan katman ayrı ekran kartı katmanı tutmaz (bellek)
@@ -212,6 +249,7 @@
     if (mid) {
       mid.style.setProperty("--th-sp", (8 / Math.max(0.2, num(L.speed, 1))).toFixed(2) + "s");
       if (L.motion === "salinim" || L.motion === "donme") mid.style.transformOrigin = L.origin || (L.motion === "salinim" ? "0% 100%" : "50% 50%");
+      if (opt.prof) natCSS(mid, L, opt.prof);
     }
     const img = el("img", "th-bl-img");
     if (L.flip || num(L.rotate, 0)) img.style.transform = `${L.flip ? "scaleX(-1) " : ""}rotate(${num(L.rotate, 0)}deg)`;
@@ -243,7 +281,7 @@
       if (lit) { const m = `url("${url}")`; Object.assign(lit.style, { WebkitMaskImage: m, maskImage: m }); }
       if (sh) softShadow(sh, url, num(L.w, 120), num(L.h, 120));
     });
-    const mv = wrapMoves(L, img);
+    const mv = wrapMoves(L, img, opt.prof);
     const body = mid || mv.top; if (mid) mid.appendChild(mv.top);
     const host = anim || pose;
     host.appendChild(body); if (lit) host.appendChild(lit);
@@ -280,7 +318,7 @@
     const acts = (Array.isArray(bg.actions) ? bg.actions : []).filter(a => a && BG_MOVES.includes(a.move) && nodes[a.layer] && nodes[a.layer].__th && nodes[a.layer].__th.L);
     if (!F || !acts.length || mode !== "view" || reduced()) return;
     const anims = [];
-    const ctx = { L: {}, C: {}, S: {}, box: {}, lit: {}, cfg: { layers: {}, depth: 1, actions: [] }, k: 1, lite: weak(), dead: false,
+    const ctx = { L: {}, C: {}, S: {}, box: {}, lit: {}, cfg: { layers: {}, depth: 1, actions: [] }, k: 1, lite: weak(), dead: false, motion: global.SeozMotion ? global.SeozMotion.of(st.doc) : null,
       anim(elm, kf, o) {
         if (!elm || ctx.dead) return null; o = o || {};
         const a = elm.animate(kf, { duration: o.d || 600, delay: o.delay || 0, easing: o.e || "cubic-bezier(.16,1,.3,1)", fill: o.fill || "both", iterations: o.it || 1, direction: o.dir || "normal", composite: o.comp || "replace" });
@@ -359,7 +397,7 @@
     const R = Math.random;
     function spawn(p, fresh) {
       p.x = R() * W; p.y = fresh ? R() * H : (type === "balon" || type === "kalp" ? H + 30 : -20);
-      p.c = cols[(R() * cols.length) | 0]; p.r = R(); p.a = R() * Math.PI * 2; p.t = R() * 100;
+      p.c = cols[(R() * cols.length) | 0]; p.r = R(); p.a = R() * Math.PI * 2; p.a0 = null; p.t = R() * 100;
       const sp = { kar: 22, yaprak: 30, konfeti: 55, atesbocegi: 8, yildiz: 0, balon: -26, kalp: -22, parilti: 0 }[type] || 20;
       p.vy = sp * (0.6 + R() * 0.8); p.vx = (R() - 0.5) * (type === "atesbocegi" ? 16 : 10);
       p.s = { kar: 1.5 + R() * 2.5, yaprak: 5 + R() * 5, konfeti: 4 + R() * 4, atesbocegi: 1.5 + R() * 1.5, yildiz: 1 + R() * 2.2, balon: 10 + R() * 8, kalp: 5 + R() * 5, parilti: 1.5 + R() * 3 }[type] || 3;
@@ -394,7 +432,15 @@
           ctx.globalAlpha = g * fade; ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = 8;
           ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 6.283); ctx.fill(); ctx.shadowBlur = 0; continue;
         }
-        p.y += p.vy * dt; p.x += (p.vx + Math.sin(p.t * 1.2 + p.a) * (type === "kar" ? 8 : 14)) * dt; p.a += dt * (type === "konfeti" ? 4 : 1.2);
+        let flip = 1;
+        if (cfg.nat && (type === "yaprak" || type === "kar" || type === "balon" || type === "kalp")) {
+          // ✨ doğal süzülme (sahne uyumu): her parça kendi ritminde; yaprak sağa-sola sarkarak, yatayken yavaşlayarak iner
+          if (p.a0 == null) p.a0 = p.a;
+          const ph = p.t * (0.8 + p.r * 0.7) + p.a0, s1 = Math.sin(ph);
+          if (type === "yaprak") { p.x += (p.vx + Math.cos(ph) * 22) * dt; p.y += p.vy * (0.62 + 0.38 * Math.abs(s1)) * dt; p.a = p.a0 + s1 * 0.8; flip = 0.5 + 0.5 * Math.abs(Math.cos(ph * 1.3)); }
+          else if (type === "kar") { p.x += (p.vx + Math.sin(p.t * (0.5 + p.r * 0.8) + p.a0) * 9) * dt; p.y += p.vy * dt; }
+          else { p.x += (p.vx + Math.sin(ph * 0.6) * 9) * dt; p.y += p.vy * (0.85 + 0.15 * s1) * dt; p.a = p.a0; }
+        } else { p.y += p.vy * dt; p.x += (p.vx + Math.sin(p.t * 1.2 + p.a) * (type === "kar" ? 8 : 14)) * dt; p.a += dt * (type === "konfeti" ? 4 : 1.2); }
         const off = type === "balon" || type === "kalp" ? p.y < -40 : p.y > H + 30;
         if (off) spawn(p, false);
         ctx.globalAlpha = (type === "kar" ? 0.85 : 0.9) * fade; ctx.fillStyle = p.c;
@@ -405,7 +451,7 @@
           ctx.globalAlpha *= 0.5; ctx.strokeStyle = p.c; ctx.beginPath(); ctx.moveTo(p.x, p.y + p.s); ctx.quadraticCurveTo(p.x + 4, p.y + p.s * 2, p.x, p.y + p.s * 3); ctx.stroke();
         } else {
           ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a);
-          if (type === "yaprak") { ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 6.283); ctx.fill(); }
+          if (type === "yaprak") { if (flip !== 1) ctx.scale(1, flip); ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, 6.283); ctx.fill(); }
           else { ctx.scale(1, Math.abs(Math.cos(p.a * 1.3)) + 0.2); ctx.fillRect(-p.s / 2, -p.s / 3, p.s, p.s * 0.66); }
           ctx.restore();
         }
@@ -505,10 +551,13 @@ onmessage = e => { const m = e.data;
     teardown(canvasEl);
     const th = doc && doc.theme;
     const revealEls = Array.from(canvasEl.querySelectorAll(".th-rv"));
-    const st = { cleanups: [] };
+    const st = { cleanups: [], doc };
     st.destroy = () => st.cleanups.splice(0).forEach(f => { try { f(); } catch (e) { /* önemsiz */ } });
     canvasEl.__seozTheme = st;
 
+    // ✨ Sahne uyumu (core/motion.js): yalnızca belgede açıksa; eski belgelerde null → her şey eskisi gibi
+    const prof = global.SeozMotion ? global.SeozMotion.of(doc) : null;
+    if (prof) { canvasEl.classList.add("th-nat"); st.cleanups.push(() => canvasEl.classList.remove("th-nat")); }
     if (th && typeof th === "object") {
       applyLanguage(canvasEl, th);
       const bg = th.bg || {};
@@ -536,7 +585,7 @@ onmessage = e => { const m = e.data;
       const litIds = new Set(bgActs.filter(a => a.move === "sheen").map(a => a.layer)), actIds = new Set(bgActs.map(a => a.layer));
       // gizlenen katman çizilmez; bg.lv = 2 yeni düzenleyiciyle kaydedilmiş zemini gösterir (eski zeminler aynen)
       const lv2 = num(bg.lv, 0) >= 2;
-      const bls = (Array.isArray(bg.layers) ? bg.layers : []).filter(L => L && !L.hidden).map(L => { const n = buildBgLayer(L, mode, three, { lit: litIds.has(L.id), act: actIds.has(L.id), lv2 }); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; n.__L = L; return n; });
+      const bls = (Array.isArray(bg.layers) ? bg.layers : []).filter(L => L && !L.hidden).map(L => { const n = buildBgLayer(L, mode, three, { lit: litIds.has(L.id), act: actIds.has(L.id), lv2, prof }); (three ? (L.front ? camF : cam) : (L.front ? front : root)).appendChild(n); if (L.id) nodes[L.id] = n; n.__L = L; return n; });
       if (three && !camF.childNodes.length) { stageF.remove(); stageF = null; }
       /* Hafif mod (yalnızca 3D zeminde): zayıf cihazda baştan, diğerlerinde gerektiğinde kendiliğinden açılır.
          Sis akışı durur, ışık parıltısı gizlenir, parçacık tuvali düşük çözünürlükte çizilir.
@@ -555,7 +604,7 @@ onmessage = e => { const m = e.data;
       if (pt && !reduced()) {
         pc = el("canvas", "th-particles"); root.appendChild(pc);
         afterEntry(mode, st, () => {
-          const pcfg = Object.assign({}, pt, { seconds: num(pt.seconds, 0) });
+          const pcfg = Object.assign({}, pt, { seconds: num(pt.seconds, 0) }, prof ? { nat: 1, density: num(pt.density, 1) * prof.density } : null);
           // 3D zeminli sayfada parçacıklar ayrı çalışanda çizilir (desteklenmezse eski yol); 2D sayfalar aynen eski yoldan
           parts = ((three || lv2) && ParticlesOff(pc, pcfg)) || Particles(pc, pcfg); st.particles = parts;   // yeni düzenle kaydedilen zeminde de
           if (st.lite) parts.quality(1);
@@ -632,6 +681,7 @@ onmessage = e => { const m = e.data;
       // derinlik (kaydırınca farklı hızda kayma) + parçacık tuvalini görünen bölgeye taşıma
       const deep = bls.filter(n => Number(n.dataset.depth) > 0 || hasScrollFx(n.__L));
       let ticking = false, tiltX = 0, tiltY = 0;
+      let smooth = null;   // aşağıda (Smoother) kurulur
       // önce bütün ölçüler okunur, sonra bütün yazmalar yapılır: okuma-yazma karışınca tarayıcı her
       // katmanda sayfayı yeniden ölçmek zorunda kalıyordu. Katman konumları müşteri sayfasında değişmez,
       // bu yüzden bir kez ölçülür (pencere boyu değişince yeniden).
@@ -648,7 +698,16 @@ onmessage = e => { const m = e.data;
         if (mode === "view") geo = g;
         const mid = top + (vh / scale) / 2;
         const halfV = Math.max(1, (vh / scale) / 2);
-        if (!rm) g.forEach(o => {
+        if (!rm && smooth) {
+          // ✨ sahne uyumu: kaydırma hedefi hesaplanır, katmanlar oraya yumuşakça (ataletle) yetişir
+          g.forEach(o => {
+            const { d, cy, fx } = o, p = fx ? Math.max(-2, Math.min(2, (cy - mid) / halfV)) : 0;
+            o.tg = { x: tiltX * d * 18 + (fx ? p * num(fx.x, 0) : 0), y: (cy - mid) * d * 0.35 + tiltY * d * 14,
+              r: fx && num(fx.rot, 0) ? p * num(fx.rot, 0) : 0, s: fx && num(fx.scale, 0) ? Math.max(0.05, 1 + p * num(fx.scale, 0) / 100) : 1,
+              k: fx && num(fx.fade, 0) ? Math.max(0, 1 - Math.min(1, Math.abs(p)) * Math.min(100, num(fx.fade, 0)) / 100) : 1 };
+          });
+          smooth.kick(g);
+        } else if (!rm) g.forEach(o => {
           const { n, d, cy, fx } = o;
           let tf;
           if (!fx) tf = `translate3d(${(tiltX * d * 18).toFixed(1)}px, ${((cy - mid) * d * 0.35 + tiltY * d * 14).toFixed(1)}px, 0)`;
@@ -688,6 +747,38 @@ onmessage = e => { const m = e.data;
       }
       st.update = update;
       const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
+      // ✨ yumuşak kaydırma takibi (yalnızca müşteri sayfasında ve sahne uyumu açıkken)
+      function Smoother() {
+        let raf = 0, last = 0, list = null, dead = false;
+        const draw = o => {
+          const c = o.cu, n = o.n;
+          const tf = `translate3d(${c.x.toFixed(1)}px, ${c.y.toFixed(1)}px, 0)` + (c.r ? ` rotate(${c.r.toFixed(2)}deg)` : "") + (Math.abs(c.s - 1) > 0.0001 ? ` scale(${c.s.toFixed(4)})` : "");
+          if (o.lt !== tf) { o.lt = tf; n.style.transform = tf; }
+          if (o.fx && num(o.fx.fade, 0)) {
+            const kk = c.k.toFixed(3);
+            if (o.lk !== kk) { o.lk = kk; if (n.__fade) n.__fade.forEach(f => { f.e.style.opacity = (f.base * c.k).toFixed(3); }); else n.style.opacity = (Math.max(0, Math.min(1, num(n.__L.opacity, 1))) * c.k).toFixed(3); }
+          }
+        };
+        const step = now => {
+          raf = 0; if (dead || !list) return;
+          const dt = Math.min(0.05, last ? (now - last) / 1000 : 1 / 60); last = now;
+          const a = 1 - Math.exp(-dt * 11);   // ~0,2 sn'de yetişir: yumuşak ama gecikmiş hissettirmez
+          let busy = false;
+          list.forEach(o => {
+            if (!o.tg) return;
+            if (!o.cu) { o.cu = Object.assign({}, o.tg); draw(o); return; }   // ilk çizim: doğrudan yerinde
+            ["x", "y", "r", "s", "k"].forEach(key => {
+              const df = o.tg[key] - o.cu[key];
+              if (Math.abs(df) > (key === "s" || key === "k" ? 0.0005 : 0.05)) { o.cu[key] += df * a; busy = true; } else o.cu[key] = o.tg[key];
+            });
+            draw(o);
+          });
+          if (busy) raf = requestAnimationFrame(step); else last = 0;
+        };
+        return { kick(g2) { list = g2; if (!raf) raf = requestAnimationFrame(step); }, stop() { dead = true; cancelAnimationFrame(raf); } };
+      }
+      // stüdyo önizlemesinde (seçim çerçevesi katmanın anlık yerini okur) takip yumuşatılmaz
+      if (prof && mode === "view" && deep.length && !rm && !canvasEl.hasAttribute("data-ts-canvas")) { smooth = Smoother(); st.cleanups.push(() => smooth.stop()); }
       if (deep.length || pc || three) {
         global.addEventListener("scroll", onScroll, { passive: true, capture: true });
         const onResize = () => { geo = null; onScroll(); };
@@ -715,7 +806,13 @@ onmessage = e => { const m = e.data;
       if (mode !== "view" || reduced() || !global.IntersectionObserver) revealEls.forEach(n => n.classList.add("th-in"));
       else {
         afterEntry(mode, st, () => {
-          const io = new IntersectionObserver(ents => ents.forEach(e => { if (e.isIntersecting) { e.target.classList.add("th-in"); io.unobserve(e.target); } }), { threshold: 0.15 });
+          const io = new IntersectionObserver(ents => {
+            const ins = ents.filter(e => e.isIntersecting);
+            // ✨ sahne uyumu: aynı anda ekrana giren öğeler yukarıdan aşağıya kısa aralıklarla canlanır
+            if (prof && ins.length > 1) ins.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+              .forEach((e, i) => { if (i) e.target.style.transitionDelay = `calc(var(--th-rv-delay, 0s) + ${Math.min(i, 6) * 90}ms)`; });
+            ins.forEach(e => { e.target.classList.add("th-in"); io.unobserve(e.target); });
+          }, { threshold: 0.15 });
           revealEls.forEach(n => io.observe(n));
           st.cleanups.push(() => io.disconnect());
         });

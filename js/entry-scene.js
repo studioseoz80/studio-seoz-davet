@@ -405,6 +405,8 @@
     else if (entry.type === "dual-wing") overlay = buildDualWingOverlay(entry, done);
     else if (entry.type === "png") overlay = buildPngOverlay(entry, done);
     else overlay = buildVideoOverlay(entry, done);
+    // ✨ Sahne uyumu (core/motion.js): belgede açıksa zarf ve kart aynı doğal eğrilerle, birbirine bağlı oynar
+    if (global.SeozMotion && global.SeozMotion.of(doc)) overlay.classList.add("seoz-entry-nat");
 
     document.body.appendChild(overlay);
     activeOverlay = overlay;

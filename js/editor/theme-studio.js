@@ -259,7 +259,8 @@
       return t;
     }
     let saveT = 0;
-    function save(rerender) { const tz = th(); if (tz && tz.bg && Array.isArray(tz.bg.layers) && tz.bg.layers.length) tz.bg.lv = 2; clearTimeout(saveT); saveT = setTimeout(() => { if (cb.onChange) cb.onChange(); }, 250); markAfter(); if (rerender !== false) preview(); renderSub(); }
+    function save(rerender) { const tz = th(); if (tz && tz.bg && Array.isArray(tz.bg.layers) && tz.bg.layers.length) tz.bg.lv = 2;
+      /* ✨ sahne uyumu (elle ayarlar korunur) */ if (global.SeozMotion && doc.motion && doc.motion.on !== false) global.SeozMotion.recompute(doc); clearTimeout(saveT); saveT = setTimeout(() => { if (cb.onChange) cb.onChange(); }, 250); markAfter(); if (rerender !== false) preview(); renderSub(); }
     function renderSub() {
       const t = th(), pk = t && t.pack && P.pack(t.pack);
       $("[data-ts-sub]").textContent = t ? (pk ? `${pk.label} · ${pk.variants[t.variant || 0].label}` : "Özel zemin") + ` · ${(t.bg && t.bg.layers || []).length} zemin katmanı` : "Henüz iç zemin yok — bir paket seçin ya da kendi zemininizi kurun";

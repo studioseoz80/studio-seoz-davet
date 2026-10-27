@@ -88,7 +88,9 @@
     }
   }
 
-  function renderLayer(layer, mode, docId, breakpoint) {
+  // ✨ Sahne uyumu: belgenin hareket karakteri modüllere iletilir (etkileşimler aynı hareket diliyle oynar)
+  let CURRENT_MOTION = null;
+  function renderLayer(layer, mode, docId, breakpoint, motion) {
     const geo = SeozDocModel.resolveGeometry(layer, breakpoint);
     const wrap = el("div", "seoz-layer seoz-layer-" + layer.type);
     wrap.dataset.layerId = layer.id;
@@ -144,7 +146,7 @@
         // "hangi belge / hangi katman" bilgisine ihtiyaç duyan modüller
         // için eklendi. Konum/Müzik/Geri Sayım/RSVP bu parametreyi
         // KULLANMAZ — geriye dönük uyumlu, isteğe bağlı bir ekstra argüman.
-        host.appendChild(moduleDef.render(layer.settings, mode, { docId: docId, layerId: layer.id }));
+        host.appendChild(moduleDef.render(layer.settings, mode, { docId: docId, layerId: layer.id, motion: motion !== undefined ? motion : CURRENT_MOTION }));
       } else {
         host.textContent = "Bilinmeyen modül: " + layer.moduleId;
       }
@@ -270,6 +272,7 @@
   }
 
   function renderDocument(doc, canvasEl, mode, breakpoint) {
+    CURRENT_MOTION = doc.motion || null;
     // breakpoint verilmezse (eski çağrılar/güvenlik için) "mobile" varsayılır
     // — bu, FAZ 8 öncesi davranışın birebir aynısıdır.
     const bp = breakpoint === "desktop" ? "desktop" : "mobile";
@@ -283,7 +286,7 @@
 
     const sorted = doc.layers.slice().sort((a, b) => (a.z || 0) - (b.z || 0));
     sorted.forEach(layer => {
-      canvasEl.appendChild(renderLayer(layer, mode, doc.id, bp));
+      canvasEl.appendChild(renderLayer(layer, mode, doc.id, bp, doc.motion || null));
     });
 
     // İÇ ZEMİN STÜDYOSU: animasyonlu zemin, tasarım dili, kaydırınca canlanma.
@@ -293,5 +296,5 @@
     SeozLayoutEngine.recalcCanvasHeight(canvasEl, doc.canvas.minHeight);
   }
 
-  global.SeozRenderer = { renderDocument, applyTextStyle, applyCanvasBackground, clearIntervalsWithin, METALLIC_GRADIENTS, applyMetallicText };
+  global.SeozRenderer = { renderDocument, applyTextStyle, applyCanvasBackground, clearIntervalsWithin, METALLIC_GRADIENTS, applyMetallicText, motion: () => CURRENT_MOTION, setMotion: m => { CURRENT_MOTION = m || null; } };
 })(window);

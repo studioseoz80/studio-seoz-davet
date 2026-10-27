@@ -38,7 +38,12 @@
     yumusak: "cubic-bezier(.65,0,.35,1)", hizlanarak: "cubic-bezier(.55,0,1,.45)", yavaslayarak: "cubic-bezier(.16,1,.3,1)",
     esnek: "cubic-bezier(.34,1.56,.64,1)", agir: "cubic-bezier(.7,0,.2,1)", duz: "linear"
   };
-  const EASE_LABELS = [["yavaslayarak", "Yavaşlayarak"], ["yumusak", "Yumuşak"], ["hizlanarak", "Hızlanarak"], ["agir", "Ağır (kapı gibi)"], ["esnek", "Esnek"], ["duz", "Düz"]];
+  // ✨ Sahne uyumunun doğal eğrileri (core/motion.js) — adlar belgeye yazılır, burada çözülür
+  if (global.SeozMotion) Object.keys(global.SeozMotion.CURVES).forEach(k => { if (!EASE[k]) EASE[k] = global.SeozMotion.CURVES[k]; });
+  const EASE_LABELS = [["yavaslayarak", "Yavaşlayarak"], ["yumusak", "Yumuşak"], ["hizlanarak", "Hızlanarak"], ["agir", "Ağır (kapı gibi)"], ["esnek", "Esnek"], ["duz", "Düz"]]
+    .concat(global.SeozMotion ? global.SeozMotion.CURVE_LABELS.map(([v, l]) => [v, "✨ " + l]) : []);
+  // ✨ sahne uyumu açıksa karakterin enerjisi (genlik çarpanı); kapalıysa 1 → eski hareket
+  const NRG = ctx => (ctx && ctx.motion ? ctx.motion.energy : 1);
 
   function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
   function timing(a, def) {
@@ -160,7 +165,12 @@
       const axis = side === "top" || side === "bottom" ? "rotateX" : "rotateY";
       const sign = side === "right" || side === "top" ? -1 : 1;
       const deg = axis === "rotateX" ? -sign * ang : sign * ang;
-      ctx.anim(ctx.L[a.layer], [{ transform: `${axis}(0)` }, { transform: `${axis}(${deg}deg)` }], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      if (ctx.motion && global.SeozMotion) {
+        // ✨ gerçek kanat gibi: ağırlığıyla açılır, hedefi çok az geçer ve sönümlenerek oturur
+        const kf = global.SeozMotion.settleKF(v => `${axis}(${v.toFixed(2)}deg)`, 0, deg, ctx.motion.settle, 2);
+        kf[0].easing = t.e;
+        ctx.anim(ctx.L[a.layer], kf, { d: t.dur, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+      } else ctx.anim(ctx.L[a.layer], [{ transform: `${axis}(0)` }, { transform: `${axis}(${deg}deg)` }], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
       ctx.later(begin, () => ctx.shade(a.layer, out ? 0.25 : 0.6, { d: t.dur, e: t.e }));
       ctx.later(begin, () => ctx.sfx("creak"));
       return t.dur;
@@ -197,11 +207,15 @@
   registerMove({ id: "float", group: "sinematik", label: "Havada süzülme", single: true, duration: 2.6, easing: "yumusak", loop: true, defRepeat: 0,
     params: [{ key: "amount", label: "Genlik", def: "orta", options: [["az", "Az"], ["orta", "Orta"], ["cok", "Çok"]] }],
     run(ctx, a, def, begin) {
-      const t = timing(a, def), px = { az: 5, orta: 10, cok: 18 }[P(a, def, "amount")] || 10;
+      const t = timing(a, def), px = ({ az: 5, orta: 10, cok: 18 }[P(a, def, "amount")] || 10) * NRG(ctx);
       const card = a.layer === C.CARD_ID;
       const it2 = t.it === Infinity ? Infinity : t.it * 2;
-      ctx.anim(card ? ctx.L[a.layer] : (ctx.C[a.layer] || ctx.L[a.layer]), [{ transform: "translateY(0) rotate(0)" }, { transform: `translateY(${-px}px) rotate(.4deg)` }],
-        { d: t.dur / 2, delay: begin, e: t.e, it: it2, dir: "alternate", fill: "none", comp: "add" });
+      // sahne uyumunda: katmanlar aynı anda aynı yöne kalkmaz (kararlı evre) ve hafifçe yana da süzülür
+      const nat = !!ctx.motion, side = nat && global.SeozMotion.phase(a.layer) > 0.5 ? 1 : -1;
+      ctx.anim(card ? ctx.L[a.layer] : (ctx.C[a.layer] || ctx.L[a.layer]), nat
+        ? [{ transform: "translate(0px, 0px) rotate(0deg)" }, { transform: `translate(${(side * px * 0.22).toFixed(1)}px, ${(-px).toFixed(1)}px) rotate(${(side * 0.45).toFixed(2)}deg)` }]
+        : [{ transform: "translateY(0) rotate(0)" }, { transform: `translateY(${-px}px) rotate(.4deg)` }],
+        { d: t.dur / 2, delay: begin, e: nat && t.e === EASE.yumusak ? EASE.sinus : t.e, it: it2, dir: "alternate", fill: "none", comp: "add" });
       if (card && ctx.cardShadow) ctx.anim(ctx.cardShadow, [{ transform: "scale(1)" }, { transform: `scale(${1 - px / 90})` }],
         { d: t.dur / 2, delay: begin, e: t.e, it: it2, dir: "alternate", fill: "none", comp: "add" });
       return t.it === Infinity ? 0 : t.dur * t.it;
@@ -210,6 +224,20 @@
     params: [{ key: "mode", label: "Biçim", def: "titresim", options: [["titresim", "Hafif titreşim"], ["sallanma", "Sallanma"], ["sarsinti", "Güçlü sarsıntı"]] }],
     run(ctx, a, def, begin) {
       const t = timing(a, def), m = P(a, def, "mode"), el = ctx.C[a.layer] || ctx.L[a.layer];
+      if (ctx.motion && global.SeozMotion) {
+        // ✨ doğal: sallanma dönüş noktalarında yavaşlayan sarkaç; titreşim yumuşak ve aralıklı; sarsıntı sönümlenerek biter
+        const M = global.SeozMotion, en = NRG(ctx), loopy = t.it === Infinity;
+        if (m === "sallanma") {
+          // 0 → +a → 0 → −a → 0: duruştan başlar, saf sinüs (dönüşlerde doğal yavaşlama, döngüde dikiş yok)
+          ctx.anim(el, M.pendulumKF(1.6 * en), { d: Math.max(t.dur, 900), delay: begin, e: "linear", it: t.it, fill: "none", comp: "add" });
+          return loopy ? 0 : Math.max(t.dur, 900) * t.it;
+        }
+        const strong = m === "sarsinti", amp = (strong ? 5 : 1.4) * en;
+        const d = loopy && !strong ? Math.max(t.dur, 2400) : t.dur;
+        ctx.anim(el, M.jitterKF(amp, strong ? 10 : 8, a.layer + a.id, loopy && !strong ? 0.62 : 0), { d, delay: begin, e: "linear", it: t.it, fill: "none", comp: "add" });
+        if (strong) ctx.later(begin, () => ctx.sfx("knock"));
+        return loopy ? 0 : d * t.it;
+      }
       let kf;
       if (m === "sallanma") kf = [{ transform: "rotate(0)" }, { transform: "rotate(1.6deg)" }, { transform: "rotate(0)" }, { transform: "rotate(-1.6deg)" }, { transform: "rotate(0)" }];
       else {
@@ -514,6 +542,13 @@
     params: [{ key: "mode", label: "Biçim", def: "in", options: [["in", "Yukarıdan düşüp sekerek yerleş"], ["out", "Aşağı düşüp çık"]] }],
     run(ctx, a, def, begin) {
       const t = timing(a, def), out = P(a, def, "mode") === "out";
+      if (ctx.motion && !out && global.SeozMotion) {
+        // ✨ yerçekimine uygun düşüş; her sekme bir öncekinin esneklik² katı kadar yükselir (sert duruş yok)
+        const pr = ctx.motion, kf2 = global.SeozMotion.bounceKF(760, pr.bounce, { bounces: pr.id === "gorkemli" ? 2 : 3, squash: pr.id === "neseli" });
+        ctx.anim(ctx.L[a.layer], kf2, { d: t.dur, delay: begin, e: "linear", fill: "both", comp: "add" });
+        ctx.later(begin + t.dur * (1 / (1 + 2 * pr.bounce + 2 * pr.bounce * pr.bounce + 2 * Math.pow(pr.bounce, 3))), () => ctx.sfx("knock"));
+        return t.dur;
+      }
       const kf = out ? [{ transform: "translateY(0) rotate(0)", offset: 0, easing: "cubic-bezier(.55,0,1,.45)" }, { transform: "translateY(-24px) rotate(-2deg)", offset: 0.18, easing: "cubic-bezier(.55,0,1,.45)" }, { transform: "translateY(900px) rotate(8deg)", offset: 1 }]
         : [{ transform: "translateY(-760px)", offset: 0, easing: "cubic-bezier(.55,0,1,.45)" }, { transform: "translateY(0)", offset: 0.55, easing: "cubic-bezier(.16,1,.3,1)" },
            { transform: "translateY(-46px)", offset: 0.72, easing: "cubic-bezier(.55,0,1,.45)" }, { transform: "translateY(0)", offset: 0.86, easing: "cubic-bezier(.16,1,.3,1)" },
@@ -527,6 +562,12 @@
     params: [{ key: "axis", label: "Eksen", def: "y", options: [["y", "Dikey eksen (kart gibi)"], ["z", "Düz döner"]] }, { key: "turns", label: "Tur", def: 1, options: [[0.5, "Yarım tur"], [1, "1 tur"], [2, "2 tur"]] }],
     run(ctx, a, def, begin) {
       const t = timing(a, def), ax = P(a, def, "axis") === "z" ? "rotateZ" : "rotateY", deg = 360 * num(P(a, def, "turns"), 1);
+      if (ctx.motion) {
+        // ✨ sürekli dönüş sabit hızla akar; birkaç tur tek bir yumuşak hareket olarak döner (tur aralarında durma yok)
+        if (t.it === Infinity) { ctx.anim(ctx.L[a.layer], [{ transform: `${ax}(0)` }, { transform: `${ax}(${deg}deg)` }], { d: t.dur, delay: begin, e: "linear", it: Infinity, fill: "none", comp: "add" }); return 0; }
+        ctx.anim(ctx.L[a.layer], [{ transform: `${ax}(0)` }, { transform: `${ax}(${deg * t.it}deg)` }], { d: t.dur * t.it, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+        return t.dur * t.it;
+      }
       ctx.anim(ctx.L[a.layer], [{ transform: `${ax}(0)` }, { transform: `${ax}(${deg}deg)` }], { d: t.dur, delay: begin, e: t.e, it: t.it, fill: t.it === Infinity ? "none" : "forwards", comp: "add" });
       return t.it === Infinity ? 0 : t.dur * t.it;
     } });
@@ -570,9 +611,9 @@
   /* ---------- ışık ve efektler (görselden bağımsız) ---------- */
   function areaOf(ctx, a) { const c = center(ctx, a.layer); return { p: ctx.frameToScreen(c.x, c.y), c }; }
   function ambientFor(ctx, a, def, begin, opts) {
-    const t = timing(a, def), dens = { az: 0.5, orta: 1, cok: 1.8 }[P(a, def, "density")] || 1;
+    const t = timing(a, def), dens = ({ az: 0.5, orta: 1, cok: 1.8 }[P(a, def, "density")] || 1) * (ctx.motion ? ctx.motion.density : 1);
     ctx.later(begin, () => {
-      const h1 = ctx.fx.ambient(Object.assign({}, opts, { count: Math.round((opts.count || 30) * dens) }));
+      const h1 = ctx.fx.ambient(Object.assign({}, opts, { count: Math.round((opts.count || 30) * dens) }, ctx.motion && (opts.type === "petal" || opts.type === "snow") ? { nat: opts.type === "petal" ? 1 : 0.45, sway: 1 } : null));
       if (t.it !== Infinity) ctx.later(t.dur, () => h1.stop());
     });
     return t.it === Infinity ? 0 : t.dur;
@@ -811,7 +852,11 @@
         const s = i ? 1 : -1, w = c.b.w, hh = c.b.h;
         const crack = sh.vertical ? `translate(${s * 5}px, 2px) rotate(${s * 4}deg)` : `translate(2px, ${s * 5}px) rotate(${s * 4}deg)`;
         const far = sh.vertical ? `translate(${s * w * 0.4}px, 780px) rotate(${s * 38}deg)` : `translate(${s * 30}px, ${780 + (i ? 0 : -hh * 0.2)}px) rotate(${s * 30}deg)`;
-        ctx.anim(el, [{ transform: "translate(0px, 0px) rotate(0deg)" }, { transform: crack, offset: 0.14, easing: t.e }, { transform: far }], { d: t.dur, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+        if (ctx.motion) {
+          // ✨ önce gerilir (hafif şişme), çatlar; parçalar yerçekimiyle hızlanarak düşer
+          ctx.anim(el, [{ transform: "translate(0px, 0px) rotate(0deg) scale(1)", easing: EASE.sinus }, { transform: "translate(0px, 0px) rotate(0deg) scale(1.035)", offset: 0.1, easing: EASE["dogal-giris"] },
+            { transform: crack + " scale(1)", offset: 0.2, easing: EASE.dusus }, { transform: far + " scale(1)" }], { d: t.dur, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+        } else ctx.anim(el, [{ transform: "translate(0px, 0px) rotate(0deg)" }, { transform: crack, offset: 0.14, easing: t.e }, { transform: far }], { d: t.dur, delay: begin, e: "linear", fill: "forwards", comp: "add" });
         ctx.anim(el, [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { d: t.dur, delay: begin, e: "linear", fill: "forwards" });
       });
       ctx.later(begin, () => {
@@ -832,6 +877,33 @@
       const t = timing(a, def), D = t.dur, c = center(ctx, a.layer), parts = ctx.parts && ctx.parts[a.layer];
       const v = P(a, def, "dir") === "dikey", sid = otherLayer(ctx, a, "scissors", def);
       const cut = sid ? 0.34 : 0.06;
+      if (ctx.motion) {
+        /* ✨ doğal kesim: makas hafif bir yay çizerek gelir, ağzı açılır ve kesim anında kapanır; kurdele TAM o anda
+           ayrılır. Uçlar dış kenarlarından sarkaç gibi aşağı savrulur, iki kez sönümlenerek salınır, sonra düşer. */
+        if (sid) {
+          const sc = center(ctx, sid), dx = c.x - sc.x, dy = c.y - sc.y;
+          const at = (r, ox, oy) => `translate(${(dx + (ox || 0)).toFixed(1)}px, ${(dy + (oy || 0)).toFixed(1)}px) rotate(${r}deg)`;
+          ctx.anim(ctx.C[sid], [{ transform: "translate(0px, 0px) rotate(0deg)", easing: EASE["dogal-giris"] },
+            { transform: at(6, -dx * 0.12, -26), offset: 0.12, easing: EASE["dogal-giris"] }, { transform: at(0), offset: 0.22, easing: EASE.sinus },
+            { transform: at(-16), offset: cut - 0.06, easing: EASE.dusus }, { transform: at(0), offset: cut, easing: EASE.sinus },
+            { transform: at(-6), offset: cut + 0.05, easing: EASE["dogal-giris"] }, { transform: at(14, 200, -110), offset: 1 }],
+            { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+          ctx.anim(ctx.C[sid], [{ opacity: 1 }, { opacity: 1, offset: cut + 0.12 }, { opacity: 0, offset: 0.82 }, { opacity: 0 }], { d: D, delay: begin, e: "linear", fill: "forwards" });
+        }
+        if (parts) parts.forEach((p, i) => {
+          const s = i ? -1 : 1, A = v ? 18 : 62, Z0 = "translateY(0px) rotate(0deg)";
+          const R = (k, y) => `translateY(${y || 0}px) rotate(${(s * A * k).toFixed(2)}deg)`;
+          const lag = i ? 0.012 : 0;   // iki uç aynı anda değil, çok küçük farkla bırakır
+          const fall = v ? (i ? "translateY(820px) rotate(-12deg)" : `translateY(820px) rotate(${s * 40}deg)`) : `translateY(820px) rotate(${s * 86}deg)`;
+          ctx.anim(p.half, [{ transform: Z0, offset: 0 }, { transform: Z0, offset: cut + lag, easing: EASE.dusus },
+            { transform: R(1.18), offset: cut + lag + 0.16, easing: EASE.sinus }, { transform: R(0.9), offset: cut + lag + 0.25, easing: EASE.sinus },
+            { transform: R(1.05), offset: cut + lag + 0.33, easing: EASE.sinus }, { transform: R(1), offset: Math.min(0.9, cut + lag + 0.4), easing: EASE.dusus },
+            { transform: fall, offset: 1 }], { d: D, delay: begin, e: "linear", fill: "forwards", comp: "add" });
+        });
+        ctx.later(begin + D * cut, () => ctx.sfx("snip"));
+        ctx.later(begin + D * (cut + 0.4), () => ctx.sfx("swoosh"));
+        return D;
+      }
       if (sid) {
         const sc = center(ctx, sid), dx = c.x - sc.x, dy = c.y - sc.y;
         const at = r => `translate(${dx}px, ${dy}px) rotate(${r}deg)`;
@@ -911,7 +983,11 @@
     const { zc, k } = cardPlace(ctx);
     const from = { belir: `translateZ(${zc - 160}px) scale(${k * 0.85})`, in: `translateY(-520px) translateZ(${zc}px) rotateX(18deg) scale(${k})` }[style] || `translateY(90px) translateZ(${zc - 20}px) scale(${k * 0.94})`;
     const to = style === "in" ? `translateY(0) translateZ(${zc}px) rotateX(0) scale(${k})` : `translateY(0) translateZ(${zc}px) scale(${k})`;
-    ctx.anim(ctx.cardWrap, [{ opacity: 0, transform: from }, { opacity: 1, transform: to }], { d: t.dur, delay: begin, e: t.e, fill: "forwards" });
+    if (ctx.motion) {
+      // ✨ kart saydamlıktan erken kurtulur (yarı saydam "hayalet" görünmez), hareketi yumuşakça oturur
+      const from2 = style === "belir" ? from : style === "in" ? from : `translateY(70px) translateZ(${zc - 20}px) scale(${k * 0.95})`;
+      ctx.anim(ctx.cardWrap, [{ opacity: 0, transform: from2 }, { opacity: 1, offset: 0.4 }, { opacity: 1, transform: to }], { d: t.dur, delay: begin, e: t.e, fill: "forwards" });
+    } else ctx.anim(ctx.cardWrap, [{ opacity: 0, transform: from }, { opacity: 1, transform: to }], { d: t.dur, delay: begin, e: t.e, fill: "forwards" });
     ctx.later(begin + t.dur * 0.3, () => ctx.sfx("chime"));
   }
 
@@ -936,15 +1012,38 @@
     list.forEach((a, i) => { if (i === 0 || isGate(a)) out.push([]); out[out.length - 1].push(a); });
     return out;
   }
-  function runChunk(ctx, list) {
+  function runChunk(ctx, list, onEnd) {
     const plan = schedule(list);
-    let end = 0;
+    let end = 0, ref = null;
     plan.items.forEach(it => {
       let used = 0;
       try { used = it.def.run(ctx, it.a, it.def, it.begin) || 0; } catch (e) { console.error("[Studio SEOZ] Hareket hatası:", it.a.move, e); }
       if (isFinite(used)) end = Math.max(end, it.begin + used);
+      if (ctx.motion && used > 0 && isMainAct(it.a, it.def) && (!ref || it.begin + used >= ref.begin + ref.used)) ref = { begin: it.begin, used };
     });
-    return ctx.wait(end);
+    const extra = onEnd ? (onEnd(end, ref) || 0) : 0;
+    return ctx.wait(end + extra);
+  }
+  // ✨ ana hareket mi (sahne uyumunun sınıflandırması: açılış/ortaya çıkış; ışık, ortam ve döngüler değil)
+  function isMainAct(a, def) { return !!(global.SeozMotion && global.SeozMotion.roleOf(a, def) === "main"); }
+  // sahne uyumunda kendiliğinden gelen kartın başlangıcı: son ana hareket bitmek üzereyken
+  function cardLeadAt(prof, end, ref) { return ref ? Math.min(end, ref.begin + ref.used * (1 - prof.cardLead)) : end; }
+  const CARD_AUTO_MS = prof => Math.round(1300 * (prof ? prof.tempo : 1));
+  const cardEase = prof => (prof ? EASE[prof.ease.enter] || EASE.yavaslayarak : EASE.yavaslayarak);
+  // otomatik açılışta ara adım: kısa bir an bekler, misafir dokunursa hemen sürer (zorunlu dokunuş / "Geç" yok)
+  const AUTO_GAP = prof => Math.max(700, Math.round(prof.beat * 1.1));   // otomatik açılışta adımlar arası kısa nefes
+  const AUTO_START = prof => prof.beat + 300;                             // core: otomatik başlangıç beklemesi
+  function autoAdvance(ctx, kind) {
+    const ms = AUTO_GAP(ctx.motion);
+    if (kind === "tap") return Promise.race([ctx.wait(ms), ctx.waitTap()]);
+    const g = tracker(ctx);
+    return new Promise(res => {
+      let f = null, over = false;
+      const done = () => { if (over) return; over = true; if (f) g.subs.delete(f); res(); };
+      f = type => { if (type === "down" || type === "up") { g.eat = true; done(); } };
+      g.subs.add(f);
+      ctx.wait(ms).then(done);
+    });
   }
   const GATE_HINT = { tap: "Devam etmek için dokunun", pull: "Açmak için çekin", swipe: "Açmak için kaydırın", hold: "Açmak için basılı tutun" };
   const DIR_ARROW = { up: " ↑", down: " ↓", left: " ←", right: " →" };
@@ -1149,6 +1248,7 @@
     const firstKind = rest.length && isGate(rest[0]) ? rest[0].start : "tap";
     const autoFirst = pre.length > 0 && autoGate(acts[firstTap]);
     const gestures = acts.some(a => isGate(a) && a.start !== "tap");
+    const cardAct = acts.some(a => MOVES[a.move].isCard || (a.layer === C.CARD_ID && MOVES[a.move].free3d));
     const model = {
       id: "free", label: "Serbest stüdyo", icon: "🎬", concept: "none", slots,
       build(ctx) {
@@ -1182,6 +1282,7 @@
         } : null,
         async open(ctx) {
           const parts = rest.length ? chunks(rest) : [];
+          const autoRun = !!(ctx.motion && ctx.cfg && ctx.cfg.start === "auto");
           for (let i = 0; i < parts.length; i++) {
             const head = parts[i][0], kind = isGate(head) ? head.start : "tap";
             if (autoGate(head) && (i > 0 || autoFirst)) {
@@ -1192,16 +1293,23 @@
               if (ctx.dead) return;
             } else if (i > 0 || (kind !== "tap" && !ctx.__gateOpen)) {
               showTapHint(ctx, true, kind);
-              if (kind === "tap") await ctx.waitTap(); else await gate(ctx, kind, head.gdir);
+              if (autoRun) await autoAdvance(ctx, kind);
+              else if (kind === "tap") await ctx.waitTap(); else await gate(ctx, kind, head.gdir);
               showTapHint(ctx, false); if (ctx.dead) return;
             }
             ctx.__gateOpen = false;
-            if (kind === "pull" || kind === "hold") await runScrubChunk(ctx, parts[i], kind, head.gdir);
-            else await runChunk(ctx, parts[i]);
+            // ✨ sahne uyumu: kart ayrı bir hareketle gelmiyorsa son ana hareket bitmek üzereyken çıkar (boş bekleme yok)
+            const lead = ctx.motion && ctx.hasCard && !cardAct && i === parts.length - 1 ? (end, ref) => {
+              const at = cardLeadAt(ctx.motion, end, ref), d = CARD_AUTO_MS(ctx.motion);
+              revealCard(ctx, "yuksel", { dur: d, e: cardEase(ctx.motion) }, at);
+              return Math.max(0, at + d - end);
+            } : null;
+            if ((kind === "pull" || kind === "hold") && !autoRun) await runScrubChunk(ctx, parts[i], kind, head.gdir);
+            else await runChunk(ctx, parts[i], lead);
             if (ctx.dead) return;
           }
           if (!ctx.__cardShown && ctx.hasCard) {
-            const t = { dur: 1300, e: EASE.yavaslayarak };
+            const t = { dur: CARD_AUTO_MS(ctx.motion), e: cardEase(ctx.motion) };
             revealCard(ctx, "yuksel", t, 0);
             await ctx.wait(t.dur);
           }
@@ -1269,7 +1377,7 @@
   /* İç kart adımı "Dokununca" olsa da açılış animasyonu bitince kart kendiliğinden gelir (misafir "Geç"e
      basmak zorunda kalmaz). Kartın ÖNÜNDE hareket yoksa bu dokunuş açılışın kendisidir ve aynen beklenir. */
   const autoGate = a => !!a && a.start === "tap" && (a.move === "card" || a.layer === C.CARD_ID);
-  function plan(ncfg, entry) {
+  function plan(ncfg, entry, prof) {
     const model = ncfg.__free, acts = model ? (ncfg.actions || []) : [];
     const firstTap = acts.findIndex(isGate);
     const pre = firstTap > 0 ? acts.slice(0, firstTap) : [];
@@ -1281,23 +1389,33 @@
       const sp = schedule(pre);
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: it.begin, end: it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: 0 })));
       // kart kendiliğinden geliyorsa: dokunuş beklenmez, önceki hareketler bitince başlar
-      t = autoFirst ? (ncfg.start === "auto" ? Math.max(1600, sp.end) : sp.end) : Math.max(ATTENTION_MIN, sp.end);
-    } else t = ncfg.start === "auto" ? 1600 : 900;
+      const AS = prof ? AUTO_START(prof) : 1600;
+      t = autoFirst ? (ncfg.start === "auto" ? Math.max(AS, sp.end) : sp.end) : (prof && ncfg.start === "auto" ? Math.max(AS, sp.end) : Math.max(ATTENTION_MIN, sp.end));
+    } else t = ncfg.start === "auto" ? (prof ? AUTO_START(prof) : 1600) : 900;
     taps.push({ time: t, first: true, kind: rest.length && isGate(rest[0]) ? rest[0].start : "tap", auto: autoFirst });
     const parts = rest.length ? chunks(rest) : [];
     parts.forEach((list, ci) => {
-      if (ci > 0) { const au = autoGate(list[0]); if (!au) t += TAP_GAP; taps.push({ time: t, kind: list[0].start, auto: au }); }
+      if (ci > 0) { const au = autoGate(list[0]); if (!au) t += prof && ncfg.start === "auto" ? AUTO_GAP(prof) : TAP_GAP; taps.push({ time: t, kind: list[0].start, auto: au }); }
       const sp = schedule(list);
       sp.items.forEach(it => items.push(Object.assign({}, it, { begin: t + it.begin, end: t + it.end, loopForever: !isFinite(timing(it.a, it.def).it) && it.def.loop, chunk: ci + 1 })));
       t += sp.end;
     });
     const cardItem = items.find(it => it.def.isCard || (it.a.layer === C.CARD_ID && it.def.free3d));
     const hasCard = !!(entry && (entry.cardSrc || ncfg.cardMode === "title")) && ncfg.cardMode !== "none";
-    const cardStart = cardItem ? cardItem.begin : t;
-    const cardShown = cardItem ? cardItem.end : (hasCard ? t + CARD_AUTO : t);
+    let cardStart = cardItem ? cardItem.begin : t;
+    let cardShown = cardItem ? cardItem.end : (hasCard ? t + CARD_AUTO : t);
+    if (prof && !cardItem && hasCard && parts.length) {
+      // ✨ sahne uyumu: kart son ana hareketin bitişiyle örtüşür (oynatıcıdaki runChunk ile aynı kural)
+      const last = items.filter(it => it.chunk === parts.length && isMainAct(it.a, it.def) && it.end > it.begin);
+      const ref = last.reduce((m, it) => (!m || it.end >= m.end ? it : m), null);
+      const end0 = t;
+      cardStart = ref ? cardLeadAt(prof, end0, { begin: ref.begin, used: ref.end - ref.begin }) : end0;
+      cardShown = cardStart + CARD_AUTO_MS(prof);
+    }
     const dd = entry && entry.cardDisplayDuration;
     const hold = dd === "tap" ? 3000 : Math.max(1, num(dd, 10)) * 1000;
     const end = Math.max(t, cardShown);
+    const cardMs = prof ? CARD_AUTO_MS(prof) : CARD_AUTO;
     const exitMs = Math.max(200, Math.min(4000, num(ncfg.exitDuration, 1) * 1000));
     const cardEnd = end + (hasCard ? hold : 0);
     let actsEnd = 0;
@@ -1307,7 +1425,7 @@
       sp.items.forEach(it => items.push(Object.assign({}, it, { a: ex.find(x => x.id === it.a.id) || it.a, begin: cardEnd + it.begin, end: cardEnd + it.end, chunk: "exit" })));
       actsEnd = sp.end;
     }
-    return { items, taps, firstTap: taps[0].time, cardStart, cardShown, hasCard, autoCard: !cardItem && hasCard, holdTap: dd === "tap",
+    return { items, taps, firstTap: taps[0].time, cardStart, cardShown, hasCard, autoCard: !cardItem && hasCard, holdTap: dd === "tap", cardMs, cardEase: cardEase(prof),
       cardEnd, exitAt: cardEnd + actsEnd, exitMs, total: cardEnd + actsEnd + exitMs };
   }
 
@@ -1321,7 +1439,7 @@
     ctl.stop = () => { ctl.dead = true; cancelAnimationFrame(ctl.raf); ctl.timers.forEach(clearTimeout); hd.destroy(); };
     ctl.ready = hd.ready.then(() => {
       const ctx = hd.ctx; if (!ctx || ctl.dead) return ctl;
-      const p = plan(ctx.cfg, d2.entry); ctl.plan = p;
+      const p = plan(ctx.cfg, d2.entry, ctx.motion); ctl.plan = p;
       const k = ctx.k, Tu = Math.max(0, Math.min(p.paused ? p.total : p.total, (o.from || 0) * 1000 / k));
       ctx.later = (ms, fn) => {   // geçmişte kalan ses/parçacık anlarını atla, gerisini bu oynatıcıya bağla
         if (ms < -1200) return;
@@ -1336,7 +1454,7 @@
         const cw = ctx.cardWrap;   // K1: kartın kendi sürekli hareketleri (süzülme, parlama) sürer
         hd.overlay.getAnimations({ subtree: true }).forEach(an => { if (an.effect && an.effect.getTiming().iterations === Infinity && !(cw && an.effect.target && cw.contains(an.effect.target))) an.cancel(); });
       });
-      if (p.autoCard) revealCard(ctx, "yuksel", { dur: CARD_AUTO, e: EASE.yavaslayarak }, p.cardStart - Tu);
+      if (p.autoCard) revealCard(ctx, "yuksel", { dur: p.cardMs, e: p.cardEase }, p.cardStart - Tu);
       const t0 = performance.now();
       const now = () => Math.min(p.total, Tu + (performance.now() - t0) / k) * k / 1000;
       ctl.time = now;

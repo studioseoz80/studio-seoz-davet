@@ -180,6 +180,10 @@
         mobileCardWidthPercent: null,
         allowReplayForGuest: false
       },
+      // ✨ OTOMATİK SAHNE UYUMU (bkz. js/core/motion.js): yeni davetiyelerde açık başlar — eklenen
+      // görseller ve hareketler kendiliğinden tek bir sahne gibi uyumlanır. Bu alanı taşımayan ESKİ
+      // davetiyeler birebir eskisi gibi oynar (uyum yalnızca kullanıcı açarsa devreye girer).
+      motion: { v: 1, on: true, character: "zarif" },
       layers: []
     };
   }

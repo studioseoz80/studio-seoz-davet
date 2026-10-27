@@ -1,0 +1,41 @@
+/* =============================================================================
+   STUDIO SEOZ EDİTÖRÜ — motion-panel.css  (✨ Otomatik Sahne Uyumu paneli)
+   Yalnızca editörde yüklenir.
+   ========================================================================= */
+.mp-root{ position:fixed; inset:0; z-index:1500; background:rgba(28,26,22,.42); display:flex; align-items:flex-start; justify-content:center; padding:48px 16px; overflow:auto; }
+.mp-card{ width:min(640px, 100%); background:var(--paper, #FAF8F3); color:var(--ink, #23261F); border-radius:14px; box-shadow:0 24px 60px rgba(0,0,0,.25); padding:22px 24px 18px; font-family:var(--f-body, sans-serif); }
+.mp-head{ display:flex; gap:12px; align-items:flex-start; justify-content:space-between; }
+.mp-head h2{ margin:0; font-family:var(--f-display, serif); font-size:1.7rem; font-weight:600; }
+.mp-head p{ margin:4px 0 0; color:var(--ink-soft, #6B6A5E); font-size:.88rem; line-height:1.45; }
+.mp-x{ border:0; background:none; font-size:1.1rem; cursor:pointer; color:var(--ink-soft, #6B6A5E); padding:4px 6px; }
+.mp-card h3{ margin:18px 0 8px; font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft, #6B6A5E); }
+.mp-switch{ display:flex; align-items:center; gap:10px; margin-top:16px; padding:10px 12px; border:1px solid var(--line, #DCD5C6); border-radius:10px; background:#fff; cursor:pointer; font-size:.86rem; }
+.mp-switch input{ position:absolute; opacity:0; pointer-events:none; }
+.mp-track{ flex:none; width:38px; height:22px; border-radius:11px; background:#D5CFC2; position:relative; transition:background .25s cubic-bezier(.37,0,.63,1); }
+.mp-track i{ position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .3s cubic-bezier(.34,1.3,.64,1); }
+.mp-switch input:checked + .mp-track{ background:var(--gold, #93703F); }
+.mp-switch input:checked + .mp-track i{ transform:translateX(16px); }
+.mp-switch input:focus-visible + .mp-track{ outline:2px solid var(--gold, #93703F); outline-offset:2px; }
+.mp-chars{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+.mp-char{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; padding:12px; border:1px solid var(--line, #DCD5C6); border-radius:10px; background:#fff; cursor:pointer; font:inherit; color:inherit;
+  transition:border-color .2s, box-shadow .2s, transform .25s cubic-bezier(.22,.61,.36,1); }
+.mp-char:hover{ transform:translateY(-1px); border-color:#C6B48F; }
+.mp-char.is-on{ border-color:var(--gold, #93703F); box-shadow:inset 0 0 0 1px var(--gold, #93703F); background:#FBF6EC; }
+.mp-ic{ font-size:1.4rem; line-height:1; margin-bottom:4px; }
+.mp-char strong{ font-size:.95rem; }
+.mp-char small{ color:var(--ink-soft, #6B6A5E); font-size:.76rem; line-height:1.35; }
+.mp-list{ list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.mp-list li{ display:flex; flex-wrap:wrap; gap:4px 10px; padding:8px 10px; background:#fff; border:1px solid var(--line, #DCD5C6); border-radius:8px; font-size:.84rem; }
+.mp-list li b{ min-width:170px; }
+.mp-list li span{ color:var(--ink-soft, #6B6A5E); }
+.mp-list li.mp-warn{ background:#FFF6E8; border-color:#E8C98F; color:#6A4B12; display:block; }
+.mp-link{ border:0; background:none; color:var(--gold, #93703F); font-weight:700; cursor:pointer; padding:0 2px; font:inherit; text-decoration:underline; }
+.mp-report{ margin:12px 0 0; padding:8px 12px; border-radius:8px; background:#EEF3EA; color:#3E5634; font-size:.85rem; }
+.mp-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:16px; }
+.mp-confirm{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:.82rem; color:#6A4B12; background:#FFF6E8; border:1px solid #E8C98F; border-radius:8px; padding:6px 8px; }
+.mp-note{ margin:12px 0 0; color:var(--ink-soft, #6B6A5E); font-size:.76rem; line-height:1.45; }
+.cs-harmony{ border:1px solid var(--line, #DCD5C6); background:#FBF6EC; color:var(--ink, #23261F); border-radius:999px; padding:5px 12px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.cs-harmony:hover{ border-color:var(--gold, #93703F); }
+.cs-auto{ color:#7A6232 !important; }
+@media (max-width:560px){ .mp-chars{ grid-template-columns:1fr; } .mp-list li b{ min-width:0; } .mp-root{ padding:16px 10px; } }
+@media (prefers-reduced-motion: reduce){ .mp-track, .mp-track i, .mp-char{ transition:none; } }

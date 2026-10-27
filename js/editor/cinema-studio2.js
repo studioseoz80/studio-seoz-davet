@@ -70,7 +70,7 @@
     root.innerHTML = `
       <header class="cs-head">
         <div class="cs-title"><span class="cs-logo">🎬</span><div><h2>Animasyon Stüdyosu</h2><p data-cs-sub></p></div></div>
-        <div class="cs-head-actions"><button type="button" class="btn btn-primary" data-cs-close>Bitti</button></div>
+        <div class="cs-head-actions">${global.SeozMotionPanel ? `<button type="button" class="cs-harmony" data-cs-harmony title="Bütün hareketleri tek bir sahne gibi uyumlar">${esc(global.SeozMotionPanel.chip(doc))}</button>` : ""}<button type="button" class="btn btn-primary" data-cs-close>Bitti</button></div>
       </header>
       <div class="cs-body">
         <aside class="cs-left" data-cs-left></aside>
@@ -102,7 +102,17 @@
     const layerName = id => isCard(id) ? "İç kart" : ((layerById(id) || {}).name || "");
     const L5 = global.SeozCinemaLibrary || null;
     const presetOn = () => !!(cin.preset && F.presetOf(cin.preset.id));
-    function save() { if (cb.onChange) cb.onChange(); }
+    // ✨ Sahne uyumu açıksa her değişiklikte sahne yeniden uyumlanır (elle ayarlar korunur); zaman çizelgesi
+    // ve önizleme aynı kuralla çizilir → editör önizlemesi = yayın
+    const harmonyOn = () => !!(global.SeozMotion && doc.motion && doc.motion.v && doc.motion.on !== false);
+    function save() {
+      if (harmonyOn()) {
+        const sel = state.selAct && cin.actions.find(x => x.id === state.selAct), before = sel ? JSON.stringify([sel.start, sel.delay, sel.duration, sel.easing]) : "";
+        const r = global.SeozMotion.recompute(doc);
+        if (r && r.changed && sel && JSON.stringify([sel.start, sel.delay, sel.duration, sel.easing]) !== before) setTimeout(() => { if (root.isConnected) renderRight(); }, 0);
+      }
+      if (cb.onChange) cb.onChange();
+    }
     function norm() { return C.normalize(cin); }
 
     /* ---------- üst bilgi ---------- */
@@ -291,6 +301,7 @@
           <span class="cs-row-btns"><button type="button" class="cs-ico" data-cs-acopy="${a.id}" title="Kopyala (sonra başka katmanı seçip Yapıştır)" aria-label="Kopyala">⧉</button>
           <button type="button" class="cs-ico cs-del" data-cs-adel="${a.id}" aria-label="Hareketi sil">✕</button></span></div>
         ${m.note ? `<p class="cs-hint">${esc(m.note)}</p>` : ""}
+        ${harmonyOn() && a.auto && a.start !== "exit" ? `<p class="cs-hint cs-auto">${(a.auto.keep || []).length ? "✋ Bu hareketteki elle ayarlarınız korunuyor; Sahne Uyumu yalnızca diğer alanları düzenler" : "✨ Zamanlama Sahne Uyumu'ndan · değiştirdiğiniz ayar korunur"}</p>` : ""}
         ${backWarnHTML(layerById(a.layer), m, a)}
         <label class="cs-row"><span>Başlat</span><select data-cs-af="${a.id}" data-key="start">
           ${START_LABELS.concat(isCard(a.layer) ? [["exit", "Kart çıkışında"]] : []).map(([v, l]) => `<option value="${v}" ${a.start === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
@@ -732,7 +743,7 @@
     /* =================== A2.3 · ZAMAN ÇİZELGESİ =================== */
     const tlEl = root.querySelector("[data-cs-tl]");
     function fmt(t) { return (Math.round(t * 10) / 10).toFixed(1).replace(".", ","); }
-    function tlPlan() { const n = norm(); return { n, p: n.__free ? F.plan(n, entry) : null, k: 1 / (n.speed || 1) }; }
+    function tlPlan() { const n = norm(); return { n, p: n.__free ? F.plan(n, entry, global.SeozMotion ? global.SeozMotion.of(doc) : null) : null, k: 1 / (n.speed || 1) }; }
     function renderTimeline() {
       const { p, k } = tlPlan();
       if (!p) { tlEl.innerHTML = `<p class="cs-hint cs-tl-empty">Hazır kurgu seçiliyken zaman çizelgesi kullanılmaz; kurgu kendi zamanlamasıyla oynar.</p>`; return; }
@@ -902,6 +913,10 @@
       const t = e.target.closest("button, [data-cs-sel]"); if (!t || !root.contains(t)) return;
       const d = t.dataset;
       if (d.csClose != null) return close();
+      if (d.csHarmony != null && global.SeozMotionPanel) {
+        return global.SeozMotionPanel.open(doc, { onChange: () => { if (cb.onChange) cb.onChange(); refreshAll(); t.textContent = global.SeozMotionPanel.chip(doc); },
+          onClose: () => { t.textContent = global.SeozMotionPanel.chip(doc); } });
+      }
       if (d.csLib != null) return openLibrary();
       if (d.csLibSave != null) return saveKurgu();
       if (d.csLibImport != null) return importKurgu();
@@ -994,6 +1009,8 @@
         const a = cin.actions.find(x => x.id === tg.dataset.csAf), key = tg.dataset.key;
         a[key] = key === "delay" || key === "duration" || key === "repeat" || key === "speed" ? Math.max(0, Number(tg.value) || 0) : tg.value;
         if (key === "duration" && !a.duration) a.duration = 0.1;
+        // ✨ kullanıcı başlatma biçimini kendisi seçtiyse, uyumun koyduğu gecikme sıfırlanır ("Öncekinden sonra" = hemen ardından)
+        if (key === "start" && a.auto && Math.abs((Number(a.delay) || 0) - (Number(a.auto.delay) || 0)) < 0.011 && a.start !== "at") a.delay = 0;
         if (key === "speed" && !a.speed) a.speed = 1;
         save(); renderSeq(); renderSub(); renderTimeline();
         if (key === "start" && isCard(a.layer)) { renderRight(); renderLeft(); return showCard(); }

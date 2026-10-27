@@ -325,9 +325,42 @@
       }
     }
     const A = (e, kf, o) => { try { return e.animate(kf, Object.assign({ fill: "forwards" }, o)); } catch (er) { return null; } };
+    function cutNat(PR) {
+      /* ✨ doğal kesim: makas küçük bir yay çizerek gelir; ağzı açılır ve KAPANDIĞI anda kurdele ayrılır. Uçlar
+         gerginliği boşaltıp (hafif geri tepme) dış uçlarından yerçekimiyle savrulur, sönümlenerek salınır (sark) ya
+         da hızlanarak düşer (dus). Kutlama, kesim tamamlanıp uçlar aşağı indikten sonra başlar. */
+      const tSnip = sc ? T * 0.3 : 0, snipD = T * 0.16, cutAt = sc ? tSnip + snipD * 0.72 : 0;
+      if (idle) idle.cancel();
+      const C0 = "translate(-50%, -50%)";
+      if (sc) {
+        A(sc, swipe ? [{ transform: WAIT + " rotate(0deg)", opacity: 1, easing: "cubic-bezier(.22,.61,.36,1)" }, { transform: C0 + " translateX(0) rotate(0deg)", opacity: 1 }]
+          : [{ transform: C0 + " translate(240%, -70%) rotate(12deg)", opacity: 0, easing: "cubic-bezier(.22,.61,.36,1)" }, { opacity: 1, offset: 0.3, easing: "cubic-bezier(.22,.61,.36,1)" },
+             { transform: C0 + " translate(80%, -34%) rotate(7deg)", offset: 0.6, easing: "cubic-bezier(.37,0,.63,1)" }, { transform: C0 + " translate(0px, 0px) rotate(0deg)", opacity: 1 }], { duration: tSnip });
+        A(sc, [{ transform: C0 + " rotate(0deg) scaleY(1)", easing: "cubic-bezier(.37,0,.63,1)" }, { transform: C0 + " rotate(-9deg) scaleY(1.16)", offset: 0.42, easing: "cubic-bezier(.55,.085,.68,.53)" },
+          { transform: C0 + " rotate(1deg) scaleY(.78)", offset: 0.72, easing: "cubic-bezier(.37,0,.63,1)" }, { transform: C0 + " rotate(0deg) scaleY(1)" }], { duration: snipD, delay: tSnip, fill: "none" });
+        A(sc, [{ transform: C0 + " translate(0px, 0px) rotate(0deg)", opacity: 1, easing: "cubic-bezier(.45,.05,.55,.95)" }, { transform: C0 + " translate(-60%, -50%) rotate(-10deg)", opacity: 1, offset: 0.35, easing: "cubic-bezier(.55,.085,.68,.53)" },
+          { transform: C0 + " translate(-230%, -30%) rotate(-18deg)", opacity: 0 }], { duration: T * 0.42, delay: tSnip + snipD });
+      }
+      later(() => {
+        shapeEdges(); full.style.visibility = "hidden"; hl.style.display = hr.style.display = "block";
+        const fall = C.fall === "dus", d = T * (fall ? 0.72 : 0.95), SIN = "cubic-bezier(.37,0,.63,1)", G = "cubic-bezier(.55,.085,.68,.53)";
+        const kfL = fall
+          ? [{ transform: "none", opacity: 1, easing: "cubic-bezier(.22,.61,.36,1)" }, { transform: "translateX(-4%) rotate(-3deg)", offset: 0.08, easing: G },
+             { transform: "translate(-7%, 50%) rotate(36deg) scaleY(.94)", offset: 0.45, easing: G }, { transform: "translate(-12%, 240%) rotate(84deg) scaleY(.9)", opacity: 0 }]
+          : [{ transform: "none", easing: "cubic-bezier(.22,.61,.36,1)" }, { transform: "translateX(-4%) rotate(-3deg)", offset: 0.07, easing: G },
+             { transform: "translateX(-3%) rotate(97deg) scaleY(.93)", offset: 0.38, easing: SIN }, { transform: "translateX(-3%) rotate(71deg) scaleY(.95)", offset: 0.56, easing: SIN },
+             { transform: "translateX(-3%) rotate(84deg) scaleY(.94)", offset: 0.72, easing: SIN }, { transform: "translateX(-3%) rotate(77deg) scaleY(.95)", offset: 0.86, easing: SIN }, { transform: "translateX(-3%) rotate(79deg) scaleY(.95)" }];
+        const kfR = kfL.map(k => Object.assign({}, k, { transform: k.transform.replace(/translateX\(-/g, "translateX(").replace(/translate\(-/g, "translate(").replace(/rotate\((-?)(\d+)deg\)/g, (m, sg, n) => `rotate(${sg ? "" : "-"}${n}deg)`) }));
+        A(hl, kfL, { duration: d });
+        A(hr, kfR, { duration: d * 1.03, delay: 24 });
+        if (bow) A(bow, [{ transform: bow.style.transform, opacity: 1, easing: "cubic-bezier(.22,.61,.36,1)" }, { transform: bow.style.transform + " translateY(-8%) scale(1.04)", offset: 0.14, easing: G }, { transform: bow.style.transform + " translateY(240%) rotate(32deg)", opacity: 0 }], { duration: T * 0.75 });
+        later(() => reveal(root, s), d * (fall ? 0.42 : 0.5));
+      }, cutAt);
+    }
     function cut() {
       if (done || root.classList.contains("is-done")) return; done = true;
       if (reduced()) { stage.style.opacity = "0"; reveal(root, s); return; }
+      if (root.__prof) return cutNat(root.__prof);
       const tSnip = sc ? T * 0.32 : 0;
       if (idle) idle.cancel();
       if (sc) {
@@ -652,7 +685,7 @@
         later(() => {
           const tr = T * 0.34, up = one ? Math.max(rise, 104) : rise;
           AN(lin, [{ transform: "translateY(0)" }, { transform: `translateY(-${up}%)` }], { duration: tr, easing: "cubic-bezier(.35,.6,.3,1)" });
-          later(() => reveal2(root, s), tr * 0.35);
+          later(() => reveal2(root, s), tr * (root.__prof ? 0.62 : 0.35));
           if (one) later(() => {   // mektup tamamen çıkınca zarfın önüne gelir
             letter.style.zIndex = "6";
             const H = root.offsetHeight || 220, lh = letter.offsetHeight || 1, dy = (50 - LP.y) / 100 * H;
@@ -762,7 +795,7 @@
           AN(glow, [{ opacity: 0, transform: "translate(-50%,-50%) scale(.3)" }, { opacity: 1, transform: "translate(-50%,-55%) scale(1.15)", offset: 0.4 }, { opacity: 0.75, transform: "translate(-50%,-55%) scale(1)" }], { duration: T * 0.7, easing: "ease-out" });
         }
         if (g.top > g.H * 0.3 && lid) rs.style.bottom = Math.max(0, g.H - g.top - g.bh * 0.1) + "px";   // sürpriz kutunun ağzından yükselir
-        later(() => reveal2(root, s), T * 0.3);
+        later(() => reveal2(root, s), T * (root.__prof ? 0.36 : 0.3));
         if (M.boxEnd === "kaybol" && lid) later(() => AN(box, [{ opacity: 1 }, { opacity: 0 }], { duration: T * 0.4 }), T * 0.45);
       }, ta);
     }
@@ -884,7 +917,12 @@
       if (FLP) fin.appendChild(pic(FLP.ref)); else fin.innerHTML = '<i class="ix2-fl-o"></i><i class="ix2-fl-c"></i>';
       lean.appendChild(fin); w.appendChild(halo); w.appendChild(lean); st.appendChild(w);
       const f = { w, halo, lean, fin, on: true };
-      if (live && !reduced()) {   // her alev kendi düzensiz ritmiyle titrer
+      if (live && !reduced() && root.__prof && global.SeozMotion) {
+        // ✨ alev: küçük, düzensiz ama akıcı titreme (sert sıçrama yok, döngü dikişsiz); hale alevle birlikte nefes alır
+        const M = global.SeozMotion, ph = M.phase("f" + i + (p.x || 0)), d = 1100 + ph * 600;
+        f.fl = AN(fin, M.flickerKF("fl" + i + "-" + (p.x || 0), root.__prof.energy), { duration: d, delay: -ph * d, iterations: Infinity, easing: "linear", fill: "none" });
+        f.hl = AN(halo, [{ opacity: 0.82, easing: M.CURVES.sinus }, { opacity: 1, offset: 0.45, easing: M.CURVES.sinus }, { opacity: 0.86, offset: 0.7, easing: M.CURVES.sinus }, { opacity: 0.82 }], { duration: d * 1.3, delay: -ph * d, iterations: Infinity, easing: "linear", fill: "none" });
+      } else if (live && !reduced()) {   // her alev kendi düzensiz ritmiyle titrer
         const R = Math.random, kf = [];
         for (let j = 0; j < 6; j++) kf.push({ transform: `scale(${(0.95 + R() * 0.08).toFixed(3)}, ${(0.9 + R() * 0.2).toFixed(3)}) skewX(${((R() - 0.5) * 7).toFixed(2)}deg)` });
         f.fl = AN(fin, kf, { duration: 900 + R() * 500, direction: "alternate", iterations: Infinity, easing: "ease-in-out", fill: "none" });
@@ -903,24 +941,41 @@
       leanA = flames.filter(f => f.on).map(f => AN(f.lean, [{ transform: "skewX(0deg) scaleY(1)" }, { transform: `skewX(${-16 * str}deg) scaleY(${1 - 0.2 * str})` }, { transform: `skewX(${-9 * str}deg) scaleY(${1 - 0.1 * str})` }], { duration: 260, direction: "alternate", iterations: Infinity, easing: "ease-in-out", fill: "none" }));
     }
     function leanOff() { leanA.forEach(a => a && a.cancel()); leanA = []; }
-    function snuff(f) {
-      f.on = false; if (f.fl) f.fl.cancel(); if (f.hl) f.hl.cancel();
-      AN(f.fin, [{ opacity: 1, transform: "none" }, { opacity: 0.8, transform: "skewX(-24deg) scale(.9, .6)", offset: 0.45 }, { opacity: 0, transform: "skewX(-30deg) scale(.4, .15)" }], { duration: 240, easing: "ease-in" });
+    function snuff(f, nat) {
+      f.on = false;
+      if (nat) {
+        // titremeyi kesmeden önce alevi bulunduğu hâlden söndür (sıçrama yok)
+        const cur = getComputedStyle(f.fin).transform; if (f.fl) f.fl.cancel(); if (f.hl) f.hl.cancel();
+        const c0 = cur && cur !== "none" ? cur : "none";
+        AN(f.fin, [{ opacity: 1, transform: c0, easing: "cubic-bezier(.37,0,.63,1)" }, { opacity: 0.9, transform: "skewX(-26deg) scale(.92, .7)", offset: 0.4, easing: "cubic-bezier(.55,.085,.68,.53)" }, { opacity: 0, transform: "skewX(-32deg) scale(.35, .12)" }], { duration: 260 });
+      } else { if (f.fl) f.fl.cancel(); if (f.hl) f.hl.cancel(); }
+      if (!nat) AN(f.fin, [{ opacity: 1, transform: "none" }, { opacity: 0.8, transform: "skewX(-24deg) scale(.9, .6)", offset: 0.45 }, { opacity: 0, transform: "skewX(-30deg) scale(.4, .15)" }], { duration: 240, easing: "ease-in" });
       AN(f.halo, [{ opacity: 1 }, { opacity: 0 }], { duration: 450, easing: "ease-out" });
       const em = el("i", "ix2-ember"); f.w.appendChild(em); AN(em, [{ opacity: 1 }, { opacity: 0.7, offset: 0.3 }, { opacity: 0 }], { duration: 1100 });
       if (M.smoke === false || reduced()) return;
-      const h = f.w.offsetHeight || 30;
+      const h = f.w.offsetHeight || 30, s0 = nat ? 150 : 0;   // doğal: duman alev tam söndüğü anda başlar
       for (let k = 0; k < 7; k++) {   // fitilden yükselen, genişleyip dağılan ince duman
         const p = el("i", "ix2-smoke"); f.w.appendChild(p);
         const R = Math.random, a = (R() - 0.5) * h * 0.6, b = (R() - 0.5) * h * 1.2;
         const an = AN(p, [{ transform: "translate(0,0) scale(.4)", opacity: 0 }, { transform: `translate(${a * 0.3}px, ${-h * 0.3}px) scale(.7)`, opacity: 0.6, offset: 0.12 }, { transform: `translate(${a}px, ${-h * 1.6}px) scale(1.5)`, opacity: 0.35, offset: 0.5 }, { transform: `translate(${b}px, ${-h * 3.2}px) scale(2.8)`, opacity: 0 }],
-          { duration: T * (1 + R() * 0.4), delay: k * 110, easing: "cubic-bezier(.25,.5,.4,1)", fill: "both" });
+          { duration: T * (1 + R() * 0.4), delay: s0 + k * 110, easing: "cubic-bezier(.25,.5,.4,1)", fill: "both" });
         if (an) an.onfinish = () => p.remove();
       }
     }
     function out() {
-      if (done) return; done = true; leanOff(); if (ring) ring.classList.remove("is-on");
+      if (done) return; done = true; if (ring) ring.classList.remove("is-on");
       const seq = M.order !== "birlikte";
+      if (root.__prof) {
+        // ✨ üfleme bir yandan öbür yana ilerler: alevler soldan sağa sırayla, önce eğilip sonra söner; duman
+        // tam sönme anında yükselir; kutlama son alevin dumanı yükselmeye başladıktan sonra gelir
+        const order = flames.map((f, i) => ({ f, x: Number((pts[i] || {}).x) || 0, i })).sort((a, b) => a.x - b.x);
+        const gap = seq ? Math.round(150 * root.__prof.tempo) : 0;
+        order.forEach((o, k) => later(() => snuff(o.f, true), seq ? k * gap : (o.i * 37) % 70));
+        later(() => leanOff(), (seq ? (order.length - 1) * gap : 70) + 200);
+        later(() => reveal2(root, s), (seq ? (order.length - 1) * gap : 70) + 260 + Math.min(700, T * 0.3));
+        return;
+      }
+      leanOff();
       flames.forEach((f, i) => later(() => snuff(f), seq ? i * 160 : Math.random() * 60));
       later(() => reveal2(root, s), (seq ? flames.length * 160 : 60) + T * 0.35);
     }
@@ -975,11 +1030,18 @@
       if (knocker) attachKnocker();
       leaves.forEach((L, i) => {
         const sg = (L.side === "l" ? 1 : -1) * (inward ? 1 : -1);
+        if (root.__prof && global.SeozMotion) {
+          // ✨ kanat önce kilitten kurtulur (küçük geri itiş), ağırlığıyla açılır, hedefi az geçip yerine oturur
+          const kf = global.SeozMotion.settleKF(v => `rotateY(${v.toFixed(2)}deg)`, 0, sg * ang, root.__prof.settle, 2);
+          kf.splice(1, 0, { transform: `rotateY(${(sg * 3).toFixed(2)}deg)`, offset: 0.08, easing: "cubic-bezier(.45,.05,.25,1)" });
+          kf[0].easing = "cubic-bezier(.37,0,.63,1)";
+          AN(L.el, kf, { duration: T * 1.15, delay: i * 70, easing: "linear" });
+        } else
         AN(L.el, [{ transform: "rotateY(0deg)" }, { transform: `rotateY(${sg * 3}deg)`, offset: 0.1 }, { transform: `rotateY(${sg * ang}deg)` }], { duration: T, delay: i * 70, easing: "cubic-bezier(.35,.1,.25,1)" });
         AN(L.img, [{ filter: "brightness(1)" }, { filter: `brightness(${inward ? 0.62 : 0.85})` }], { duration: T, delay: i * 70 });
       });
       if (light) AN(light, [{ opacity: 0 }, { opacity: 1 }], { duration: T * 0.7, delay: T * 0.08, easing: "ease-out" });
-      later(() => reveal2(root, s), T * 0.45);
+      later(() => reveal2(root, s), T * (root.__prof ? 0.55 : 0.45));
     }
     function knockOnce() {
       if (opened || n >= N) return; n++;
@@ -1002,11 +1064,15 @@
     }
   }
 
-  function render(settings, mode) {
+  function render(settings, mode, o3) {
     const s = Object.assign({}, DEFAULTS, settings);
     const kind = BUILD[s.kind] ? s.kind : "kazi-kazan";
     const live = mode === "view";
     const root = el("div", "ix ix-" + kind);
+    // ✨ Sahne uyumu: belgede açıksa etkileşim aynı hareket diliyle (karakteriyle) oynar; yoksa eskisi gibi
+    const mo = o3 && "motion" in o3 ? o3.motion : (global.SeozRenderer && SeozRenderer.motion ? SeozRenderer.motion() : null);
+    root.__prof = mo && global.SeozMotion ? global.SeozMotion.of({ motion: mo }) : null;
+    if (root.__prof) root.classList.add("ix-nat");
     root.style.setProperty("--ix-c", s.color); root.style.setProperty("--ix-ink", s.textColor);
     try {
       // E2: türün ana parçası yüklenmişse kendi görselleriyle çalışan yeni çizim; yoksa eski hazır çizim (aynen)

@@ -124,7 +124,7 @@
       scale = Math.min(1.6, fw / W, fh / H);
       Object.assign(box.style, { width: W + "px", height: H + "px", transform: `scale(${scale})` });
       box.innerHTML = "";
-      ixRoot = I.render(Object.assign({}, s), "view");
+      ixRoot = I.render(Object.assign({}, s), "view", { motion: global.SeozRenderer && SeozRenderer.motion ? SeozRenderer.motion() : null });
       box.appendChild(ixRoot);
       ov.hidden = state.mode !== "edit";
       const gh = ixRoot.querySelector(".ix-hint"), guest = kind === "kurdele" && M.trigger === "kaydir" ? "parmakla kaydırınca keser (tek dokunuş makası gösterir, ikinci dokunuş da keser)" : (gh ? gh.textContent : "");

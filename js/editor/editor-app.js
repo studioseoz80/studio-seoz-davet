@@ -83,6 +83,7 @@
             <option value="">✦ Etkileşim Ekle...</option>
           </select>
           <button class="btn btn-outline" data-open-theme-studio title="Animasyonlu zemin, paketler, sunum biçimleri">🎨 İç Zemin Stüdyosu</button>
+          <button class="btn btn-outline" data-open-motion title="Bütün hareketleri tek bir sahne gibi uyumlar: zamanlama, hız, geçiş, enerji">✨ Sahne Uyumu</button>
           <div class="spacer"></div>
           <button class="btn btn-outline" data-change-bg>Zemin Görseli Yükle</button>
           <input type="file" accept="image/png,image/jpeg,image/webp" data-change-bg-input class="hidden">
@@ -177,6 +178,7 @@
 
     function refreshAllUI() {
       fullCanvasRender();
+      if (typeof paintMotionBtn === "function") paintMotionBtn();
       refreshSidebar();
       renderEntryPanel();
       renderBgSettingsPanel();
@@ -275,7 +277,7 @@
           SeozRenderer.clearIntervalsWithin(host);
           host.innerHTML = "";
           const moduleDef = SeozModuleRegistry.getModule(layer.moduleId);
-          if (moduleDef) host.appendChild(moduleDef.render(layer.settings, "edit", { docId: doc.id, layerId: layer.id }));
+          if (moduleDef) host.appendChild(moduleDef.render(layer.settings, "edit", { docId: doc.id, layerId: layer.id, motion: doc.motion || null }));
         }
       }
       // İÇ ZEMİN: sunum biçimi / kaydırınca canlanma varsa yeniden uygulanır
@@ -616,6 +618,9 @@
       clearTimeout(saveTimer);
       const doSave = () => {
         try {
+          // ✨ Sahne uyumu açıksa: yeni eklenen katman/hareket/etkileşim kaydedilmeden önce sahneye uyumlanır
+          // (elle yapılmış ayarlara dokunulmaz — bkz. core/motion.js)
+          if (window.SeozMotion && doc.motion && doc.motion.on !== false) SeozMotion.recompute(doc);
           SeozStorage.saveDraft(doc);
           saveStatusEl.textContent = "Kaydedildi • " + new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
           // MADDE 4: belge GERÇEKTEN kaydedildiği an (yani değişiklik
@@ -748,6 +753,17 @@
         }
       });
     } else if (interactiveSelect) interactiveSelect.style.display = "none";
+    const motionBtn = appRoot.querySelector("[data-open-motion]");
+    function paintMotionBtn() { if (motionBtn && window.SeozMotionPanel) motionBtn.textContent = SeozMotionPanel.chip(doc); }
+    if (motionBtn && typeof SeozMotionPanel !== "undefined") {
+      paintMotionBtn();
+      motionBtn.addEventListener("click", () => {
+        SeozMotionPanel.open(doc, {
+          onChange: () => { fullCanvasRender(); renderEntryPanel(); paintMotionBtn(); scheduleAutosave(true); },
+          onClose: () => { paintMotionBtn(); }
+        });
+      });
+    } else if (motionBtn) motionBtn.style.display = "none";
     const themeBtn = appRoot.querySelector("[data-open-theme-studio]");
     if (themeBtn && typeof SeozThemeStudio !== "undefined") {
       themeBtn.addEventListener("click", () => {

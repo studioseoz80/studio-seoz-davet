@@ -363,7 +363,8 @@
         const fromTop = o.from !== "bottom" && o.from !== "any";
         add({ type: o.type || "dot", x: rnd(0, W), y: o.from === "bottom" ? H + 20 : o.from === "any" ? rnd(0, H) : -20,
               vx: rnd(-1, 1) * (o.drift || 20), vy: (fromTop ? 1 : -1) * rnd(0.6, 1) * (o.speed || 60) * (o.from === "any" ? rnd(-0.3, 0.3) : 1),
-              g: 0, life: o.life || 9, size: rnd(0.6, 1.3) * (o.size || 4), color: pick(colors), drag: 1, ambient: true, sway: o.sway != null ? o.sway : 1 });
+              g: 0, life: o.life || 9, size: rnd(0.6, 1.3) * (o.size || 4), color: pick(colors), drag: 1, ambient: true, sway: o.sway != null ? o.sway : 1,
+              nat: o.nat ? (o.nat === true ? 1 : o.nat) : 0 });
       } };
       for (let i = 0; i < n; i++) { em.spawn(); const p = list[list.length - 1]; if (p) { p.y = rnd(-20, H); p.age = rnd(0, p.life * 0.6); } }
       em.rate = n / (o.life || 9);
@@ -396,8 +397,17 @@
         p.age += dt;
         if (p.age >= p.life || p.y > H + 80 || p.y < -200 || p.x < -140 || p.x > W + 140) { list.splice(i, 1); continue; }
         p.vy += (p.g || 0) * dt; p.vx *= p.drag; p.vy *= p.drag;
-        if (p.sway) p.x += Math.sin(p.age * 1.6 + p.seed * 6) * p.sway * 0.6;
-        p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+        if (p.nat) {
+          // doğal süzülme (yalnızca sahne uyumunda): yaprak gibi sağa-sola sarkarak iner; yatayken yavaşlar,
+          // eğikken hızlanır, dönüşü salınımı izler (sabit hızla dönen "pervane" görüntüsü yok)
+          const w = 0.9 + p.seed * 0.7, ph = p.age * w + p.seed * 6.283, s1 = Math.sin(ph);
+          p.x += (p.vx + Math.cos(ph) * 26 * p.sway * p.nat) * dt;
+          p.y += p.vy * (0.62 + 0.38 * Math.abs(s1)) * dt;
+          p.rot = (p.rot0 != null ? p.rot0 : (p.rot0 = p.rot)) + s1 * 0.75 + p.age * p.vr * 0.15;
+        } else {
+          if (p.sway) p.x += Math.sin(p.age * 1.6 + p.seed * 6) * p.sway * 0.6;
+          p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+        }
         const k = p.age / p.life;
         const fade = k < 0.1 ? k / 0.1 : k > 0.75 ? (1 - k) / 0.25 : 1;
         c2.save(); c2.globalAlpha = Math.max(0, p.alpha * fade); c2.translate(p.x, p.y);
@@ -775,6 +785,8 @@
     const k = 1 / cfg.speed;
     const ctx = {
       doc, entry, cfg, model: m, scenario: scenarioOf(cfg), concept: conceptOf(cfg), pal, E,
+      // ✨ Sahne uyumu (core/motion.js): yalnızca belgede açıksa dolu; eski belgelerde null → eski hareketler
+      motion: global.SeozMotion ? global.SeozMotion.of(doc) : null,
       L: {}, S: {}, C: {}, box: {}, uploaded: {}, lit: {}, failed: st.failed || {}, overlay, frame: st.frame, backdropEl: st.backdrop,
       scale: () => st.scale, dead: false, hasCard: false, reduced: st.reduced, lite: cfg.lite,
       k, h, svg, img, rnd, pick, mix,
@@ -1052,12 +1064,14 @@
       function startConcept() {
         const c = ctx.concept;
         if (!c) return;
-        (c.ambient || []).forEach(a => ctx.fx.ambient(a));
+        // ✨ sahne uyumunda konseptin yaprak/kar yağışı da doğal süzülür
+        (c.ambient || []).forEach(a => ctx.fx.ambient(ctx.motion && (a.type === "petal" || a.type === "snow") ? Object.assign({}, a, { nat: a.type === "petal" ? 1 : 0.45 }) : a));
         if (c.overlay && !cfg.lite) c.overlay(ctx, overlay);
         if (c.tint) { const t = h("div", "sc-tint", { background: c.tint }); overlay.insertBefore(t, fxCanvas); }
       }
       function waitStart() {
-        if (cfg.start === "auto") return ctx.wait(opts.autoDelay != null ? opts.autoDelay : 1600);
+        // sahne uyumunda gereksiz bekleme yok: karakterin ritmi kadar kısa bir an (zarif 1,2 sn · neşeli 0,8 sn)
+        if (cfg.start === "auto") return ctx.wait(opts.autoDelay != null ? opts.autoDelay : (ctx.motion ? ctx.motion.beat + 300 : 1600));
         // A2.4: senaryo kendi başlatma hareketini (çekme, kaydırma, basılı tutma) bekleyebilir
         if (!reduced && ctx.scenario.waitStart) return ctx.scenario.waitStart(ctx);
         // açılış kendiliğinden sürebilir (iç kart adımı); misafir dokunursa beklemeden geçilir
