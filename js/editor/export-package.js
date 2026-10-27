@@ -40,6 +40,7 @@
     "js/core/blob-store.js",
     "js/core/renderer.js",
     "js/core/motion.js",
+    "js/core/media.js",
     "js/core/qr-encoder.js",
     "js/fonts-library.js",
     "js/entry-scene.js",
@@ -173,6 +174,7 @@
 <script src="js/core/event-store.js"></script>
 <script src="js/core/renderer.js"></script>
 <script src="js/core/motion.js"></script>
+<script src="js/core/media.js"></script>
 <script src="js/core/qr-encoder.js"></script>
 <script src="js/fonts-library.js"></script>
 <script src="js/entry-scene.js"></script>

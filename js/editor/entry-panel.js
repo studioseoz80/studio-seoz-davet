@@ -32,6 +32,44 @@
     });
   }
 
+  /* ---- MP4 desteği (zarf, iç kart, tek kart) ----
+     Görsel yüklenince eskisi gibi yalnızca xxxSrc yazılır ve video bilgisi (xxxMedia) silinir;
+     MP4 yüklenince xxxSrc videoyu, xxxMedia oynatma ayarlarını tutar. */
+  const MD = window.SeozMedia || null;
+  const ACCEPT = MD ? MD.ACCEPT_WITH_VIDEO : "image/png,image/jpeg,image/webp";
+  const isVid = m => !!(MD && MD.isVideo(m));
+  function slotPreviewHTML(src, media, attr) {
+    if (!src) return "";
+    if (isVid(media)) return `<video ${attr} muted loop playsinline autoplay preload="metadata" style="width:100%;max-height:160px;object-fit:cover;margin-bottom:8px;background:#111;border-radius:4px;"></video>`;
+    return `<img ${attr} style="width:100%;max-height:160px;object-fit:cover;margin-bottom:8px;">`;
+  }
+  function slotOptsHTML(media, mediaKey) {
+    if (!isVid(media)) return "";
+    const o = MD.opts(media), sec = Number(media.duration) ? " · " + String(Math.round(media.duration * 10) / 10).replace(".", ",") + " sn" : "";
+    const row = (k, label) => `<label style="display:flex;gap:8px;align-items:center;font-size:.78rem;margin:4px 0;cursor:pointer;"><input type="checkbox" data-vopt="${mediaKey}" data-vk="${k}" ${o[k] ? "checked" : ""} style="width:auto;"> ${label}</label>`;
+    return `<div style="margin:6px 0 8px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;">
+      <div style="font-size:.74rem;color:var(--ink-soft);margin-bottom:4px;"><b>▶ MP4 video</b>${media.w ? ` · ${media.w}×${media.h}` : ""}${sec}</div>
+      ${row("autoplay", "Otomatik oynat (kapalıysa açılış başlayınca oynar)")}${row("loop", "Döngü (bitince baştan)")}${row("sound", "Ses açık (misafirin ilk dokunuşunda açılır)")}</div>`;
+  }
+  /* Ortak yükleme: görsel ya da MP4 */
+  function loadSlotFile(file, entry, srcKey, mediaKey) {
+    if (MD && MD.isVideoFile(file)) {
+      return MD.processVideoFile(file).then(res => {
+        entry[srcKey] = res.ref; entry[mediaKey] = MD.newMedia(res, entry[mediaKey]);
+        if (res.notes && res.notes.length > 1) alert("Video yüklendi.\n\n• " + res.notes.join("\n• "));
+      });
+    }
+    const sizeMB = SeozImageUtils.estimateFileSizeMB(file);
+    if (!confirmLargeFile(sizeMB, "image")) return Promise.resolve(false);
+    return SeozImageUtils.processImageFile(file).then(result => { entry[srcKey] = result.ref; delete entry[mediaKey]; });
+  }
+  function wireSlotOpts(bodyEl, entry, cb) {
+    bodyEl.querySelectorAll("[data-vopt]").forEach(inp => inp.addEventListener("change", () => {
+      const m = entry[inp.dataset.vopt]; if (!m) return;
+      m[inp.dataset.vk] = inp.checked; cb.onChange();
+    }));
+  }
+
   function render(containerEl, doc, cb) {
     const entry = doc.entry;
 
@@ -57,9 +95,12 @@
         </label>
       </div>
 
-      <button type="button" class="btn btn-outline" data-replay-entry style="width:100%;margin-top:6px;">
-        ▶ Girişi Yeniden Oynat
-      </button>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button type="button" class="btn btn-outline" data-replay-entry style="flex:1;">
+          ▶ Girişi Yeniden Oynat
+        </button>
+        ${window.SeozVideoExport ? `<button type="button" class="btn btn-outline" data-entry-mp4 title="Açılışı video (.mp4) olarak indir — Instagram Reels için 1080×1920">⬇ MP4 İndir</button>` : ""}
+      </div>
     `;
 
     renderBody();
@@ -77,6 +118,15 @@
 
     containerEl.querySelector("[data-replay-entry]").addEventListener("click", () => {
       cb.onReplay();
+    });
+    const mp4Btn = containerEl.querySelector("[data-entry-mp4]");
+    if (mp4Btn) mp4Btn.addEventListener("click", () => {
+      if (!window.SeozVideoExport.supportedType(doc)) {
+        alert(entry.type === "none" ? "Bu davetiyede giriş animasyonu yok. Önce bir giriş türü seçin." :
+          entry.type === "video" ? "Giriş zaten bir video; MP4 İndir yalnızca animasyonlu açılışlar içindir." : "Önce açılış görselini (veya Animasyon Stüdyosu'nda katmanları) yükleyin.");
+        return;
+      }
+      window.SeozVideoExport.open(doc);
     });
 
     // MADDE 2 — "Kart Ekranda Kalma Süresi": card / png / dual-wing
@@ -214,19 +264,21 @@
       bodyEl.innerHTML = `
         <div class="field">
           <label style="font-size:.76rem;color:var(--ink-soft);margin-bottom:5px;display:block;">Zarf / Giriş Görseli</label>
-          ${entry.pngSrc ? `<img data-preview-envelope style="width:100%;max-height:160px;object-fit:cover;margin-bottom:8px;">` : ""}
+          ${slotPreviewHTML(entry.pngSrc, entry.pngMedia, "data-preview-envelope")}
+          ${slotOptsHTML(entry.pngMedia, "pngMedia")}
           <button type="button" class="btn btn-outline" data-upload-png style="width:100%;">
-            ${entry.pngSrc ? "Görseli Değiştir" : "Görsel Yükle"}
+            ${entry.pngSrc ? (isVid(entry.pngMedia) ? "Videoyu Değiştir" : "Görseli Değiştir") : "Görsel / MP4 Yükle"}
           </button>
-          <input type="file" accept="image/png,image/jpeg,image/webp" data-upload-png-input class="hidden">
+          <input type="file" accept="${ACCEPT}" data-upload-png-input class="hidden">
         </div>
         <div class="field" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
           <label style="font-size:.76rem;color:var(--ink-soft);margin-bottom:5px;display:block;">İç Kart Görseli (isteğe bağlı)</label>
-          ${entry.cardSrc ? `<img data-preview-card style="width:100%;max-height:160px;object-fit:cover;margin-bottom:8px;">` : ""}
+          ${slotPreviewHTML(entry.cardSrc, entry.cardMedia, "data-preview-card")}
+          ${slotOptsHTML(entry.cardMedia, "cardMedia")}
           <button type="button" class="btn btn-outline" data-upload-card style="width:100%;">
-            ${entry.cardSrc ? "Kartı Değiştir" : "Kart Görseli Yükle"}
+            ${entry.cardSrc ? "Kartı Değiştir" : "Kart Görseli / MP4 Yükle"}
           </button>
-          <input type="file" accept="image/png,image/jpeg,image/webp" data-upload-card-input class="hidden">
+          <input type="file" accept="${ACCEPT}" data-upload-card-input class="hidden">
           ${entry.cardSrc ? `<button type="button" class="btn-danger-text" data-remove-card style="margin-top:6px;">Kartı Kaldır</button>` : ""}
           <p style="font-size:.72rem;color:var(--ink-soft);margin-top:8px;">${animationNote}</p>
         </div>
@@ -243,13 +295,11 @@
       input.addEventListener("change", () => {
         const file = input.files[0];
         if (!file) return;
-        const sizeMB = SeozImageUtils.estimateFileSizeMB(file);
-        if (!confirmLargeFile(sizeMB, "image")) return;
-        SeozImageUtils.processImageFile(file).then(result => {
-          entry.pngSrc = result.ref;
+        loadSlotFile(file, entry, "pngSrc", "pngMedia").then(ok => {
+          if (ok === false) return;
           renderBody();
           cb.onChange();
-        }).catch(() => alert("Görsel yüklenemedi. Lütfen PNG, JPG veya WebP deneyin."));
+        }).catch(err => alert(MD && MD.isVideoFile(file) ? (err.message || "Video yüklenemedi.") : "Görsel yüklenemedi. Lütfen PNG, JPG, WebP veya MP4 deneyin."));
       });
 
       const cardInput = bodyEl.querySelector("[data-upload-card-input]");
@@ -257,24 +307,24 @@
       cardInput.addEventListener("change", () => {
         const file = cardInput.files[0];
         if (!file) return;
-        const sizeMB = SeozImageUtils.estimateFileSizeMB(file);
-        if (!confirmLargeFile(sizeMB, "image")) return;
-        SeozImageUtils.processImageFile(file).then(result => {
-          entry.cardSrc = result.ref;
+        loadSlotFile(file, entry, "cardSrc", "cardMedia").then(ok => {
+          if (ok === false) return;
           renderBody();
           cb.onChange();
-        }).catch(() => alert("Kart görseli yüklenemedi. Lütfen PNG, JPG veya WebP deneyin."));
+        }).catch(err => alert(MD && MD.isVideoFile(file) ? (err.message || "Video yüklenemedi.") : "Kart görseli yüklenemedi. Lütfen PNG, JPG, WebP veya MP4 deneyin."));
       });
 
       const removeCardBtn = bodyEl.querySelector("[data-remove-card]");
       if (removeCardBtn) {
         removeCardBtn.addEventListener("click", () => {
           entry.cardSrc = "";
+          delete entry.cardMedia;
           renderBody();
           cb.onChange();
         });
       }
 
+      wireSlotOpts(bodyEl, entry, cb);
       wireDurationAndSizeFields(bodyEl);
     }
 
@@ -290,11 +340,12 @@
         bodyEl.innerHTML = `
           <div class="field">
             <label style="font-size:.76rem;color:var(--ink-soft);margin-bottom:5px;display:block;">Kart Görseli</label>
-            ${entry.cardOnlySrc ? `<img data-preview-card-only style="width:100%;max-height:160px;object-fit:cover;margin-bottom:8px;">` : ""}
+            ${slotPreviewHTML(entry.cardOnlySrc, entry.cardOnlyMedia, "data-preview-card-only")}
+            ${slotOptsHTML(entry.cardOnlyMedia, "cardOnlyMedia")}
             <button type="button" class="btn btn-outline" data-upload-card-only style="width:100%;">
-              ${entry.cardOnlySrc ? "Kartı Değiştir" : "Kart Görseli Yükle"}
+              ${entry.cardOnlySrc ? "Kartı Değiştir" : "Kart Görseli / MP4 Yükle"}
             </button>
-            <input type="file" accept="image/png,image/jpeg,image/webp" data-upload-card-only-input class="hidden">
+            <input type="file" accept="${ACCEPT}" data-upload-card-only-input class="hidden">
             <p style="font-size:.72rem;color:var(--ink-soft);margin-top:8px;">
               Zarf yok — bu görsel doğrudan ekranda ortalı ve büyük gösterilir.
             </p>
@@ -310,15 +361,14 @@
         input.addEventListener("change", () => {
           const file = input.files[0];
           if (!file) return;
-          const sizeMB = SeozImageUtils.estimateFileSizeMB(file);
-          if (!confirmLargeFile(sizeMB, "image")) return;
-          SeozImageUtils.processImageFile(file).then(result => {
-            entry.cardOnlySrc = result.ref;
+          loadSlotFile(file, entry, "cardOnlySrc", "cardOnlyMedia").then(ok => {
+            if (ok === false) return;
             renderBody();
             cb.onChange();
-          }).catch(() => alert("Görsel yüklenemedi. Lütfen PNG, JPG veya WebP deneyin."));
+          }).catch(err => alert(MD && MD.isVideoFile(file) ? (err.message || "Video yüklenemedi.") : "Görsel yüklenemedi. Lütfen PNG, JPG, WebP veya MP4 deneyin."));
         });
 
+        wireSlotOpts(bodyEl, entry, cb);
         wireDurationAndSizeFields(bodyEl);
         return;
       }

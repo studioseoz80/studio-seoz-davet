@@ -24,7 +24,9 @@
     const layer = (Array.isArray(cin.layers) ? cin.layers : []).find(l => l && l.src);
     const img = (doc.layers || []).filter(l => l.type === "image" && l.content && l.content.src).sort((a, b) => (a.y || 0) - (b.y || 0))[0];
     const bg = doc.canvas && doc.canvas.background;
-    return [e.cardOnlySrc, e.cardSrc, e.pngSrc, layer && layer.src, img && img.content.src, bg && bg.type === "image" ? bg.value : ""].find(Boolean) || "";
+    // MP4 alanlarında paylaşım kapağı için videonun kapak görseli (ilk kare) kullanılır
+    const pic = (src, m) => (m && m.type === "video" ? (m.poster || "") : src);
+    return [pic(e.cardOnlySrc, e.cardOnlyMedia), pic(e.cardSrc, e.cardMedia), pic(e.pngSrc, e.pngMedia), layer && pic(layer.src, layer.media), img && img.content.src, bg && bg.type === "image" ? bg.value : ""].find(Boolean) || "";
   }
   function loadImage(ref) {
     return SeozBlobStore.resolveToObjectURL(ref).then(u => new Promise((res, rej) => {

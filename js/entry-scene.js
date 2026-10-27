@@ -33,6 +33,7 @@
 
   function removeOverlay() {
     clearActiveTimeouts();
+    if (activeOverlay && global.SeozMedia) global.SeozMedia.stop(activeOverlay);
     if (activeOverlay) {
       activeOverlay.remove();
       activeOverlay = null;
@@ -68,6 +69,24 @@
   //    hesaplanır — böylece kart her zaman zarfın içine güvenle sığar,
   //    kullanıcı hiçbir ince ayar yapmadan doğru oranı görür.
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+  /* MP4 (core/media.js): zarf, iç kart ve tek kart görseli video olabilir. "media" alanı yoksa
+     (bütün eski davetiyeler) eskisi gibi <img> kullanılır. */
+  function mediaEl(ref, media, cls) {
+    const M = global.SeozMedia;
+    if (M && M.isVideo(media)) {
+      const v = M.makeVideo("", media, null, cls);
+      SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) v.src = url; });
+      return v;
+    }
+    const img = document.createElement("img");
+    img.className = cls; img.alt = "";
+    SeozBlobStore.resolveToObjectURL(ref).then(url => { img.src = url; });
+    return img;
+  }
+  // video yardımcıları (video yoksa hiçbir şey yapmaz)
+  const vStart = (root, phase) => { if (global.SeozMedia) global.SeozMedia.start(root, phase); };
+  const vUnmute = root => { if (global.SeozMedia) global.SeozMedia.unmute(root); };
 
   function applySizeVars(overlay, entry) {
     const desktopW = clamp(entry.desktopWidthPx || 420, 160, 900);
@@ -110,12 +129,9 @@
     overlay.className = "seoz-entry-overlay";
     applySizeVars(overlay, entry);
 
-    const img = document.createElement("img");
-    img.className = "seoz-entry-image";
-    img.alt = "";
     // DÜZELTME: entry.pngSrc artık çoğunlukla bir IndexedDB referansı —
-    // gerçek adrese asenkron çevrilip öyle atanıyor.
-    SeozBlobStore.resolveToObjectURL(entry.pngSrc).then(url => { img.src = url; });
+    // gerçek adrese asenkron çevrilip öyle atanıyor. (MP4 ise <video>)
+    const img = mediaEl(entry.pngSrc, entry.pngMedia, "seoz-entry-image");
     overlay.appendChild(img);
 
     const hint = document.createElement("div");
@@ -126,10 +142,7 @@
     const hasCard = !!entry.cardSrc;
     let cardImg = null;
     if (hasCard) {
-      cardImg = document.createElement("img");
-      cardImg.className = "seoz-entry-card";
-      cardImg.alt = "";
-      SeozBlobStore.resolveToObjectURL(entry.cardSrc).then(url => { cardImg.src = url; });
+      cardImg = mediaEl(entry.cardSrc, entry.cardMedia, "seoz-entry-card");
       overlay.appendChild(cardImg);
     }
 
@@ -164,9 +177,11 @@
     }
 
     overlay.addEventListener("click", () => {
+      vUnmute(overlay);
       if (phase === "envelope") {
         hint.style.display = "none";
         if (!hasCard) { finish(); return; } // ESKİ DAVRANIŞ — kart yoksa doğrudan geç
+        vStart(overlay, "open");
         goToCardPhase();
       } else if (phase === "card") {
         // Kart gösterilirken tekrar dokunmak hemen ayrılış aşamasına geçirir.
@@ -189,10 +204,7 @@
     overlay.className = "seoz-entry-overlay";
     applySizeVars(overlay, entry);
 
-    const img = document.createElement("img");
-    img.className = "seoz-entry-card-only";
-    img.alt = "";
-    SeozBlobStore.resolveToObjectURL(entry.cardOnlySrc).then(url => { img.src = url; });
+    const img = mediaEl(entry.cardOnlySrc, entry.cardOnlyMedia, "seoz-entry-card-only");
     overlay.appendChild(img);
 
     function finish() {
@@ -200,7 +212,13 @@
       onFinish();
     }
 
-    overlay.addEventListener("click", finish);
+    // "Ses açık" MP4 kartta ilk dokunuş sesi açar (kart kapanmaz); sonraki dokunuş eskisi gibi geçer.
+    // Görsel kartta ve sessiz videoda davranış aynen eskisi gibidir.
+    let soundOn = !(global.SeozMedia && global.SeozMedia.isVideo(entry.cardOnlyMedia) && entry.cardOnlyMedia.sound);
+    overlay.addEventListener("click", () => {
+      if (!soundOn) { soundOn = true; vUnmute(overlay); return; }
+      finish();
+    });
     scheduleAutoAdvance(entry.cardDisplayDuration, finish);
 
     return overlay;
@@ -239,31 +257,36 @@
     const hasCard = !!entry.cardSrc;
     let cardImg = null;
     if (hasCard) {
-      cardImg = document.createElement("img");
-      cardImg.className = "seoz-entry-card-inline";
-      cardImg.alt = "";
-      SeozBlobStore.resolveToObjectURL(entry.cardSrc).then(url => { cardImg.src = url; });
+      cardImg = mediaEl(entry.cardSrc, entry.cardMedia, "seoz-entry-card-inline");
       wrap.appendChild(cardImg);
     }
 
+    // MP4 zarf: iki kanat aynı videonun eşzamanlı oynayan iki kopyasıdır (ikincisi sessiz)
+    const pngVideo = !!(global.SeozMedia && global.SeozMedia.isVideo(entry.pngMedia));
+    const wingMedia = side => {
+      if (!pngVideo) { const i = document.createElement("img"); i.className = "seoz-entry-wing-img"; i.alt = ""; return i; }
+      const v = global.SeozMedia.makeVideo("", entry.pngMedia, null, "seoz-entry-wing-img");
+      if (side === "r") v.dataset.clone = "1";
+      return v;
+    };
     const leftWing = document.createElement("div");
     leftWing.className = "seoz-entry-wing seoz-entry-wing-left";
-    const leftImg = document.createElement("img");
-    leftImg.className = "seoz-entry-wing-img";
-    leftImg.alt = "";
+    const leftImg = wingMedia("l");
     leftWing.appendChild(leftImg);
     wrap.appendChild(leftWing);
 
     const rightWing = document.createElement("div");
     rightWing.className = "seoz-entry-wing seoz-entry-wing-right";
-    const rightImg = document.createElement("img");
-    rightImg.className = "seoz-entry-wing-img";
-    rightImg.alt = "";
+    const rightImg = wingMedia("r");
     rightWing.appendChild(rightImg);
     wrap.appendChild(rightWing);
 
     SeozBlobStore.resolveToObjectURL(entry.pngSrc).then(url => {
-      ghost.src = url; leftImg.src = url; rightImg.src = url;
+      leftImg.src = url; rightImg.src = url;
+      // ölçü için görünmez "hayalet": videoda kapak görseli (ilk kare) kullanılır
+      if (!pngVideo) ghost.src = url;
+      else if (entry.pngMedia.poster) SeozBlobStore.resolveToObjectURL(entry.pngMedia.poster).then(u => { if (u) ghost.src = u; });
+      else { ghost.style.aspectRatio = `${entry.pngMedia.w || 9} / ${entry.pngMedia.h || 16}`; }
     });
 
     overlay.appendChild(wrap);
@@ -318,8 +341,10 @@
     }
 
     overlay.addEventListener("click", () => {
+      vUnmute(overlay);
       if (phase === "envelope") {
         hint.style.display = "none";
+        vStart(overlay, "open");
         if (!hasCard) {
           leftWing.classList.add("opening");
           rightWing.classList.add("opening");
@@ -410,6 +435,7 @@
 
     document.body.appendChild(overlay);
     activeOverlay = overlay;
+    vStart(overlay, entry.type === "card" ? "open" : "show");
   }
 
   /* Geriye dönük uyumluluk: FAZ 1-2'de kullanılan çağrı şekli. */

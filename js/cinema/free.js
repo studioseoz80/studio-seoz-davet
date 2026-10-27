@@ -46,6 +46,11 @@
   const NRG = ctx => (ctx && ctx.motion ? ctx.motion.energy : 1);
 
   function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
+  // bölünen/çoğaltılan parça: görselse <img>, MP4 ise aynı videonun sessiz kopyası (core/media.js)
+  function vis(src, style) {
+    if (global.SeozMedia) return global.SeozMedia.cloneVisual(src, style);
+    const im = h("img", "", style); im.src = src ? src.src : ""; im.alt = ""; return im;
+  }
   function timing(a, def) {
     // A2.3: harekete özel hız (0,5× yavaş … 2× hızlı) süreyi böler
     const sp = Math.max(0.25, Math.min(4, num(a.speed, 1)));
@@ -78,7 +83,7 @@
       const fit = imgEl.style.objectFit || "contain";
       Array.from(inner.children).forEach(ch => { if (!ch.classList.contains("sc-slot")) ch.style.display = "none"; });   // bağlı katmanlar kalır
       // Her yarı yalnızca kendi yarısı kadar yer kaplar (taşma gizli): telefonda çizim yükü yarıya iner.
-      const alpha = !(u.check && u.check.info && u.check.info.hasAlpha === false);
+      const alpha = !(u.check && u.check.info && u.check.info.hasAlpha === false) && imgEl.tagName !== "VIDEO";
       const parts = [0, 1].map(i => {
         const half = h("div", "sc-half", { position: "absolute", overflow: "hidden", transformStyle: "preserve-3d",
           left: vertical ? "0" : (i ? "50%" : "0"), top: vertical ? (i ? "50%" : "0") : "0",
@@ -86,8 +91,7 @@
           transformOrigin: vertical ? (i ? "50% 100%" : "50% 0%") : (i ? "100% 50%" : "0% 50%") });
         const pos = { position: "absolute", width: vertical ? "100%" : "200%", height: vertical ? "200%" : "100%",
           left: vertical ? "0" : (i ? "-100%" : "0"), top: vertical ? (i ? "-100%" : "0") : "0" };
-        const im = h("img", "", Object.assign({ objectFit: fit, pointerEvents: "none" }, pos));
-        im.src = imgEl.src; im.alt = "";
+        const im = vis(imgEl, Object.assign({ objectFit: fit, pointerEvents: "none" }, pos));
         half.appendChild(im);
         let sh = null;
         if (!ctx.lite) {
@@ -346,8 +350,7 @@
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const tile = h("div", "sc-half sc-tile", { position: "absolute", overflow: "hidden", transformStyle: "preserve-3d",
           left: (100 * c / cols) + "%", top: (100 * r / rows) + "%", width: (100 / cols) + "%", height: (100 / rows) + "%" });
-        const im = h("img", "", { position: "absolute", width: (100 * cols) + "%", height: (100 * rows) + "%", left: (-100 * c) + "%", top: (-100 * r) + "%", objectFit: fit, pointerEvents: "none" });
-        im.src = imgEl.src; im.alt = "";
+        const im = vis(imgEl, { position: "absolute", width: (100 * cols) + "%", height: (100 * rows) + "%", left: (-100 * c) + "%", top: (-100 * r) + "%", objectFit: fit, pointerEvents: "none" });
         tile.appendChild(im);
         inner.insertBefore(tile, firstChild || null);
         tiles.push({ el: tile, c, r });
@@ -453,8 +456,7 @@
         inner.__pages = [];
         for (let i = 1; i < n; i++) {
           const leaf = h("div", "sc-half sc-leaf", { position: "absolute", inset: "0", transformOrigin: "0% 50%", transformStyle: "preserve-3d", transform: `translateZ(${-i * 0.8}px)` });
-          const im = h("img", "", { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: (front && front.style.objectFit) || "contain", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", filter: `brightness(${1 - i * 0.05})` });
-          im.src = front ? front.src : ""; im.alt = "";
+          const im = vis(front, { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: (front && front.style.objectFit) || "contain", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", filter: `brightness(${1 - i * 0.05})` });
           leaf.appendChild(im);
           if (!C.honestBack(u)) {     // 3D-1: yeni görsellerde arka yüz uydurulmaz
             const back = h("div", "", { position: "absolute", inset: "0", background: "#EDE6D8", transform: "rotateY(180deg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" });
@@ -690,10 +692,10 @@
     note: "Görselin kendi şeklinde, zemine düşen yumuşak bir gölge eklenir ve ışık dolaşıyormuş gibi kayar.",
     prepare(ctx, a) {
       const S = ctx.S[a.layer], u = ctx.cfg.layers[a.layer]; if (!S || !u || !u.src || S.__shadow) return;
-      const front = ctx.L[a.layer].querySelector("img"); if (!front) return;
-      const sh = h("img", "sc-cast", { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: front.style.objectFit || "contain", pointerEvents: "none",
+      const front = ctx.L[a.layer].querySelector("img, video"); if (!front) return;
+      const sh = vis(front, { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: front.style.objectFit || "contain", pointerEvents: "none",
         filter: ctx.lite ? "brightness(0)" : "brightness(0) blur(8px)", opacity: "0.42", transform: "translate3d(14px, 22px, -4px)" });
-      sh.src = front.src; sh.alt = "";
+      sh.classList.add("sc-cast");
       S.insertBefore(sh, S.firstChild);
       S.__shadow = sh;
     },
@@ -829,8 +831,7 @@
     const parts = polys.map((poly, i) => {
       const el = h("div", "sc-half sc-shard", { position: "absolute", inset: "0", clipPath: poly, WebkitClipPath: poly,
         transformOrigin: vertical ? (i ? "75% 50%" : "25% 50%") : (i ? "50% 75%" : "50% 25%") });
-      const im = h("img", "", { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: fit, pointerEvents: "none" });
-      im.src = imgEl.src; im.alt = ""; el.appendChild(im);
+      const im = vis(imgEl, { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: fit, pointerEvents: "none" }); el.appendChild(im);
       inner.insertBefore(el, firstChild || null);
       return el;
     });
@@ -1342,7 +1343,7 @@
     const layers = {};
     C.model(p.model).slots.forEach(s => {
       const l = byId[roles[s.id]];
-      if (l && l.src) layers[s.id] = { src: l.src, backSrc: l.backSrc || "", thickness: l.thickness, light: l.light, v3: l.v3 };
+      if (l && l.src) layers[s.id] = { src: l.src, backSrc: l.backSrc || "", thickness: l.thickness, light: l.light, v3: l.v3, media: l.media };
       else if (!artFill) layers[s.id] = { hidden: true };
     });
     const out = Object.assign({}, cfg, { model: p.model, scenario: p.scenario, layers });

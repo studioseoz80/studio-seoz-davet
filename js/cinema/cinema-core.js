@@ -125,7 +125,27 @@
     if (global.SeozBlobStore && global.SeozBlobStore.resolveToObjectURL) return global.SeozBlobStore.resolveToObjectURL(ref).catch(() => "");
     return Promise.resolve(ref);
   }
+  /* MP4 katmanlar (core/media.js): "media" alanı video olan kayıtların kaynakları. Kayıtta video yoksa
+     bu tablo boş kalır ve her şey eskisi gibi <img> ile çizilir. */
+  const VIDEO = new Map();
+  function registerVideos(cfg, entry) {
+    const M = global.SeozMedia; if (!M) return;
+    const m = modelOf(cfg);
+    if (m) m.slots.forEach(s => { const u = cfg.layers[s.id]; if (u && u.src && M.isVideo(u.media)) VIDEO.set(u.src, u.media); });
+    if (entry && entry.cardSrc && M.isVideo(entry.cardMedia)) VIDEO.set(entry.cardSrc, entry.cardMedia);
+  }
   function img(ref, cls, fit) {
+    const vm = ref && VIDEO.get(ref);
+    if (vm) {
+      // kalınlık dilimi, arka yüz ve gölge kopyaları videonun kapak görseliyle (ilk kare) çizilir
+      if (/sc-slab|sc-backface|sc-cardshadow/.test(cls || "")) {
+        if (vm.poster) return img(vm.poster, cls, fit);
+        return h("div", cls, { width: "100%", height: "100%", background: "#1A120C", pointerEvents: "none" });
+      }
+      const v = global.SeozMedia.makeVideo(URLS.get(ref) || "", vm, { width: "100%", height: "100%", objectFit: fit || "contain", display: "block", pointerEvents: "none" }, cls);
+      if (!URLS.has(ref)) resolveSrc(ref).then(u => { if (u) v.src = u; });
+      return v;
+    }
     const i = h("img", cls, { width: "100%", height: "100%", objectFit: fit || "contain", display: "block", pointerEvents: "none" });
     i.alt = ""; i.draggable = false;
     if (URLS.has(ref)) { if (URLS.get(ref)) i.src = URLS.get(ref); }
@@ -157,9 +177,21 @@
       im.src = url;
     });
   }
+  function loadVideo(url) {
+    return new Promise(res => {
+      const v = document.createElement("video");
+      v.muted = true; v.playsInline = true; v.preload = "auto";
+      if (needsCors(url)) v.crossOrigin = "anonymous";
+      let settled = false;
+      const end = ok => { if (settled) return; settled = true; v.removeAttribute("src"); try { v.load(); } catch (e) { /* önemsiz */ } res(ok); };
+      v.onloadeddata = () => end(true); v.onerror = () => end(false);
+      v.src = url;
+    });
+  }
   function loadOne(ref) {
     return resolveSrc(ref).then(async url => {
       if (!url) return false;
+      if (VIDEO.has(ref)) { const ok = await loadVideo(url); if (ok) URLS.set(ref, url); return ok; }   // MP4: maske kullanılmaz
       const cors = needsCors(url);
       let ok = await tryLoad(url, cors);
       if (ok) MASK_OK.add(ref);
@@ -491,6 +523,7 @@
     if (a.ctx) a.ctx.dead = true;
     a.timers.forEach(clearTimeout);
     a.anims.forEach(x => { try { x.cancel(); } catch (e) { /* önemsiz */ } });
+    if (global.SeozMedia && a.overlay) global.SeozMedia.stop(a.overlay);
     if (a.fx) a.fx.destroy();
     if (a.onResize) global.removeEventListener("resize", a.onResize);
     if (a.onKey) global.removeEventListener("keydown", a.onKey);
@@ -924,6 +957,7 @@
     if (!opts.freeze) stop();
     const entry = doc.entry || {};
     const cfg = normalize(entry.cinema);
+    registerVideos(cfg, entry);
     // çok zayıf cihazlarda (≤2 GB bellek veya ≤2 çekirdek) hafif mod kendiliğinden açılır
     if (!cfg.lite && !opts.freeze && weakDevice()) cfg.lite = true;
     const done = onFinish || function () {};
@@ -949,7 +983,11 @@
     st.onGone = opts.onGone || null;   // K1/Hazırlık: açılış ekranı tamamen kalkınca
 
     let phase = "loading", finished = false;
-    function setPhase(p) { phase = p; overlay.dataset.scPhase = p; if (opts.onPhase) opts.onPhase(p); }
+    function setPhase(p) {
+      phase = p; overlay.dataset.scPhase = p;
+      if (p === "opening" && global.SeozMedia) global.SeozMedia.start(overlay, "open");   // otomatik oynamayan videolar açılışla başlar
+      if (opts.onPhase) opts.onPhase(p);
+    }
 
     const handle = {
       overlay, ctx: null, ready: null,
@@ -1039,6 +1077,8 @@
       global.addEventListener("resize", st.onResize);
       ctx.fx = Particles(fxCanvas, { lite: cfg.lite, intensity: cfg.intensity });
       st.fx = ctx.fx;
+      // MP4 katmanlar: otomatik oynayanlar sahne görünür görünmez başlar (sessiz)
+      if (global.SeozMedia) global.SeozMedia.start(overlay, opts.manual ? "open" : "show");
       // A2.3: "manual" = sahne ve parçacıklar hazır, oynatmayı zaman çizelgesi yönetir
       if (opts.manual) { setPhase("manual"); const ui = overlay.querySelector(".sc-ui"); if (ui) ui.style.display = "none"; return handle; }
       if (cfg.start !== "auto" && !(st.ctx && st.ctx.scenario && st.ctx.scenario.autoStart)) hint.style.display = "";
@@ -1050,6 +1090,7 @@
     if (!opts.freeze) {
       overlay.addEventListener("click", () => {
         Sound.unlock();
+        if (global.SeozMedia) global.SeozMedia.unmute(overlay);   // "ses açık" videolar misafirin dokunuşuyla sesli oynar
         if (phase === "attention" && tapResolve) { const r = tapResolve; tapResolve = null; r(); }
         else if (phase === "card") finish(false);
         else if (phase === "opening" && st.tapWait) { const r = st.tapWait; st.tapWait = null; r(); }
@@ -1177,7 +1218,7 @@
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
     normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active,
-    preload, sourcesOf, layoutOf, setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
+    preload, sourcesOf, layoutOf, registerVideos, isVideoRef: ref => VIDEO.has(ref), setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }
   };

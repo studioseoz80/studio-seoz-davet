@@ -43,9 +43,11 @@ async function supabaseConfig(env, request) {
 function shareInfo(doc) {
   const meta = (doc && doc.meta) || {}, share = meta.share || {}, entry = (doc && doc.entry) || {};
   const cin = entry.cinema || {};
-  const firstLayer = Array.isArray(cin.layers) ? cin.layers.find(l => isHttp(l && l.src)) : null;
+  // MP4 alanlarında (media.type "video") paylaşım görseli olarak videonun kapak görseli kullanılır
+  const pic = (src, m) => (m && m.type === "video" ? m.poster : src);
+  const firstLayer = Array.isArray(cin.layers) ? cin.layers.find(l => isHttp(l && pic(l.src, l.media))) : null;
   const bg = doc && doc.canvas && doc.canvas.background;
-  const image = [share.image, entry.cardOnlySrc, entry.cardSrc, entry.pngSrc, firstLayer && firstLayer.src, bg && bg.type === "image" ? bg.value : ""].find(isHttp) || "";
+  const image = [share.image, pic(entry.cardOnlySrc, entry.cardOnlyMedia), pic(entry.cardSrc, entry.cardMedia), pic(entry.pngSrc, entry.pngMedia), firstLayer && pic(firstLayer.src, firstLayer.media), bg && bg.type === "image" ? bg.value : ""].find(isHttp) || "";
   return {
     title: clip(share.title || meta.title || "Davetiye", 90),
     description: clip(share.description || DEFAULT_DESC, 200),

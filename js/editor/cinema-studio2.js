@@ -81,6 +81,7 @@
               <button type="button" data-cs-view="desktop">Bilgisayar</button>
             </div>
             <button type="button" class="btn btn-gold cs-play" data-cs-play>▶ Önizle</button>
+            ${global.SeozVideoExport ? `<button type="button" class="btn btn-outline cs-mp4" data-cs-mp4 title="Açılışı video (.mp4) olarak indir — Instagram Reels için 1080×1920">⬇ MP4 İndir</button>` : ""}
           </div>
           <div class="cs-stage-area" data-cs-area><div class="cs-stage" data-cs-stage></div></div>
           <p class="cs-stage-tip" data-cs-tip></p>
@@ -131,7 +132,7 @@
       leftEl.innerHTML = `
         <section class="cs-sec">
           <h3>Katmanlar <small>(üstteki önde)</small></h3>
-          <button type="button" class="btn btn-gold cs-wide" data-cs-add>+ Görsel ekle (PNG, JPG, WebP)</button>
+          <button type="button" class="btn btn-gold cs-wide" data-cs-add>+ Görsel ekle (PNG, JPG, WebP, MP4)</button>
           <div class="cs-layers">
             ${cardOn() ? (() => { const mv = layerMoves(CARD).length, k = cin.card || {};
               const tags = [k.d3 ? "3D" : "", k.shadow ? "gölge" : "", mv ? mv + " hareket" : ""].filter(Boolean).join(" · ") || "giriş: otomatik";
@@ -212,6 +213,7 @@
           <div class="cs-card"><span class="cs-thumb cs-thumb-card" data-cs-thumb="__card"></span>
             <div><button type="button" class="btn btn-outline" data-cs-card-up>${entry.cardSrc ? "Kartı değiştir" : "Kart görseli yükle"}</button>
             ${entry.cardSrc ? `<button type="button" class="btn-danger-text" data-cs-card-del>Kaldır</button>` : ""}</div></div>
+          ${videoOptsHTML(entry.cardMedia, "card")}
           <label class="cs-row"><span>Kart</span><select data-cs-opt="cardMode">
             <option value="auto" ${n.cardMode === "auto" ? "selected" : ""}>Otomatik</option><option value="image" ${n.cardMode === "image" ? "selected" : ""}>Yüklenen görsel</option>
             <option value="title" ${n.cardMode === "title" ? "selected" : ""}>Yazılı kart</option><option value="none" ${n.cardMode === "none" ? "selected" : ""}>Kart yok</option></select></label>
@@ -250,21 +252,33 @@
     }
     function fillThumbs() {
       root.querySelectorAll("[data-cs-thumb]").forEach(el => {
-        const id = el.dataset.csThumb, ref = id === "__card" ? entry.cardSrc : (layerById(id) || {}).src;
+        const id = el.dataset.csThumb, m = id === "__card" ? entry.cardMedia : (layerById(id) || {}).media;
+        const isV = !!(MD && MD.isVideo(m)), ref = isV ? m.poster : (id === "__card" ? entry.cardSrc : (layerById(id) || {}).src);
         el.innerHTML = "";
-        if (!ref) { el.classList.add("is-empty"); return; }
+        if (!ref && !isV) { el.classList.add("is-empty"); return; }
         el.classList.remove("is-empty");
-        global.SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) { const i = document.createElement("img"); i.src = url; i.alt = ""; el.appendChild(i); } });
+        if (isV) { const b = document.createElement("span"); b.className = "cs-vbadge"; b.textContent = "▶ MP4"; el.appendChild(b); }
+        if (ref) global.SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) { const i = document.createElement("img"); i.src = url; i.alt = ""; el.insertBefore(i, el.firstChild); } });
       });
     }
     async function renderBudget() {
       const el = $("[data-cs-budget]"); if (!el) return;
-      const refs = []; cin.layers.forEach(l => { if (l.src) refs.push(l.src); if (l.backSrc) refs.push(l.backSrc); }); if (entry.cardSrc) refs.push(entry.cardSrc);
+      const refs = []; cin.layers.forEach(l => { if (l.src) refs.push(l.src); if (l.backSrc) refs.push(l.backSrc); if (l.media && l.media.poster) refs.push(l.media.poster); }); if (entry.cardSrc) refs.push(entry.cardSrc); if (entry.cardMedia && entry.cardMedia.poster) refs.push(entry.cardMedia.poster);
       let total = 0;
       for (const r of refs) { if (!global.SeozBlobStore.isRef(r)) continue; try { const b = await global.SeozBlobStore.getBlob(r.slice(4)); if (b) total += b.size; } catch (e) { /* önemsiz */ } }
       const over = total > BUDGET_MB * 1024 * 1024, many = cin.layers.length > MAX_LAYERS_WARN;
       el.className = "cs-budget" + (over || many ? " is-over" : "");
-      el.textContent = `Görseller: ${mb(total)} MB / ${BUDGET_MB} MB` + (over ? " — sınır aşıldı, açılış yavaş yüklenebilir." : "") + (many ? ` · ${cin.layers.length} katman: telefonda akıcılık için ${MAX_LAYERS_WARN}'yi aşmamaya çalışın.` : "");
+      el.textContent = `${cin.layers.some(l => l.media) || entry.cardMedia ? "Görseller ve videolar" : "Görseller"}: ${mb(total)} MB / ${BUDGET_MB} MB` + (over ? " — sınır aşıldı, açılış yavaş yüklenebilir." : "") + (many ? ` · ${cin.layers.length} katman: telefonda akıcılık için ${MAX_LAYERS_WARN}'yi aşmamaya çalışın.` : "");
+    }
+
+    /* MP4 katman / kart: oynatma ayarları */
+    function videoOptsHTML(m, scope) {
+      if (!(MD && MD.isVideo(m))) return "";
+      const o = MD.opts(m), sec = Number(m.duration) ? (Math.round(m.duration * 10) / 10).toString().replace(".", ",") + " sn" : "";
+      return `<div class="cs-video" data-cs-vscope="${scope}"><p class="cs-hint"><b>▶ MP4 video</b>${m.w ? ` · ${m.w}×${m.h}` : ""}${sec ? " · " + sec : ""}</p>
+        <label class="cs-check"><input type="checkbox" data-cs-v="autoplay" ${o.autoplay ? "checked" : ""}><span>Otomatik oynat<small>Kapalıysa açılış başlayınca oynar</small></span></label>
+        <label class="cs-check"><input type="checkbox" data-cs-v="loop" ${o.loop ? "checked" : ""}><span>Döngü<small>Bitince baştan oynar</small></span></label>
+        <label class="cs-check"><input type="checkbox" data-cs-v="sound" ${o.sound ? "checked" : ""}><span>Ses açık<small>Tarayıcılar sesi misafirin ilk dokunuşunda açar</small></span></label></div>`;
     }
 
     /* ---------- sağ panel ---------- */
@@ -394,7 +408,8 @@
       rightEl.innerHTML = `
         <section class="cs-sec">
           <label class="cs-row cs-row-col"><span>Katman adı</span><input type="text" maxlength="40" data-cs-lname value="${esc(l.name)}"></label>
-          <div class="cs-up"><button type="button" class="btn btn-outline" data-cs-up>Görseli değiştir</button></div>
+          <div class="cs-up"><button type="button" class="btn btn-outline" data-cs-up>${MD && MD.isVideo(l.media) ? "Videoyu değiştir" : "Görseli değiştir"}</button></div>
+          ${videoOptsHTML(l.media, "layer")}
           ${checksHTML(l.check)}
           <div class="cs-up cs-up-back"><span>Arka yüz <small>(isteğe bağlı, dönen katmanlar için)</small></span>
             <button type="button" class="btn btn-outline" data-cs-up-back>${l.backSrc ? "Değiştir" : "Yükle"}</button>
@@ -504,18 +519,23 @@
     global.addEventListener("resize", onResize);
 
     /* ---------- görsel yükleme ---------- */
-    function pick(multi, fn) {
+    // video: true → PNG/JPG/WebP yanında MP4 de seçilebilir (katman ön yüzü ve iç kart)
+    const MD = global.SeozMedia || null;
+    function pick(multi, fn, video) {
       const inp = document.createElement("input");
-      inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp"; inp.multiple = !!multi; inp.style.display = "none"; inp.dataset.csFile = "1";
+      inp.type = "file"; inp.accept = video && MD ? MD.ACCEPT_WITH_VIDEO : "image/png,image/jpeg,image/webp"; inp.multiple = !!multi; inp.style.display = "none"; inp.dataset.csFile = "1";
       inp.addEventListener("change", () => { const fs = Array.from(inp.files || []); inp.remove(); if (fs.length) fn(fs); });
       root.appendChild(inp); inp.click();
     }
     function busy(on, text) {
       let b = root.querySelector(".cs-busy");
-      if (on) { if (!b) { b = document.createElement("div"); b.className = "cs-busy"; root.appendChild(b); } b.textContent = text || "Görsel işleniyor…"; } else if (b) b.remove();
+      if (on) { if (!b) { b = document.createElement("div"); b.className = "cs-busy"; root.appendChild(b); } b.textContent = text || "Dosya işleniyor…"; } else if (b) b.remove();
     }
     const PSEUDO = { id: "free", backdrop: true, guide: { alpha: "no" } };
-    async function process(file) { return S1.processLayerFile(file, null, PSEUDO, { guideSize: [1, 1] }); }
+    async function process(file, video) {
+      if (video && MD && MD.isVideoFile(file)) return MD.processVideoFile(file);   // MP4: olduğu gibi saklanır, ilk kareden kapak görseli
+      return S1.processLayerFile(file, null, PSEUDO, { guideSize: [1, 1] });
+    }
     function fitBox(w, hgt) {
       const s = Math.min(320 / w, 560 / hgt), bw = r1(w * s), bh = r1(hgt * s);
       return { x: r1((C.FRAME_W - bw) / 2), y: r1((C.FRAME_H - bh) / 2), w: bw, h: bh };
@@ -525,10 +545,11 @@
       const errs = [];
       for (const f of files) {
         try {
-          const res = await process(f);
+          const res = await process(f, true);
           // v3 (3D-1): bu görselde ayrı arka yüz yüklenmedikçe arkaya hiçbir şey uydurulmaz
           const l = { id: uid("L"), name: (f.name || "Görsel").replace(/\.[a-z0-9]+$/i, "").slice(0, 40), src: res.ref, box: fitBox(res.info.w, res.info.h),
             check: { warnings: res.warnings, notes: res.notes, info: res.info }, v3: 1 };
+          if (res.info.video) l.media = MD.newMedia(res);
           cin.layers.push(l); state.sel = l.id;
         } catch (err) { errs.push(`${f.name}: ${err.message || "yüklenemedi"}`); }
       }
@@ -539,10 +560,11 @@
       pick(false, async ([f]) => {
         busy(true);
         try {
-          const res = await process(f), l = layerById(id);
+          const res = await process(f, !back), l = layerById(id);
           if (back) { l.backSrc = res.ref; l.backCheck = { warnings: res.warnings, notes: res.notes }; }
           else {
             l.src = res.ref; l.check = { warnings: res.warnings, notes: res.notes, info: res.info };
+            if (res.info.video) l.media = MD.newMedia(res, l.media); else delete l.media;
             // oran değiştiyse kutu yeni orana uyarlanır (merkez korunur)
             const nb = fitBox(res.info.w, res.info.h), ob = l.box || nb, cx = ob.x + ob.w / 2, cy = ob.y + ob.h / 2;
             const k = Math.min(ob.w / nb.w, ob.h / nb.h);
@@ -550,7 +572,7 @@
           }
           save(); refreshAll();
         } catch (err) { alert(err.message || "Görsel yüklenemedi."); } finally { busy(false); }
-      });
+      }, !back);
     }
     async function uploadLogo(f) {
       busy(true);
@@ -670,7 +692,13 @@
 
     async function uploadCard(f) {
       busy(true);
-      try { const res = await S1.processLayerFile(f, null, { id: "card", backdrop: true, guide: { alpha: "no" } }, { guideSize: [1, 1] }); entry.cardSrc = res.ref; cin.cardCheck = { warnings: res.warnings, notes: res.notes }; save(); refreshAll(); }
+      try {
+        const vid = MD && MD.isVideoFile(f);
+        const res = vid ? await MD.processVideoFile(f) : await S1.processLayerFile(f, null, { id: "card", backdrop: true, guide: { alpha: "no" } }, { guideSize: [1, 1] });
+        entry.cardSrc = res.ref; cin.cardCheck = { warnings: res.warnings, notes: res.notes };
+        if (vid) entry.cardMedia = MD.newMedia(res, entry.cardMedia); else delete entry.cardMedia;
+        save(); refreshAll();
+      }
       catch (err) { alert(err.message || "Kart görseli yüklenemedi."); } finally { busy(false); }
     }
 
@@ -922,7 +950,7 @@
       if (d.csLibImport != null) return importKurgu();
       if (d.csLogo != null) return pick(false, ([f]) => uploadLogo(f));
       if (d.csLogoDel != null) { cin.brand = Object.assign({}, cin.brand, { logo: "" }); save(); return refreshAll(); }
-      if (d.csAdd != null) return pick(true, addFiles);
+      if (d.csAdd != null) return pick(true, addFiles, true);
       if (d.csLup) { e.stopPropagation(); return moveLayer(d.csLup, +1); }
       if (d.csLdown) { e.stopPropagation(); return moveLayer(d.csLdown, -1); }
       if (d.csLdel) { e.stopPropagation(); return deleteLayer(d.csLdel); }
@@ -935,11 +963,17 @@
       if (d.csSel) { state.sel = d.csSel; renderLeft(); renderRight(); drawHandles(); renderTimeline(); if (isCard(d.csSel)) showCard(); return; }
       if (d.csView) { state.view = d.csView; return rebuildStage(); }
       if (d.csPlay != null) return togglePreview();
+      if (d.csMp4 != null) {   // ⬇ MP4 İndir: önizleme oynuyorsa durdurulur, açılış video olarak çekilir
+        if (state.previewing) togglePreview();
+        if (!cin.layers.length && !presetOn()) { toast("Önce katman (görsel veya MP4) ekleyin"); return; }
+        save();
+        return global.SeozVideoExport.open(doc);
+      }
       if (d.csUp != null) return replaceImage(state.sel, false);
       if (d.csUpBack != null) return replaceImage(state.sel, true);
       if (d.csDelBack != null) { const l = layerById(state.sel); delete l.backSrc; delete l.backCheck; save(); return refreshAll(); }
-      if (d.csCardUp != null) return pick(false, ([f]) => uploadCard(f));
-      if (d.csCardDel != null) { entry.cardSrc = ""; delete cin.cardCheck; save(); return refreshAll(); }
+      if (d.csCardUp != null) return pick(false, ([f]) => uploadCard(f), true);
+      if (d.csCardDel != null) { entry.cardSrc = ""; delete entry.cardMedia; delete cin.cardCheck; save(); return refreshAll(); }
       if (d.csKbackUp != null) return pick(false, async ([f]) => { busy(true); try { const res = await process(f); const k = cardCfg(); k.back = "image"; k.backSrc = res.ref; } catch (err) { alert(err.message || "Görsel yüklenemedi"); } busy(false); save(); refreshAll(); });
       if (d.csKreset != null) { const k = cardCfg(); ["d3", "rx", "ry", "rz", "persp", "depth"].forEach(x => delete k[x]); save(); renderLeft(); renderRight(); return rebuildStage(); }
       if (d.cs3dreset != null) { const l = layerById(state.sel); ["rx", "ry", "rz", "persp"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
@@ -1002,6 +1036,11 @@
       if (tg.matches("[data-cs-lname]")) {
         l.name = tg.value.trim() || l.name; save(); renderSeq();
         const nm = leftEl.querySelector(`.cs-layer2[data-cs-sel="${l.id}"] .cs-layer-t strong`); if (nm) nm.textContent = l.name;
+        return;
+      }
+      if (tg.dataset.csV) {   // MP4 oynatma ayarları
+        const scope = tg.closest("[data-cs-vscope]").dataset.csVscope, m = scope === "card" ? entry.cardMedia : (l || {}).media;
+        if (m) { m[tg.dataset.csV] = tg.checked; save(); if (isCard(state.sel)) showCard(); else rebuildStage(); }
         return;
       }
       if (tg.matches("[data-cs-parent]")) { if (tg.value) l.parent = tg.value; else delete l.parent; save(); renderLeft(); return rebuildStage(); }
