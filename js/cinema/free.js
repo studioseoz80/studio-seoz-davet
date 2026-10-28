@@ -1343,7 +1343,7 @@
     const layers = {};
     C.model(p.model).slots.forEach(s => {
       const l = byId[roles[s.id]];
-      if (l && l.src) layers[s.id] = { src: l.src, backSrc: l.backSrc || "", thickness: l.thickness, light: l.light, v3: l.v3, media: l.media };
+      if (l && l.src) layers[s.id] = { src: l.src, backSrc: l.backSrc || "", thickness: l.thickness, light: l.light, v3: l.v3, media: l.media, model: l.model };
       else if (!artFill) layers[s.id] = { hidden: true };
     });
     const out = Object.assign({}, cfg, { model: p.model, scenario: p.scenario, layers });

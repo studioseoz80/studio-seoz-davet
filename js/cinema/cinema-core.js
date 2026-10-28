@@ -134,7 +134,27 @@
     if (m) m.slots.forEach(s => { const u = cfg.layers[s.id]; if (u && u.src && M.isVideo(u.media)) VIDEO.set(u.src, u.media); });
     if (entry && entry.cardSrc && M.isVideo(entry.cardMedia)) VIDEO.set(entry.cardSrc, entry.cardMedia);
   }
+  /* 3D model katmanları (core/model3d.js): "model" alanı olan katmanlar. Yoksa tablo boş kalır. */
+  const MODEL = new Map();
+  function registerModels(cfg) {
+    const m = modelOf(cfg); if (!m) return;
+    m.slots.forEach(s => { const u = cfg.layers[s.id]; if (u && u.src && u.model && u.model.type === "glb") MODEL.set(u.src, u.model); });
+  }
   function img(ref, cls, fit) {
+    const mm = ref && MODEL.get(ref);
+    if (mm) {
+      const M3 = global.SeozModel3D;
+      const st = { width: "100%", height: "100%", display: "block", pointerEvents: "none" };
+      const poster = mm.poster ? resolveSrc(mm.poster) : null;
+      if (M3 && !/sc-slab|sc-backface|sc-cardshadow/.test(cls || "")) {
+        const el = M3.makeEl(URLS.has(ref) ? URLS.get(ref) : resolveSrc(ref), mm, st, cls, "");
+        if (poster) poster.then(u => { if (el.__model) el.__model.posterUrl = u || ""; });
+        return el;
+      }
+      // motor yoksa (ör. bu aşamada yayın sitesi) kapak görseli gösterilir
+      if (mm.poster) return img(mm.poster, cls, "contain");
+      return h("div", cls, st);
+    }
     const vm = ref && VIDEO.get(ref);
     if (vm) {
       // kalınlık dilimi, arka yüz ve gölge kopyaları videonun kapak görseliyle (ilk kare) çizilir
@@ -192,6 +212,7 @@
     return resolveSrc(ref).then(async url => {
       if (!url) return false;
       if (VIDEO.has(ref)) { const ok = await loadVideo(url); if (ok) URLS.set(ref, url); return ok; }   // MP4: maske kullanılmaz
+      if (MODEL.has(ref)) { URLS.set(ref, url); return true; }   // 3D model: kendi içinde yüklenir, maske kullanılmaz
       const cors = needsCors(url);
       let ok = await tryLoad(url, cors);
       if (ok) MASK_OK.add(ref);
@@ -524,6 +545,7 @@
     a.timers.forEach(clearTimeout);
     a.anims.forEach(x => { try { x.cancel(); } catch (e) { /* önemsiz */ } });
     if (global.SeozMedia && a.overlay) global.SeozMedia.stop(a.overlay);
+    if (global.SeozModel3D && a.overlay) global.SeozModel3D.stop(a.overlay);
     if (a.fx) a.fx.destroy();
     if (a.onResize) global.removeEventListener("resize", a.onResize);
     if (a.onKey) global.removeEventListener("keydown", a.onKey);
@@ -713,6 +735,8 @@
 
   function buildPngFaces(ctx, slot, u, L, inner, src) {
     const fit = slot.fit || "contain";
+    // 3D model gerçek hacimlidir: kalınlık dilimi, arka yüz ve ışık maskesi gerekmez
+    if (MODEL.has(src)) { inner.appendChild(img(src, "sc-upload sc-front", fit)); return; }
     const honest = honestBack(u);
     const two = !!slot.back || honest;  // dönen parça: arkası görünebilir (dürüst modda ön yüz arkadan gizlenir)
     const t = L.thickness;
@@ -958,6 +982,7 @@
     const entry = doc.entry || {};
     const cfg = normalize(entry.cinema);
     registerVideos(cfg, entry);
+    registerModels(cfg);
     // çok zayıf cihazlarda (≤2 GB bellek veya ≤2 çekirdek) hafif mod kendiliğinden açılır
     if (!cfg.lite && !opts.freeze && weakDevice()) cfg.lite = true;
     const done = onFinish || function () {};
@@ -1218,7 +1243,7 @@
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
     normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active,
-    preload, sourcesOf, layoutOf, registerVideos, isVideoRef: ref => VIDEO.has(ref), setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
+    preload, sourcesOf, layoutOf, registerVideos, isVideoRef: ref => VIDEO.has(ref), registerModels, isModelRef: ref => MODEL.has(ref), setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }
   };

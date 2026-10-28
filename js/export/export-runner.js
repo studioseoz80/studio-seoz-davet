@@ -53,7 +53,7 @@
         const cr = hd.ctx && (hd.ctx.cardWrap || hd.ctx.cardEl);
         C.cardMark = { at: null, after: null, test: el => !!cr && C.cardMark.after != null && (cr === el || cr.contains(el)) };
         sc.hasCard = hasCard();
-      });
+      }).then(() => (W.SeozModel3D ? W.SeozModel3D.ready(hd.overlay) : true));   // 3D modeller açılana kadar bekle
       // ara kapılarda (dokunarak devam) misafirin dokunuşu taklit edilir
       sc.tick = () => {
         const hint = hd.overlay.querySelector(".sc-hint");

@@ -133,6 +133,7 @@
         <section class="cs-sec">
           <h3>Katmanlar <small>(üstteki önde)</small></h3>
           <button type="button" class="btn btn-gold cs-wide" data-cs-add>+ Görsel ekle (PNG, JPG, WebP, MP4)</button>
+          ${global.SeozModel3D ? `<button type="button" class="btn btn-outline cs-wide cs-add3d" data-cs-add3d>+ 3D Model ekle (GLB)</button>` : ""}
           <div class="cs-layers">
             ${cardOn() ? (() => { const mv = layerMoves(CARD).length, k = cin.card || {};
               const tags = [k.d3 ? "3D" : "", k.shadow ? "gölge" : "", mv ? mv + " hareket" : ""].filter(Boolean).join(" · ") || "giriş: otomatik";
@@ -253,22 +254,39 @@
     function fillThumbs() {
       root.querySelectorAll("[data-cs-thumb]").forEach(el => {
         const id = el.dataset.csThumb, m = id === "__card" ? entry.cardMedia : (layerById(id) || {}).media;
-        const isV = !!(MD && MD.isVideo(m)), ref = isV ? m.poster : (id === "__card" ? entry.cardSrc : (layerById(id) || {}).src);
+        const mo = id === "__card" ? null : (layerById(id) || {}).model, is3 = !!(M3 && M3.isModel(mo));
+        const isV = !!(MD && MD.isVideo(m)), ref = is3 ? mo.poster : isV ? m.poster : (id === "__card" ? entry.cardSrc : (layerById(id) || {}).src);
         el.innerHTML = "";
-        if (!ref && !isV) { el.classList.add("is-empty"); return; }
+        if (!ref && !isV && !is3) { el.classList.add("is-empty"); return; }
         el.classList.remove("is-empty");
-        if (isV) { const b = document.createElement("span"); b.className = "cs-vbadge"; b.textContent = "▶ MP4"; el.appendChild(b); }
+        if (isV || is3) { const b = document.createElement("span"); b.className = "cs-vbadge"; b.textContent = is3 ? "3D" : "▶ MP4"; el.appendChild(b); }
         if (ref) global.SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) { const i = document.createElement("img"); i.src = url; i.alt = ""; el.insertBefore(i, el.firstChild); } });
       });
     }
     async function renderBudget() {
       const el = $("[data-cs-budget]"); if (!el) return;
-      const refs = []; cin.layers.forEach(l => { if (l.src) refs.push(l.src); if (l.backSrc) refs.push(l.backSrc); if (l.media && l.media.poster) refs.push(l.media.poster); }); if (entry.cardSrc) refs.push(entry.cardSrc); if (entry.cardMedia && entry.cardMedia.poster) refs.push(entry.cardMedia.poster);
+      const refs = []; cin.layers.forEach(l => { if (l.src) refs.push(l.src); if (l.backSrc) refs.push(l.backSrc); if (l.media && l.media.poster) refs.push(l.media.poster); if (l.model && l.model.poster) refs.push(l.model.poster); }); if (entry.cardSrc) refs.push(entry.cardSrc); if (entry.cardMedia && entry.cardMedia.poster) refs.push(entry.cardMedia.poster);
       let total = 0;
       for (const r of refs) { if (!global.SeozBlobStore.isRef(r)) continue; try { const b = await global.SeozBlobStore.getBlob(r.slice(4)); if (b) total += b.size; } catch (e) { /* önemsiz */ } }
       const over = total > BUDGET_MB * 1024 * 1024, many = cin.layers.length > MAX_LAYERS_WARN;
       el.className = "cs-budget" + (over || many ? " is-over" : "");
       el.textContent = `${cin.layers.some(l => l.media) || entry.cardMedia ? "Görseller ve videolar" : "Görseller"}: ${mb(total)} MB / ${BUDGET_MB} MB` + (over ? " — sınır aşıldı, açılış yavaş yüklenebilir." : "") + (many ? ` · ${cin.layers.length} katman: telefonda akıcılık için ${MAX_LAYERS_WARN}'yi aşmamaya çalışın.` : "");
+    }
+
+    /* 3D model katmanı: gerçek 360° dönüş ayarları */
+    function modelOptsHTML(m) {
+      if (!(M3 && M3.isModel(m))) return "";
+      const o = M3.opts(m), per = Number(o.period) || 6;
+      const sel = (key, list) => `<select data-cs-m="${key}">${list.map(([v, t]) => `<option value="${v}" ${String(o[key]) === String(v) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+      const tilt = (key, label) => `<label class="cs-row"><span>${label}</span><input type="range" min="-90" max="90" step="1" data-cs-m="${key}" value="${Number(o[key]) || 0}"><output data-cs-mout="${key}">${Number(o[key]) || 0}°</output></label>`;
+      return `<div class="cs-video cs-model3d"><p class="cs-hint"><b>◆ 3D model (GLB)</b>${o.tris ? ` · ${Number(o.tris).toLocaleString("tr-TR")} üçgen` : ""}</p>
+        <label class="cs-row"><span>Dönüş ekseni</span>${sel("axis", [["y", "Y · sağa-sola"], ["x", "X · takla"], ["z", "Z · düz çevir"]])}</label>
+        <label class="cs-row"><span>Yön</span>${sel("dir", [["1", "Saat yönü"], ["-1", "Ters yön"]])}</label>
+        <label class="cs-row"><span>Hız (bir tur)</span><input type="range" min="1" max="20" step="0.5" data-cs-m="period" value="${per}"><output data-cs-mout="period">${String(per).replace(".", ",")} sn</output></label>
+        <label class="cs-check"><input type="checkbox" data-cs-m="loop" ${o.loop !== false ? "checked" : ""}><span>Sürekli dönme<small>Kapalıysa seçilen tur kadar döner, yumuşakça durur</small></span></label>
+        ${o.loop === false ? `<label class="cs-row"><span>Tur sayısı</span>${sel("turns", [["0.5", "Yarım tur"], ["1", "1 tur (360°)"], ["2", "2 tur"], ["3", "3 tur"]])}</label>` : ""}
+        <p class="cs-hint" style="margin:8px 0 2px">Başlangıç eğimi</p>
+        ${tilt("tiltX", "X")}${tilt("tiltY", "Y")}${tilt("tiltZ", "Z")}</div>`;
     }
 
     /* MP4 katman / kart: oynatma ayarları */
@@ -408,12 +426,13 @@
       rightEl.innerHTML = `
         <section class="cs-sec">
           <label class="cs-row cs-row-col"><span>Katman adı</span><input type="text" maxlength="40" data-cs-lname value="${esc(l.name)}"></label>
-          <div class="cs-up"><button type="button" class="btn btn-outline" data-cs-up>${MD && MD.isVideo(l.media) ? "Videoyu değiştir" : "Görseli değiştir"}</button></div>
+          <div class="cs-up"><button type="button" class="btn btn-outline" data-cs-up>${M3 && M3.isModel(l.model) ? "Modeli değiştir" : MD && MD.isVideo(l.media) ? "Videoyu değiştir" : "Görseli değiştir"}</button></div>
           ${videoOptsHTML(l.media, "layer")}
+          ${modelOptsHTML(l.model)}
           ${checksHTML(l.check)}
-          <div class="cs-up cs-up-back"><span>Arka yüz <small>(isteğe bağlı, dönen katmanlar için)</small></span>
+          ${M3 && M3.isModel(l.model) ? "" : `<div class="cs-up cs-up-back"><span>Arka yüz <small>(isteğe bağlı, dönen katmanlar için)</small></span>
             <button type="button" class="btn btn-outline" data-cs-up-back>${l.backSrc ? "Değiştir" : "Yükle"}</button>
-            ${l.backSrc ? `<button type="button" class="btn-danger-text" data-cs-del-back>Kaldır</button>` : ""}</div>
+            ${l.backSrc ? `<button type="button" class="btn-danger-text" data-cs-del-back>Kaldır</button>` : ""}</div>`}
           <label class="cs-check"><input type="checkbox" data-cs-l="backdrop" ${l.backdrop ? "checked" : ""}> Arka plan olarak kullan (tüm ekranı kaplar)</label>
           ${l.backdrop ? "" : `<label class="cs-row cs-row-col"><span>Birlikte hareket et</span><select data-cs-parent>
             <option value="">Bağımsız</option>${others.map(o => `<option value="${o.id}" ${l.parent === o.id ? "selected" : ""}>${esc(o.name)} ile birlikte</option>`).join("")}</select></label>`}
@@ -521,6 +540,38 @@
     /* ---------- görsel yükleme ---------- */
     // video: true → PNG/JPG/WebP yanında MP4 de seçilebilir (katman ön yüzü ve iç kart)
     const MD = global.SeozMedia || null;
+    const M3 = global.SeozModel3D || null;   // 3D model katmanı (motor yalnızca model eklenince yüklenir)
+    function pickModel(fn) {
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = M3.ACCEPT; inp.style.display = "none"; inp.dataset.csFile = "1";
+      inp.addEventListener("change", () => { const fs = Array.from(inp.files || []); inp.remove(); if (fs.length) fn(fs); });
+      root.appendChild(inp); inp.click();
+    }
+    async function addModels(files) {
+      busy(true, "3D model hazırlanıyor…");
+      const errs = [];
+      for (const f of files) {
+        try {
+          const res = await M3.processModelFile(f);
+          const l = { id: uid("L"), name: (f.name || "3D Model").replace(/\.[a-z0-9]+$/i, "").slice(0, 40), src: res.ref, box: fitBox(1, 1),
+            check: { warnings: res.warnings, notes: res.notes, info: res.info }, v3: 1, model: M3.newModel(res) };
+          cin.layers.push(l); state.sel = l.id;
+        } catch (err) { errs.push(`${f.name}: ${err.message || "yüklenemedi"}`); }
+      }
+      busy(false); save(); refreshAll();
+      if (errs.length) alert(errs.join("\n"));
+    }
+    async function replaceModel(id) {
+      pickModel(async ([f]) => {
+        busy(true, "3D model hazırlanıyor…");
+        try {
+          const res = await M3.processModelFile(f), l = layerById(id);
+          l.src = res.ref; l.check = { warnings: res.warnings, notes: res.notes, info: res.info };
+          l.model = M3.newModel(res, l.model);   // dönüş ayarları korunur
+          save(); refreshAll();
+        } catch (err) { alert(err.message || "Model yüklenemedi."); } finally { busy(false); }
+      });
+    }
     function pick(multi, fn, video) {
       const inp = document.createElement("input");
       inp.type = "file"; inp.accept = video && MD ? MD.ACCEPT_WITH_VIDEO : "image/png,image/jpeg,image/webp"; inp.multiple = !!multi; inp.style.display = "none"; inp.dataset.csFile = "1";
@@ -951,6 +1002,7 @@
       if (d.csLogo != null) return pick(false, ([f]) => uploadLogo(f));
       if (d.csLogoDel != null) { cin.brand = Object.assign({}, cin.brand, { logo: "" }); save(); return refreshAll(); }
       if (d.csAdd != null) return pick(true, addFiles, true);
+      if (d.csAdd3d != null && M3) return pickModel(addModels);
       if (d.csLup) { e.stopPropagation(); return moveLayer(d.csLup, +1); }
       if (d.csLdown) { e.stopPropagation(); return moveLayer(d.csLdown, -1); }
       if (d.csLdel) { e.stopPropagation(); return deleteLayer(d.csLdel); }
@@ -969,7 +1021,7 @@
         save();
         return global.SeozVideoExport.open(doc);
       }
-      if (d.csUp != null) return replaceImage(state.sel, false);
+      if (d.csUp != null) { const ls = layerById(state.sel); if (M3 && ls && M3.isModel(ls.model)) return replaceModel(state.sel); return replaceImage(state.sel, false); }
       if (d.csUpBack != null) return replaceImage(state.sel, true);
       if (d.csDelBack != null) { const l = layerById(state.sel); delete l.backSrc; delete l.backCheck; save(); return refreshAll(); }
       if (d.csCardUp != null) return pick(false, ([f]) => uploadCard(f), true);
@@ -1010,7 +1062,8 @@
       return `${clamp(isFinite(ox) ? ox : 50, -50, 150)}% ${clamp(isFinite(oy) ? oy : 50, -50, 150)}%`;
     }
     rightEl.addEventListener("input", (e) => {
-      const kk = e.target.dataset.csK;
+      const kk = e.target.dataset.csK, mk = e.target.dataset.csM;
+      if (mk && e.target.type === "range") { const o = rightEl.querySelector(`[data-cs-mout="${mk}"]`); if (o) o.textContent = mk === "period" ? String(e.target.value).replace(".", ",") + " sn" : e.target.value + "°"; return; }
       if (kk && e.target.type === "range") { const o = rightEl.querySelector(`[data-cs-kout="${kk}"]`); if (o) o.textContent = e.target.value + (kk === "depth" ? "" : "°"); return; }
       const k = e.target.dataset.csL; if (!k) return;
       const v = Number(e.target.value), out = rightEl.querySelector(`[data-cs-lout="${k}"]`);
@@ -1037,6 +1090,13 @@
         l.name = tg.value.trim() || l.name; save(); renderSeq();
         const nm = leftEl.querySelector(`.cs-layer2[data-cs-sel="${l.id}"] .cs-layer-t strong`); if (nm) nm.textContent = l.name;
         return;
+      }
+      if (tg.dataset.csM && l && l.model) {   // 3D model dönüş ayarları
+        const k = tg.dataset.csM;
+        if (k === "loop") l.model.loop = tg.checked;
+        else if (k === "axis") l.model.axis = tg.value;
+        else l.model[k] = Number(tg.value);
+        save(); if (k === "loop") renderRight(); return rebuildStage();
       }
       if (tg.dataset.csV) {   // MP4 oynatma ayarları
         const scope = tg.closest("[data-cs-vscope]").dataset.csVscope, m = scope === "card" ? entry.cardMedia : (l || {}).media;

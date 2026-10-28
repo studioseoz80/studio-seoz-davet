@@ -18,7 +18,7 @@
   const PARTS = { acilis: "Açılış", kart: "İç kart", ikisi: "Açılış + iç kart" };
   const QUALITY = { hd: { w: 1080, h: 1920, label: "1080 × 1920 · Instagram Reels (önerilen)" }, sd: { w: 720, h: 1280, label: "720 × 1280 · daha hızlı, daha küçük dosya" } };
   const SCRIPTS = ["js/export/virtual-clock.js", "js/core/document-model.js", "js/core/layout-engine.js", "js/core/blob-store.js", "js/core/renderer.js",
-    "js/core/motion.js", "js/core/media.js", "js/entry-scene.js", "js/cinema/cinema-core.js", "js/cinema/cinema-art.js", "js/cinema/concepts.js",
+    "js/core/motion.js", "js/core/media.js", "js/core/model3d.js", "js/entry-scene.js", "js/cinema/cinema-core.js", "js/cinema/cinema-art.js", "js/cinema/concepts.js",
     "js/cinema/models/door.js", "js/cinema/free.js", "js/modules/module-registry.js", "js/export/frame-compositor.js", "js/export/mp4-mux.js", "js/export/export-runner.js"];
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
