@@ -210,7 +210,8 @@
     if (obj && typeof obj === "object") { const o = {}; Object.keys(obj).forEach(x => { o[x] = replaceRefs(obj[x], map); }); return o; }
     return obj;
   }
-  const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
+  const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4", "video/webm": "webm", "model/gltf-binary": "glb" };
+  const MIME_BY_EXT = { jpg: "image/jpeg", mp4: "video/mp4", webm: "video/webm", glb: "model/gltf-binary" };
   async function exportBlob(k, withImages) {
     const payload = { format: FORMAT, version: 1, name: k.name, createdAt: k.createdAt, data: k.data };
     if (!withImages) return { blob: new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), ext: "json", images: 0 };
@@ -244,7 +245,7 @@
       for (const ref of names) {
         const f = zip.file(ref.slice(4)); if (!f) continue;
         const ext = ref.split(".").pop().toLowerCase();
-        const blob = new Blob([await f.async("arraybuffer")], { type: ext === "jpg" ? "image/jpeg" : "image/" + ext });
+        const blob = new Blob([await f.async("arraybuffer")], { type: MIME_BY_EXT[ext] || "image/" + ext });
         map[ref] = await SeozBlobStore.putBlob(blob);
       }
       payload.data = replaceRefs(payload.data, map);

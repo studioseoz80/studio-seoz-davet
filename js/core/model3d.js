@@ -1,5 +1,5 @@
 /* =============================================================================
-   STUDIO SEOZ — core/model3d.js  (3D MODEL KATMANI · Aşama 1)
+   STUDIO SEOZ — core/model3d.js  (3D MODEL KATMANI)
    -----------------------------------------------------------------------------
    Animasyon Stüdyosu'nda "3D Model" katmanı: GLB dosyası gerçek 3D olarak
    çizilir ve kendi ekseni (X / Y / Z) etrafında 360° döner.
@@ -15,7 +15,9 @@
    - Ekranda görünmeyen ya da sayfadan kaldırılan model çizilmez; kaldırılan
      modelin grafik belleği serbest bırakılır.
    - WebGL yoksa / model açılamazsa kapak görseli (poster) gösterilir; sahne
-     asla bozulmaz.
+     asla bozulmaz. Model inerken de kapak görseli görünür.
+   - Müşteri sayfası bu dosyayı yalnızca davetiyede model varsa yükler
+     (cinema-core.js → ensureModel3D); model olmayan davetiye hiçbir şey indirmez.
    ========================================================================= */
 (function (global) {
   "use strict";
@@ -49,11 +51,34 @@
   }
   const weak = () => (navigator.deviceMemory && navigator.deviceMemory <= 2) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
 
+  /* model dosyası bir kez indirilir (açılış hazırlanırken önceden başlatılabilir) */
+  const bufCache = new Map();
+  function fetchBuf(url) {
+    if (!bufCache.has(url)) {
+      const p = fetch(url, { mode: "cors", credentials: "omit" }).then(r => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.arrayBuffer();
+      }).then(b => {
+        if (b.byteLength < 20 || new DataView(b).getUint32(0, true) !== 0x46546C67) throw new Error("GLB değil");
+        return b;
+      });
+      bufCache.set(url, p);
+      p.catch(() => bufCache.delete(url));
+    }
+    return bufCache.get(url);
+  }
+  /* açılış hazırlığı: motoru ve model dosyasını birlikte indirmeye başla; hata olsa da çözülür */
+  function prefetch(url) {
+    if (!url) return Promise.resolve(false);
+    const jobs = [fetchBuf(url)];
+    if (hasWebGL()) jobs.push(engine());
+    return Promise.all(jobs).then(() => true, () => false);
+  }
   /* model dosyasını sahne nesnesine çevir; aynı adres için tek kez okunur */
   const sceneCache = new Map();
   function loadGltf(E, url) {
     if (!sceneCache.has(url)) {
-      const p = new Promise((res, rej) => new E.GLTFLoader().load(url, g => res(g), undefined, err => rej(err)));
+      const p = fetchBuf(url).then(buf => new Promise((res, rej) => new E.GLTFLoader().parse(buf, "", g => res(g), err => rej(err))));
       sceneCache.set(url, p);
       p.catch(() => sceneCache.delete(url));
     }
@@ -85,6 +110,7 @@
       if (!it.el.isConnected) { if (++it.gone > 2) dispose(it); continue; }
       it.gone = 0;
       if (!it.ready || !it.visible || document.visibilityState === "hidden") continue;
+      if (it.cap && it.lastT && now - it.lastT < it.cap) continue;   // zayıf cihaz: saniyede en çok ~30 kare
       adapt(it, now);
       draw(it, now);
     }
@@ -94,10 +120,11 @@
   function adapt(it, now) {
     if (global.__vclock || !it.lastT) return;
     const dt = now - it.lastT;
-    if (dt > 250) { it.slow = 0; return; }              // sekme / kaydırma arası: sayma
+    if (dt > 1500) { it.slow = 0; return; }             // sekme değişimi / uzun duraklama: sayma
     it.ema = it.ema ? it.ema * 0.9 + dt * 0.1 : dt;
     it.slow = it.ema > 26 ? (it.slow || 0) + dt : 0;      // ~38 kare/sn altında geçen süre
     if (it.slow > 1200 && (it.q || 1) > (it.qMin || 1)) { it.q = Math.max(it.qMin || 1, (it.q || 1) * 0.75); it.slow = 0; it.ema = 0; it.w = 0; }
+    else if (it.slow > 1200 && !it.cap) { it.cap = 30; it.slow = 0; it.ema = 0; }   // en düşük çözünürlükte de yavaşsa: 30 kare/sn
   }
   function kick() { if (!rafId && live.size) rafId = requestAnimationFrame(loop); }
 
@@ -121,14 +148,25 @@
     it.renderer.render(it.scene, it.camera);
     it.lastT = now; it.frames = (it.frames || 0) + 1;
   }
+  /* katman büyütülmüşse (Ölçek / yakınlaşma hareketi) çizim çözünürlüğü de büyür: bulanıklaşmaz */
+  function zoomOf(it, now) {
+    if (it.zT && now - it.zT < 500) return it.z || 1;
+    it.zT = now;
+    const r = it.el.getBoundingClientRect(), w = it.el.clientWidth || 1, h = it.el.clientHeight || 1;
+    const k = Math.max(r.width / w, r.height / h) || 1;
+    const z = Math.min(3, Math.max(1, Math.round(k * 4) / 4));   // çeyrek adımlarla: küçük titreşimler yeniden boyutlandırmaz
+    if (z !== it.z) { it.z = z; it.w = 0; }
+    return z;
+  }
   function resize(it) {
+    zoomOf(it, performance.now());
     const w = it.el.clientWidth || 1, h = it.el.clientHeight || 1;
     if (w === it.w && h === it.h) return;
     it.w = w; it.h = h;
     // telefonda piksel yoğunluğu ve toplam piksel sınırlı (akıcılık + pil)
     const base = Math.min(global.devicePixelRatio || 1, weak() ? 1.5 : 2);
     it.qMin = Math.min(1, 1 / base);                    // en fazla ekran pikseline kadar iner (bulanıklaşmaz)
-    let dpr = base * Math.max(it.qMin, it.q || 1);
+    let dpr = base * Math.max(it.qMin, it.q || 1) * (it.z || 1);
     const maxPx = global.__vclock ? 4.2e6 : 1.6e6;
     if (w * h * dpr * dpr > maxPx) dpr = Math.sqrt(maxPx / (w * h));
     it.renderer.setPixelRatio(dpr);
@@ -146,20 +184,37 @@
   function dispose(it) {
     live.delete(it);
     try { if (it.io) it.io.disconnect(); } catch (e) { /* önemsiz */ }
-    try { it.scene && it.scene.traverse(o => { if (o.isMesh) { o.geometry && o.geometry.dispose(); } }); } catch (e) { /* önemsiz */ }
+    try {
+      it.scene && it.scene.traverse(o => {
+        if (!o.isMesh) return;
+        if (o.geometry) o.geometry.dispose();
+        [].concat(o.material || []).forEach(m => { Object.keys(m).forEach(k => { if (m[k] && m[k].isTexture) m[k].dispose(); }); m.dispose(); });
+      });
+    } catch (e) { /* önemsiz */ }
     try { if (it.envTex) it.envTex.dispose(); } catch (e) { /* önemsiz */ }
     try { if (it.renderer) { it.renderer.dispose(); it.renderer.forceContextLoss && it.renderer.forceContextLoss(); } } catch (e) { /* önemsiz */ }
     it.ready = false;
+  }
+  /* kapak görseli: model inene kadar ve model açılamazsa görünür */
+  function posterImg(it) {
+    if (!it.posterEl) {
+      const im = document.createElement("img"); im.alt = ""; im.draggable = false; im.className = "sc-model-poster";
+      Object.assign(im.style, { position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none" });
+      it.el.insertBefore(im, it.el.firstChild);
+      it.posterEl = im;
+    }
+    return it.posterEl;
+  }
+  function setPoster(el, url) {
+    const it = el && el.__model; if (!it || !url) return;
+    it.posterUrl = url;
+    if (!it.ready) { const im = posterImg(it); if (im.getAttribute("src") !== url) im.src = url; }
   }
   function fallback(it, why) {
     it.failed = why || "hata";
     it.el.dataset.modelFailed = it.failed;
     if (it.canvas) it.canvas.style.display = "none";
-    if (it.posterUrl) {
-      const im = document.createElement("img"); im.alt = ""; im.src = it.posterUrl;
-      Object.assign(im.style, { width: "100%", height: "100%", objectFit: "contain", display: "block" });
-      it.el.appendChild(im);
-    }
+    if (it.posterUrl) { const im = posterImg(it); im.src = it.posterUrl; im.style.display = "block"; }
     dispose(it);
     it.resolve();
   }
@@ -169,8 +224,10 @@
       if (!hasWebGL()) return fallback(it, "webgl");
       const E = await engine();
       const T = E.THREE;
-      const renderer = new T.WebGLRenderer({ canvas: it.canvas, alpha: true, antialias: !!global.__vclock || (global.devicePixelRatio || 1) < 2,   // yüksek yoğunluklu ekranda kenar yumuşatma gereksiz premultipliedAlpha: true,
-        preserveDrawingBuffer: !!global.__vclock, powerPreference: "high-performance" });
+      // yüksek yoğunluklu (2×+) ekranda kenar yumuşatma gözle fark edilmez ama telefonu yorar
+      const aa = !!global.__vclock || (global.devicePixelRatio || 1) < 2;
+      const renderer = new T.WebGLRenderer({ canvas: it.canvas, alpha: true, antialias: aa, premultipliedAlpha: true,
+        preserveDrawingBuffer: !!global.__vclock, powerPreference: weak() ? "low-power" : "high-performance" });
       renderer.setClearColor(0x000000, 0);
       renderer.outputColorSpace = T.SRGBColorSpace;
       renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -200,6 +257,7 @@
       it.ready = true;
       it.el.dataset.modelReady = "1";
       draw(it, performance.now());
+      if (it.posterEl) it.posterEl.style.display = "none";
       kick();
       it.resolve();
     } catch (e) {
@@ -220,6 +278,7 @@
     let resolve; const ready = new Promise(r => { resolve = r; });
     const it = { el, canvas, o: opts(model), posterUrl: posterUrl || "", t0: performance.now(), visible: true, gone: 0, ready: false, resolve, readyP: ready };
     el.__model = it;
+    if (it.posterUrl) setPoster(el, it.posterUrl);
     live.add(it);
     if ("IntersectionObserver" in global) {
       it.io = new IntersectionObserver(es => { es.forEach(x => { it.visible = x.isIntersecting; }); if (it.visible) kick(); });
@@ -242,7 +301,14 @@
   function snapshot(el, style) {
     const it = el && el.__model, im = document.createElement("img");
     im.alt = ""; if (style) Object.assign(im.style, style);
-    try { if (it && it.ready) { draw(it, performance.now()); im.src = it.canvas.toDataURL("image/png"); } else if (it && it.posterUrl) im.src = it.posterUrl; } catch (e) { if (it && it.posterUrl) im.src = it.posterUrl; }
+    try {
+      if (it && it.ready) {
+        // aynı anda birden çok parça (ör. dörde bölünme) aynı kareyi paylaşır: kare bir kez kodlanır
+        const now = performance.now();
+        if (!it.snap || now - it.snapT > 30) { draw(it, now); it.snap = it.canvas.toDataURL("image/png"); it.snapT = now; }
+        im.src = it.snap;
+      } else if (it && it.posterUrl) im.src = it.posterUrl;
+    } catch (e) { if (it && it.posterUrl) im.src = it.posterUrl; }
     return im;
   }
   function stop(root) { all(root).forEach(dispose); }
@@ -300,6 +366,6 @@
     return Object.assign({}, DEFAULTS, p, { type: "glb", poster: res.poster || "", tris: res.info.tris });
   }
 
-  global.SeozModel3D = { ACCEPT, DEFAULTS, MAX_MB, isModel, opts, isGlbFile, makeEl, snapshot, ready, restart, stop, processModelFile, newModel, engine, angleAt,
+  global.SeozModel3D = { ACCEPT, DEFAULTS, MAX_MB, isModel, opts, isGlbFile, makeEl, setPoster, prefetch, snapshot, ready, restart, stop, processModelFile, newModel, engine, angleAt,
     _live: () => live.size };
 })(window);

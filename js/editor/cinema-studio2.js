@@ -422,7 +422,7 @@
       const L = C.layoutOf({ box: l.box, origin: "50% 50%" }, l, 1);
       const [ox, oy] = String(L.origin).split(/\s+/).map(v => parseFloat(v));
       const others = cin.layers.filter(x => x.id !== l.id && !x.backdrop);
-      const acts = layerMoves(l.id);
+      const acts = layerMoves(l.id), is3 = !!(M3 && M3.isModel(l.model));
       rightEl.innerHTML = `
         <section class="cs-sec">
           <label class="cs-row cs-row-col"><span>Katman adı</span><input type="text" maxlength="40" data-cs-lname value="${esc(l.name)}"></label>
@@ -451,12 +451,12 @@
           <label class="cs-row"><span>Ölçek</span><input type="range" min="0.2" max="3" step="0.01" data-cs-l="scale" value="${L.s}"><output data-cs-lout="scale">${Math.round(L.s * 100)}%</output></label>
           <div class="cs-grid2"><label>Dönme noktası x %<input type="number" step="1" data-cs-l="ox" value="${r1(ox)}"></label><label>Dönme noktası y %<input type="number" step="1" data-cs-l="oy" value="${r1(oy)}"></label></div>
           <label class="cs-row"><span>Derinlik</span><input type="range" min="-200" max="200" step="1" data-cs-l="depth" value="${Number(l.depth) || 0}"><output data-cs-lout="depth">${Number(l.depth) || 0}</output></label>
-          <label class="cs-row"><span>Kalınlık</span><input type="range" min="0" max="40" step="1" data-cs-l="thickness" value="${L.thickness}"><output data-cs-lout="thickness">${L.thickness}</output></label>
-          <label class="cs-row"><span>Işık tepkisi</span><input type="range" min="0" max="1.5" step="0.05" data-cs-l="light" value="${L.light}"><output data-cs-lout="light">${Math.round(L.light * 100)}%</output></label>
+          ${is3 ? "" : `<label class="cs-row"><span>Kalınlık</span><input type="range" min="0" max="40" step="1" data-cs-l="thickness" value="${L.thickness}"><output data-cs-lout="thickness">${L.thickness}</output></label>
+          <label class="cs-row"><span>Işık tepkisi</span><input type="range" min="0" max="1.5" step="0.05" data-cs-l="light" value="${L.light}"><output data-cs-lout="light">${Math.round(L.light * 100)}%</output></label>`}
           <button type="button" class="btn btn-outline cs-reset" data-cs-reset>Yerleşimi sıfırla</button>
-          <p class="cs-hint">Sahnede katmanı sürükleyin, sağ alt köşeden büyütün, kırmızı artıyla dönme noktasını taşıyın. Ok tuşları 1, Shift ile 10 birim kaydırır.</p>
+          <p class="cs-hint">Sahnede katmanı sürükleyin, sağ alt köşeden büyütün, kırmızı artıyla dönme noktasını taşıyın. Ok tuşları 1, Shift ile 10 birim kaydırır.${is3 ? " Model, kutunun içine her açıdan sığacak şekilde ortalanır." : ""}</p>
         </section>
-        ${d3HTML(l)}`}`;
+        ${is3 ? "" : d3HTML(l)}`}`;
     }
 
     /* ---------- sahne ---------- */

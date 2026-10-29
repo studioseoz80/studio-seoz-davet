@@ -335,7 +335,8 @@
     "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif",
     "image/svg+xml": "svg", "video/mp4": "mp4", "video/webm": "webm",
     "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav",
-    "audio/ogg": "ogg", "audio/mp4": "m4a"
+    "audio/ogg": "ogg", "audio/mp4": "m4a",
+    "model/gltf-binary": "glb"          // 3D model (GLB)
   };
 
   function collectRefs(node, refs) {

@@ -25,8 +25,9 @@
     const img = (doc.layers || []).filter(l => l.type === "image" && l.content && l.content.src).sort((a, b) => (a.y || 0) - (b.y || 0))[0];
     const bg = doc.canvas && doc.canvas.background;
     // MP4 alanlarında paylaşım kapağı için videonun kapak görseli (ilk kare) kullanılır
-    const pic = (src, m) => (m && m.type === "video" ? (m.poster || "") : src);
-    return [pic(e.cardOnlySrc, e.cardOnlyMedia), pic(e.cardSrc, e.cardMedia), pic(e.pngSrc, e.pngMedia), layer && pic(layer.src, layer.media), img && img.content.src, bg && bg.type === "image" ? bg.value : ""].find(Boolean) || "";
+    // 3D model katmanında modelin kapak görseli kullanılır (GLB bir resim değildir)
+    const pic = (src, m, mo) => (mo && mo.type === "glb" ? (mo.poster || "") : m && m.type === "video" ? (m.poster || "") : src);
+    return [pic(e.cardOnlySrc, e.cardOnlyMedia), pic(e.cardSrc, e.cardMedia), pic(e.pngSrc, e.pngMedia), layer && pic(layer.src, layer.media, layer.model), img && img.content.src, bg && bg.type === "image" ? bg.value : ""].find(Boolean) || "";
   }
   function loadImage(ref) {
     return SeozBlobStore.resolveToObjectURL(ref).then(u => new Promise((res, rej) => {

@@ -134,8 +134,24 @@
     if (m) m.slots.forEach(s => { const u = cfg.layers[s.id]; if (u && u.src && M.isVideo(u.media)) VIDEO.set(u.src, u.media); });
     if (entry && entry.cardSrc && M.isVideo(entry.cardMedia)) VIDEO.set(entry.cardSrc, entry.cardMedia);
   }
-  /* 3D model katmanları (core/model3d.js): "model" alanı olan katmanlar. Yoksa tablo boş kalır. */
+  /* 3D model katmanları (core/model3d.js): "model" alanı olan katmanlar. Yoksa tablo boş kalır.
+     Müşteri sayfası 3D dosyasını yalnızca davetiyede model varsa, açılış hazırlanırken yükler. */
   const MODEL = new Map();
+  const CORE_SRC = (document.currentScript && document.currentScript.src) || "";
+  let m3Promise = null;
+  function ensureModel3D() {
+    if (global.SeozModel3D) return Promise.resolve(global.SeozModel3D);
+    if (!m3Promise) {
+      m3Promise = new Promise(res => {
+        const sc = document.createElement("script");
+        sc.src = CORE_SRC ? new URL("../core/model3d.js", CORE_SRC).href : "js/core/model3d.js";
+        sc.onload = () => res(global.SeozModel3D || null);
+        sc.onerror = () => { m3Promise = null; sc.remove(); res(null); };
+        document.head.appendChild(sc);
+      });
+    }
+    return m3Promise;
+  }
   function registerModels(cfg) {
     const m = modelOf(cfg); if (!m) return;
     m.slots.forEach(s => { const u = cfg.layers[s.id]; if (u && u.src && u.model && u.model.type === "glb") MODEL.set(u.src, u.model); });
@@ -147,8 +163,9 @@
       const st = { width: "100%", height: "100%", display: "block", pointerEvents: "none" };
       const poster = mm.poster ? resolveSrc(mm.poster) : null;
       if (M3 && !/sc-slab|sc-backface|sc-cardshadow/.test(cls || "")) {
-        const el = M3.makeEl(URLS.has(ref) ? URLS.get(ref) : resolveSrc(ref), mm, st, cls, "");
-        if (poster) poster.then(u => { if (el.__model) el.__model.posterUrl = u || ""; });
+        const pRef = mm.poster || "";
+        const el = M3.makeEl(URLS.has(ref) ? URLS.get(ref) : resolveSrc(ref), mm, st, cls, URLS.get(pRef) || "");
+        if (poster && !URLS.get(pRef)) poster.then(u => { if (u) (M3.setPoster ? M3.setPoster(el, u) : (el.__model && (el.__model.posterUrl = u))); });
         return el;
       }
       // motor yoksa (ör. bu aşamada yayın sitesi) kapak görseli gösterilir
@@ -212,7 +229,13 @@
     return resolveSrc(ref).then(async url => {
       if (!url) return false;
       if (VIDEO.has(ref)) { const ok = await loadVideo(url); if (ok) URLS.set(ref, url); return ok; }   // MP4: maske kullanılmaz
-      if (MODEL.has(ref)) { URLS.set(ref, url); return true; }   // 3D model: kendi içinde yüklenir, maske kullanılmaz
+      if (MODEL.has(ref)) {   // 3D model: motor + dosya önceden indirilir; açılmazsa kapak görseli kullanılır
+        URLS.set(ref, url);
+        const pRef = MODEL.get(ref).poster;
+        const M3 = await ensureModel3D();
+        await Promise.all([M3 && M3.prefetch ? M3.prefetch(url) : null, pRef && !URLS.has(pRef) ? loadOne(pRef) : null]);
+        return true;
+      }
       const cors = needsCors(url);
       let ok = await tryLoad(url, cors);
       if (ok) MASK_OK.add(ref);

@@ -33,6 +33,9 @@ cp -R js/core "$OUT/js/core"
 cp -R js/modules "$OUT/js/modules"
 cp js/*.js "$OUT/js/"
 cp -R js/cinema "$OUT/js/cinema"
+# 3D model motoru (Three.js, MIT). Yalnızca davetiyede 3D model katmanı varsa
+# tarayıcıya iner; model olmayan davetiyeler bu klasöre hiç istek atmaz.
+cp -R js/vendor "$OUT/js/vendor"
 # İç Zemin Tasarım Stüdyosu: zemin motoru ve sunum biçimleri (yalnızca görüntüleme kodu)
 cp -R js/theme "$OUT/js/theme"
 cp css/theme.css "$OUT/css/theme.css"

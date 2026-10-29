@@ -98,8 +98,22 @@
     "audio/mp3": "mp3",
     "audio/wav": "wav",
     "audio/x-wav": "wav",
-    "audio/ogg": "ogg"
+    "audio/ogg": "ogg",
+    "model/gltf-binary": "glb"
   };
+  // 3D model katmanı varsa pakete 3D motoru da eklenir (yoksa paket eskisi gibi kalır)
+  const MODEL_FILES = [
+    "js/core/model3d.js",
+    "js/vendor/three/three.module.min.js",
+    "js/vendor/three/GLTFLoader.js",
+    "js/vendor/three/BufferGeometryUtils.js",
+    "js/vendor/three/RoomEnvironment.js",
+    "js/vendor/three/LICENSE"
+  ];
+  function hasModel(doc) {
+    const c = doc && doc.entry && doc.entry.cinema;
+    return !!(c && Array.isArray(c.layers) && c.layers.some(l => l && l.model && l.model.type === "glb"));
+  }
 
   function guessExtension(blob) {
     return EXTENSION_BY_MIME[blob.type] || "bin";
@@ -334,7 +348,7 @@
 
     const finalDoc = replaceIdbRefs(docCopy, map);
 
-    for (const relPath of CORE_FILES) {
+    for (const relPath of CORE_FILES.concat(hasModel(finalDoc) ? MODEL_FILES : [])) {
       const text = await fetchTextOrThrow(relPath);
       zip.file(relPath, text);
     }
