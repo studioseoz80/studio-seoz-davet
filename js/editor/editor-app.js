@@ -182,7 +182,8 @@
       refreshSidebar();
       renderEntryPanel();
       renderBgSettingsPanel();
-      appRoot.querySelector("[data-title-input]").value = doc.meta.title || "";
+      const titleInput = appRoot.querySelector("[data-title-input]");   // stüdyo kapanırken editör ekranda olmayabilir
+      if (titleInput) titleInput.value = doc.meta.title || "";
       const bgColorInput = appRoot.querySelector("[data-bg-color]");
       if (bgColorInput && doc.canvas.background.type === "color") bgColorInput.value = doc.canvas.background.value;
       const deleteBtn = appRoot.querySelector("[data-delete-selected]");
