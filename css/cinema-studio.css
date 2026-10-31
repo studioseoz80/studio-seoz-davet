@@ -230,3 +230,16 @@ body.cs-open{ overflow:hidden; }
 .cs-video .cs-check span{ display:flex; flex-direction:column; line-height:1.3; }
 .cs-video .cs-check small{ font-size:11px; margin-top:1px; }
 .cs-video .cs-check input{ margin-top:2px; }
+
+/* Sahne arka plan rengi */
+.cs-bgpick{ display:flex; align-items:center; gap:10px; margin:6px 0 10px; }
+.cs-bgpick input[type=color]{ width:44px; height:36px; padding:2px; border:1px solid var(--line, #DCD5C6); border-radius:6px; background:#fff; cursor:pointer; flex:none; }
+.cs-bgpick span{ display:flex; flex-direction:column; gap:1px; font-size:12px; min-width:0; }
+.cs-bgpick small{ color:var(--ink-soft, #6B6A5E); font-size:11px; letter-spacing:.02em; }
+.cs-swatches{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:4px; margin-bottom:10px; align-items:start; }
+.cs-sw{ display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 1px; border:1px solid transparent; border-radius:6px; background:none; cursor:pointer; font:500 10.5px var(--f-body, sans-serif); color:var(--ink-soft, #6B6A5E); min-width:0; }
+.cs-sw i{ width:26px; height:26px; border-radius:50%; box-shadow:inset 0 0 0 1px rgba(0,0,0,.18); }
+.cs-sw span{ white-space:normal; text-align:center; line-height:1.15; font-size:9.5px; letter-spacing:-.01em; }
+.cs-sw:hover{ border-color:var(--line, #DCD5C6); }
+.cs-sw.is-on{ border-color:var(--gold, #93703F); color:var(--ink, #2A2420); font-weight:700; }
+.cs-sw:focus-visible{ outline:2px solid var(--gold, #93703F); outline-offset:1px; }

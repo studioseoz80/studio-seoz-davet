@@ -189,6 +189,7 @@
           <label class="cs-check"><input type="checkbox" data-cs-opt="lite" ${n.lite ? "checked" : ""}> Hafif mod</label>
           <label class="cs-row cs-row-col"><span>İpucu yazısı</span><input type="text" maxlength="40" data-cs-opt="hintText" value="${esc(n.hintText)}"></label>
         </section>
+        ${bgHTML(n.bgColor)}
         <section class="cs-sec">
           <h3>Özel gün konsepti</h3>
           <select data-cs-opt="concept" aria-label="Özel gün konsepti">
@@ -985,11 +986,37 @@
     }
     document.addEventListener("keydown", onCopyKeys);
 
+    /* Sahne arka plan rengi: her davetiyenin açılışında ayrı saklanır (entry.cinema.bgColor).
+       Seçilmemişse alan hiç yazılmaz → eski görünüm (koyu zemin) aynen kalır. */
+    const BG_DEFAULT = "#0E0C0B";
+    const BG_SWATCHES = [["#101B3D", "Gece mavisi"], ["#5C1220", "Bordo"], ["#F3EAD8", "Krem"], ["#000000", "Siyah"], ["#E9D6AE", "Şampanya"]];
+    function bgHTML(cur) {
+      return `<section class="cs-sec cs-bgsec">
+          <h3>Arka plan rengi</h3>
+          <div class="cs-bgpick"><input type="color" data-cs-bg value="${esc(cur || BG_DEFAULT)}" aria-label="Arka plan rengini seç">
+            <span><b data-cs-bgname>${cur ? esc((BG_SWATCHES.find(s => s[0] === cur) || [0, cur])[1]) : "Varsayılan"}</b><small data-cs-bgval>${cur ? esc(cur) : "Koyu zemin"}</small></span></div>
+          <div class="cs-swatches">${BG_SWATCHES.map(([hex, name]) => `<button type="button" class="cs-sw${cur === hex ? " is-on" : ""}" data-cs-bgsw="${hex}" aria-pressed="${cur === hex}" title="${name} ${hex}"><i style="background:${hex}"></i><span>${name}</span></button>`).join("")}</div>
+          <button type="button" class="btn btn-outline cs-reset" data-cs-bgreset ${cur ? "" : "disabled"}>Varsayılana dön</button>
+          <p class="cs-hint">Yalnızca bu davetiyenin açılışı için. "Arka plan olarak kullan" işaretli bir görsel varsa görsel bu rengin üstünde kalır.</p>
+        </section>`;
+    }
+    function liveBg(v) {   // sahneyi yeniden kurmadan anında göster
+      const ov = stageEl.querySelector(".sc-overlay"); if (!ov) return;
+      if (v) { ov.style.backgroundColor = v; ov.dataset.scBg = v; } else { ov.style.backgroundColor = ""; delete ov.dataset.scBg; }
+    }
+    function setBg(v) {
+      v = /^#[0-9a-fA-F]{6}$/.test(String(v || "")) ? String(v).toUpperCase() : "";
+      if (v) cin.bgColor = v; else delete cin.bgColor;
+      save(); liveBg(v); renderLeft();
+    }
+
     function refreshAll() { renderSub(); renderLeft(); renderRight(); if (isCard(state.sel)) showCard(); else rebuildStage(); renderTimeline(); }
 
     /* ---------- olaylar ---------- */
     root.addEventListener("click", (e) => {
       const t = e.target.closest("button, [data-cs-sel]"); if (!t || !root.contains(t)) return;
+      if (t.dataset.csBgsw) return setBg(t.dataset.csBgsw);
+      if (t.dataset.csBgreset != null) return setBg("");
       const d = t.dataset;
       if (d.csClose != null) return close();
       if (d.csHarmony != null && global.SeozMotionPanel) {
@@ -1033,12 +1060,14 @@
     });
     leftEl.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-cs-sel][role=button]")) { e.preventDefault(); e.target.click(); } });
     leftEl.addEventListener("input", (e) => {
+      if (e.target.matches("[data-cs-bg]")) { liveBg(e.target.value.toUpperCase()); const s = leftEl.querySelector("[data-cs-bgval]"); if (s) s.textContent = e.target.value.toUpperCase(); return; }
       const k = e.target.dataset.csOpt;
       if (k === "cardSize") { const o = leftEl.querySelector("[data-cs-cardsize]"); if (o) o.textContent = "%" + e.target.value; return; }
       if (k && e.target.type === "range") { cin[k] = Number(e.target.value); const o = leftEl.querySelector(`[data-cs-out="${k}"]`); if (o) o.textContent = r1(cin[k]) + "×"; }
     });
     leftEl.addEventListener("change", (e) => {
       const tg = e.target;
+      if (tg.matches("[data-cs-bg]")) return setBg(tg.value);
       if (tg.matches("[data-cs-preset]")) {
         if (tg.value) cin.preset = { id: tg.value, roles: (cin.preset && cin.preset.roles) || {}, artFill: !!(cin.preset && cin.preset.artFill) };
         else cin.preset = null;

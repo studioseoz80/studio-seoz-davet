@@ -43,6 +43,7 @@
     speed: 1, depth: 1, intensity: 1, sound: true, start: "tap", lite: false,
     cardMode: "auto", cardTitle: "", cardSubtitle: "", cardSize: 100,
     hintText: "Açmak için dokunun",
+    bgColor: "",          // sahne arka plan rengi (#RRGGBB); boşsa eskisi gibi koyu zemin (cinema.css)
     brand: { useColors: false, primary: "#7A1F2B", secondary: "#C9A45C", logo: "", text: "" },
     layers: {}
   };
@@ -91,6 +92,7 @@
     c.lite = !!c.lite;
     if (c.concept !== "auto" && c.concept !== "none" && !CONCEPTS[c.concept]) c.concept = "auto";
     if (c.accessory !== "none" && !ACCESSORIES[c.accessory]) c.accessory = "none";
+    c.bgColor = /^#[0-9a-fA-F]{6}$/.test(String(c.bgColor || "")) ? String(c.bgColor).toUpperCase() : "";   // yalnızca geçerli renk kodu
     return c;
   }
   function scenarioOf(c) { const m = modelOf(c); return m.scenarios.find(s => s.id === c.scenario) || m.scenarios[0]; }
@@ -1014,6 +1016,8 @@
 
     const overlay = h("div", "sc-overlay" + (inBox ? " sc-inbox" : "") + (cfg.lite ? " sc-lite" : "") + (opts.freeze ? " sc-freeze" : ""));
     overlay.dataset.scModel = cfg.model; overlay.dataset.scScenario = cfg.scenario; overlay.dataset.scPhase = "loading";
+    // seçilen arka plan rengi; seçilmemişse hiçbir şey değişmez. Arka plan görseli (katman) bu rengin üstünde kalır.
+    if (cfg.bgColor) { overlay.style.backgroundColor = cfg.bgColor; overlay.dataset.scBg = cfg.bgColor; }
     overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-label", "Davetiye açılışı");
     const backdrop = h("div", "sc-backdrop");
     const view = h("div", "sc-view");
