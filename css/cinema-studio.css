@@ -243,3 +243,26 @@ body.cs-open{ overflow:hidden; }
 .cs-sw:hover{ border-color:var(--line, #DCD5C6); }
 .cs-sw.is-on{ border-color:var(--gold, #93703F); color:var(--ink, #2A2420); font-weight:700; }
 .cs-sw:focus-visible{ outline:2px solid var(--gold, #93703F); outline-offset:1px; }
+
+/* Kart üzerindeki katmanlar */
+.cs-clsec .cs-grid2 .btn{ min-height:36px; }
+.cs-cllist{ list-style:none; margin:10px 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.cs-clitem{ display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--line, #DCD5C6); border-radius:6px; background:#fff; cursor:pointer; }
+.cs-clitem.is-on{ border-color:var(--gold, #93703F); box-shadow:0 0 0 1px var(--gold, #93703F) inset; }
+.cs-clitem.is-off{ opacity:.55; }
+.cs-clitem:focus-visible{ outline:2px solid var(--gold, #93703F); outline-offset:1px; }
+.cs-clic{ flex:none; width:24px; height:24px; border-radius:4px; display:grid; place-items:center; background:var(--paper, #F5F0E6); font:700 12px var(--f-body, sans-serif); }
+.cs-clnm{ flex:1; min-width:0; display:flex; flex-direction:column; font-size:12px; }
+.cs-clnm b{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cs-clnm small{ color:var(--ink-soft, #6B6A5E); font-size:10.5px; }
+.cs-clbtns{ flex:none; display:flex; gap:2px; }
+.cs-clbtns .cs-mini{ padding:2px 6px; min-width:0; }
+.cs-cled{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line, #DCD5C6); }
+.cs-cled textarea{ width:100%; box-sizing:border-box; padding:7px 8px; border:1px solid var(--line, #DCD5C6); border-radius:4px; font:inherit; resize:vertical; }
+.cs-clh4{ margin:14px 0 4px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft, #6B6A5E); }
+.cs-clsw{ grid-template-columns:repeat(6, minmax(0, 1fr)); }
+.cs-wide{ width:100%; margin-top:10px; }
+/* sahnede: kart katmanları sürüklenebilir, seçili olan çerçeveli */
+.cs-stage .sc-cl{ pointer-events:auto; cursor:move; touch-action:none; }
+.cs-stage .sc-cl.cs-cl-on{ outline:1.5px dashed #F2C14E; outline-offset:4px; }
+.cs-stage .sc-cl .cs-clh{ position:absolute; right:-10px; bottom:-10px; width:12px; height:12px; background:#F2C14E; border:1.5px solid #6B4A12; border-radius:2px; cursor:nwse-resize; }

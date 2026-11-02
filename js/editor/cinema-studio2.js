@@ -218,7 +218,7 @@
           ${videoOptsHTML(entry.cardMedia, "card")}
           <label class="cs-row"><span>Kart</span><select data-cs-opt="cardMode">
             <option value="auto" ${n.cardMode === "auto" ? "selected" : ""}>Otomatik</option><option value="image" ${n.cardMode === "image" ? "selected" : ""}>Yüklenen görsel</option>
-            <option value="title" ${n.cardMode === "title" ? "selected" : ""}>Yazılı kart</option><option value="none" ${n.cardMode === "none" ? "selected" : ""}>Kart yok</option></select></label>
+            <option value="title" ${n.cardMode === "title" ? "selected" : ""}>Yazılı kart</option><option value="plain" ${n.cardMode === "plain" ? "selected" : ""}>Düz kart (yazısız)</option><option value="none" ${n.cardMode === "none" ? "selected" : ""}>Kart yok</option></select></label>
           <label class="cs-row"><span>Kart boyutu</span><input type="range" min="60" max="133" step="1" data-cs-opt="cardSize" value="${Number(n.cardSize) || 100}" aria-label="Kart boyutu"><b data-cs-cardsize>%${Number(n.cardSize) || 100}</b></label>
           <label class="cs-row cs-row-col"><span>Yazılı kart başlığı</span><input type="text" maxlength="60" data-cs-opt="cardTitle" placeholder="${esc((doc.meta && doc.meta.title) || "")}" value="${esc(n.cardTitle)}"></label>
           <label class="cs-row"><span>Ekranda kalma</span><select data-cs-hold>
@@ -373,6 +373,127 @@
         </section>`;
     }
     /* K1 · İç kart paneli: 3D duruş, yumuşak gölge, gerçek arka yüz ve karta özel hareketler */
+    /* ---------------- KART ÜZERİNDEKİ KATMANLAR (yazı / PNG) ----------------
+       cin.cardLayers: kartın ön yüzüne bağlı katmanlar. Sıra = görünme sırası ("Öncekinden sonra" için). */
+    const CL_ANIM_LABELS = [["none", "Hareketsiz"], ["down", "Yukarıdan inerek"], ["up", "Aşağıdan yükselerek"], ["left", "Soldan kayarak"], ["right", "Sağdan kayarak"], ["fade", "Solarak belirme"], ["grow", "Büyüyerek belirme"]];
+    const CL_SWATCHES = [["#7A1F2B", "Bordo"], ["#B8925A", "Altın"], ["#2A2420", "Koyu"], ["#FBF7EF", "Krem"], ["#FFFFFF", "Beyaz"], ["#101B3D", "Gece mavisi"]];
+    const cls = () => (Array.isArray(cin.cardLayers) ? cin.cardLayers : (cin.cardLayers = []));
+    const clById = id => cls().find(x => x.id === id) || null;
+    const clName = L => L.type === "text" ? (String(L.text || "").split("\n")[0].slice(0, 26) || "Yazı") : (L.name || "PNG");
+    function clHTML() {
+      const list = cls(), sel = clById(state.clSel);
+      const n1 = v => String(Math.round(Number(v) * 100) / 100).replace(".", ",");
+      const item = (L, i) => `<li class="cs-clitem${L.id === state.clSel ? " is-on" : ""}${L.hidden ? " is-off" : ""}" data-cs-clsel="${L.id}" role="button" tabindex="0">
+          <span class="cs-clic">${L.type === "text" ? "T" : "▣"}</span><span class="cs-clnm"><b>${esc(clName(L))}</b><small>${esc((CL_ANIM_LABELS.find(a => a[0] === ((L.anim || {}).type || "none")) || CL_ANIM_LABELS[0])[1])}${(L.anim || {}).loop ? " · süzülme" : ""}</small></span>
+          <span class="cs-clbtns"><button type="button" class="cs-mini" data-cs-clmv="up" data-id="${L.id}" ${i === 0 ? "disabled" : ""} aria-label="Yukarı">▲</button><button type="button" class="cs-mini" data-cs-clmv="down" data-id="${L.id}" ${i === list.length - 1 ? "disabled" : ""} aria-label="Aşağı">▼</button><button type="button" class="cs-mini" data-cs-clhide="${L.id}" aria-label="${L.hidden ? "Göster" : "Gizle"}">${L.hidden ? "◌" : "👁"}</button><button type="button" class="cs-mini cs-cldel" data-cs-cldel="${L.id}" aria-label="Sil">✕</button></span></li>`;
+      let ed = "";
+      if (sel) {
+        const A = sel.anim || {};
+        const rng = (k, label, min, max, step, val, unit) => `<label class="cs-row"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" data-cs-cl="${k}" value="${val}"><output data-cs-clout="${k}">${unit(val)}</output></label>`;
+        const textEd = sel.type === "text" ? `
+          <label class="cs-row cs-row-col"><span>Yazı</span><textarea rows="2" maxlength="300" data-cs-cl="text">${esc(sel.text || "")}</textarea></label>
+          <label class="cs-row cs-row-col"><span>Yazı tipi</span><select data-cs-cl="font">${global.SeozFonts ? global.SeozFonts.optionsHTML(sel.font || "Cormorant Garamond") : `<option>${esc(sel.font || "Cormorant Garamond")}</option>`}</select></label>
+          ${rng("size", "Boyut", 8, 96, 1, Number(sel.size) || 28, v => v + " px")}
+          <div class="cs-grid2"><label>Kalınlık<select data-cs-cl="weight">${[[300, "İnce"], [400, "Normal"], [500, "Orta"], [600, "Yarı kalın"], [700, "Kalın"]].map(([v, t]) => `<option value="${v}" ${Number(sel.weight || 400) === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+            <label>Hizalama<select data-cs-cl="align">${[["center", "Ortada"], ["left", "Sola"], ["right", "Sağa"]].map(([v, t]) => `<option value="${v}" ${(sel.align || "center") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+          <div class="cs-bgpick"><input type="color" data-cs-cl="color" value="${esc(sel.color || "#2A2420")}" aria-label="Yazı rengi"><span><b>Yazı rengi</b><small>${esc(sel.color || "#2A2420")}</small></span></div>
+          <div class="cs-swatches cs-clsw">${CL_SWATCHES.map(([hx, nm]) => `<button type="button" class="cs-sw${(sel.color || "").toUpperCase() === hx ? " is-on" : ""}" data-cs-clsw="${hx}" title="${nm}"><i style="background:${hx}"></i><span>${nm}</span></button>`).join("")}</div>
+          ${rng("ls", "Harf aralığı", 0, 0.6, 0.01, Number(sel.ls) || 0, v => n1(v))}`
+        : `<div class="cs-up"><button type="button" class="btn btn-outline" data-cs-clrepl="${sel.id}">Görseli değiştir</button></div>
+          ${rng("w", "Genişlik", 16, 300, 1, Math.round(Number(sel.w) || 120), v => v + " px")}`;
+        ed = `<div class="cs-cled">
+          ${textEd}
+          <div class="cs-grid2"><label>Yatay (x)<input type="number" step="1" data-cs-cl="x" value="${Math.round(Number(sel.x) || 0)}"></label><label>Dikey (y)<input type="number" step="1" data-cs-cl="y" value="${Math.round(Number(sel.y) || 0)}"></label></div>
+          ${rng("s", "Ölçek", 0.3, 3, 0.01, Number(sel.s) || 1, v => Math.round(v * 100) + "%")}
+          ${rng("rot", "Döndürme", -180, 180, 1, Math.round(Number(sel.rot) || 0), v => v + "°")}
+          ${rng("opacity", "Saydamlık", 0.1, 1, 0.05, sel.opacity != null ? Number(sel.opacity) : 1, v => Math.round(v * 100) + "%")}
+          <h4 class="cs-clh4">Animasyon</h4>
+          <label class="cs-row cs-row-col"><span>Giriş</span><select data-cs-cla="type">${CL_ANIM_LABELS.map(([v, t]) => `<option value="${v}" ${(A.type || "none") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+          <label class="cs-row cs-row-col"><span>Başlangıç</span><select data-cs-cla="start"><option value="card" ${A.start !== "after" ? "selected" : ""}>Kart görününce</option><option value="after" ${A.start === "after" ? "selected" : ""}>Öncekinden sonra</option></select></label>
+          <div class="cs-grid2"><label>Gecikme (sn)<input type="number" min="0" max="30" step="0.1" data-cs-cla="delay" value="${Number(A.delay) || 0}"></label><label>Süre (sn)<input type="number" min="0.1" max="10" step="0.1" data-cs-cla="dur" value="${A.dur != null ? A.dur : 0.9}"></label></div>
+          <label class="cs-check"><input type="checkbox" data-cs-cla="loop" ${A.loop ? "checked" : ""}> Girişten sonra sürekli süzülme</label>
+        </div>`;
+      }
+      return `<section class="cs-sec cs-clsec">
+          <h3>Kart üzerindeki katmanlar</h3>
+          <div class="cs-grid2"><button type="button" class="btn btn-gold" data-cs-cladd="text">+ Yazı ekle</button><button type="button" class="btn btn-outline" data-cs-cladd="image">+ PNG ekle</button></div>
+          ${list.length ? `<ol class="cs-cllist">${list.map(item).join("")}</ol>` : `<p class="cs-hint">Kartın ön yüzüne yazı ve saydam PNG ekleyin. Kart döner, büyür ya da süzülürse katmanlar da onunla gider; her biri kendi animasyonuyla sırayla gelir.</p>`}
+          ${ed}
+          ${list.length ? `<button type="button" class="btn btn-outline cs-wide" data-cs-clplay>▶ Kart animasyonunu oynat</button>
+          <p class="cs-hint">Sahnede katmanı sürükleyerek taşıyın, sarı köşeden büyütün. Zamanlama, kartın göründüğü andan başlar; kart ekranda kalma süresi içinde oynar.</p>` : ""}
+        </section>`;
+    }
+    // sahnede seçili kart katmanını işaretle ve büyütme köşesi ekle
+    function markCl() {
+      stageEl.querySelectorAll(".sc-cl").forEach(el => {
+        const on = !!state.clSel && el.dataset.cl === state.clSel && isCard(state.sel);
+        el.classList.toggle("cs-cl-on", on);
+        const hh = el.querySelector(".cs-clh");
+        if (on && !hh) { const c = document.createElement("i"); c.className = "cs-clh"; c.dataset.csClh = "1"; el.appendChild(c); }
+        else if (!on && hh) hh.remove();
+      });
+    }
+    function clLive(L) {   // sahnedeki kopyayı yeniden kurmadan güncelle (sürükleme, kaydırıcılar)
+      const el = stageEl.querySelector(`.sc-cl[data-cl="${L.id}"]`); if (!el) return;
+      el.style.left = (Number(L.x) || 0) + "px"; el.style.top = (Number(L.y) || 0) + "px";
+      el.style.transform = `translate(-50%, -50%) rotate(${Number(L.rot) || 0}deg) scale(${Number(L.s) || 1})`;
+      el.style.opacity = String(L.opacity != null ? L.opacity : 1);
+      const tx = el.querySelector(".sc-cl-text");
+      if (tx) { tx.textContent = String(L.text || ""); tx.style.fontSize = (Number(L.size) || 28) + "px"; tx.style.letterSpacing = (Number(L.ls) || 0) + "em"; tx.style.color = L.color || "#2A2420"; }
+      const im = el.querySelector(".sc-cl-img");
+      if (im && L.w) { im.style.width = L.w + "px"; im.style.height = (L.h || L.w) + "px"; }
+    }
+    function clRefresh(keepPanel) { save(); if (!keepPanel) renderRight(); showCard(); }
+    function clAdd(type) {
+      const list = cls();
+      const nm = norm(), mode = nm.cardMode === "auto" ? (entry.cardSrc ? "image" : "title") : nm.cardMode;
+      if (!list.length && mode === "title") { cin.cardMode = "plain"; toast("Kart, üzerine yazı yerleştirmek için yazısız düz karta çevrildi"); renderLeft(); }
+      const lastY = list.length ? Math.max.apply(null, list.map(L => Number(L.y) || 0)) : 140;
+      const base = { id: uid("CL"), x: 150, y: Math.min(470, list.length ? lastY + 60 : 190), rot: 0, s: 1, opacity: 1,
+        anim: { type: type === "text" ? "fade" : "grow", start: list.length ? "after" : "card", delay: 0, dur: 0.9, loop: false } };
+      if (type === "text") {
+        list.push(Object.assign(base, { type: "text", text: "Yeni yazı", font: "Cormorant Garamond", size: 28, weight: 500, color: "#2A2420", align: "center", ls: 0.04 }));
+        state.clSel = base.id; return clRefresh();
+      }
+      pick(false, async ([f]) => {
+        busy(true);
+        try {
+          const res = await process(f, false), ar = (res.info.h || 1) / (res.info.w || 1), w = Math.min(140, Math.round(240 / Math.max(1, ar)));
+          list.push(Object.assign(base, { type: "image", name: (f.name || "PNG").replace(/\.[a-z0-9]+$/i, "").slice(0, 30), src: res.ref, ar, w, h: Math.round(w * ar) }));
+          state.clSel = base.id; clRefresh();
+        } catch (err) { alert(err.message || "Görsel yüklenemedi."); } finally { busy(false); }
+      }, false);
+    }
+    function clReplace(id) {
+      pick(false, async ([f]) => {
+        busy(true);
+        try {
+          const res = await process(f, false), L = clById(id), ar = (res.info.h || 1) / (res.info.w || 1);
+          L.src = res.ref; L.ar = ar; L.h = Math.round((Number(L.w) || 120) * ar); L.name = (f.name || "PNG").replace(/\.[a-z0-9]+$/i, "").slice(0, 30);
+          clRefresh();
+        } catch (err) { alert(err.message || "Görsel yüklenemedi."); } finally { busy(false); }
+      }, false);
+    }
+    // sahnede sürükleme (taşı) ve köşeden büyütme
+    stageEl.addEventListener("pointerdown", (e) => {
+      const el = e.target.closest(".sc-cl"); if (!el || !isCard(state.sel) || state.previewing || state.playing) return;
+      const L = clById(el.dataset.cl); if (!L) return;
+      e.preventDefault(); e.stopPropagation();
+      if (state.clSel !== L.id) { state.clSel = L.id; renderRight(); markCl(); }
+      const box = el.closest(".sc-cl-box"), k = box ? box.getBoundingClientRect().width / (box.offsetWidth || 300) : 1;
+      const scaling = !!e.target.closest("[data-cs-clh]");
+      const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const st = { x: e.clientX, y: e.clientY, lx: Number(L.x) || 0, ly: Number(L.y) || 0, s: Number(L.s) || 1, d: Math.hypot(e.clientX - cx, e.clientY - cy) || 1 };
+      try { el.setPointerCapture(e.pointerId); } catch (er) { /* önemsiz */ }
+      const move = ev => {
+        if (scaling) L.s = Math.round(clamp(st.s * Math.hypot(ev.clientX - cx, ev.clientY - cy) / st.d, 0.3, 3) * 100) / 100;
+        else { L.x = Math.round(st.lx + (ev.clientX - st.x) / (k || 1)); L.y = Math.round(st.ly + (ev.clientY - st.y) / (k || 1)); }
+        clLive(L);
+      };
+      const up = () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); save(); renderRight(); };
+      el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    }, true);
+
     function cardPanelHTML() {
       const k = cin.card || {}, n = norm(), mode = n.cardMode === "auto" ? (entry.cardSrc ? "image" : "title") : n.cardMode;
       const acts = layerMoves(CARD);
@@ -389,6 +510,7 @@
           <h3>İç kart</h3>
           <p class="cs-hint">Kartın görseli, türü, boyutu ve ekranda kalma süresi soldaki "İç kart" bölümünde. Burada kartın 3D duruşunu, gölgesini, arka yüzünü ve hareketlerini ayarlarsınız.</p>
         </section>
+        ${clHTML()}
         <section class="cs-sec">
           <h3>Hareketler</h3>
           ${hasEntry ? "" : `<p class="cs-hint">Giriş hareketi yok: kart, son hareketten sonra kendiliğinden aşağıdan yükselerek gelir.</p>`}
@@ -529,6 +651,15 @@
     function onKey(e) {
       if (e.key === "Escape" && !state.previewing) { close(); return; }
       if (state.previewing || !/^Arrow/.test(e.key) || /^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName || "")) return;
+      if (isCard(state.sel) && state.clSel) {   // kart katmanı: ok tuşlarıyla ince ayar
+        const K = clById(state.clSel); if (!K) return;
+        e.preventDefault();
+        const st = e.shiftKey ? 10 : 1;
+        K.x = (Number(K.x) || 0) + (e.key === "ArrowLeft" ? -st : e.key === "ArrowRight" ? st : 0);
+        K.y = (Number(K.y) || 0) + (e.key === "ArrowUp" ? -st : e.key === "ArrowDown" ? st : 0);
+        clLive(K); clearTimeout(state.clT); state.clT = setTimeout(() => { save(); renderRight(); }, 300);
+        return;
+      }
       const l = layerById(state.sel); if (!l || l.backdrop) return;
       e.preventDefault();
       const s = e.shiftKey ? 10 : 1, L = C.layoutOf({ box: l.box }, l, 1);
@@ -903,13 +1034,15 @@
       state.tl = F.runTimeline(doc, stageEl, { from, paused, sound: !paused && n.sound,
         onTick: t => { state.time = t; updateHead(t); },
         onEnd: () => { state.playing = false; state.time = 0; rebuildStage(); renderTimeline(); } });
+      if (paused && state.tl && state.tl.ready) { const tl = state.tl; tl.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => { if (state.tl === tl) markCl(); }))); }
       renderTimeline();
     }
     // K1: iç kart seçiliyken sahne, kartın göründüğü anda donar (3D duruş ve gölge hemen görülsün)
     function showCard() {
-      const { p, k } = tlPlan();
+      const { n, p, k } = tlPlan();
       if (!isCard(state.sel) || !p || !p.hasCard || state.previewing) return rebuildStage();
-      seek((p.cardShown + 400) * k / 1000);
+      const span = C.cardLayersSpan ? C.cardLayersSpan(n) : 0;   // kart üzerindeki katmanlar yerine oturmuş olsun
+      seek(Math.min(p.cardShown + span + 400, Math.max(p.cardShown + 400, p.exitAt - 60)) * k / 1000);
     }
     function tlPause() { const t = state.tl && state.tl.time ? state.tl.time() : state.time; state.time = t; tlStart(t, true); }
     function seek(t) { const { p, k } = tlPlan(); if (!p) return; state.time = clamp(t, 0, p.total * k / 1000); tlStart(state.time, true); }
@@ -1014,6 +1147,20 @@
 
     /* ---------- olaylar ---------- */
     root.addEventListener("click", (e) => {
+      // kart üzerindeki katmanlar
+      const clb = e.target.closest("[data-cs-cladd], [data-cs-clmv], [data-cs-clhide], [data-cs-cldel], [data-cs-clsw], [data-cs-clrepl], [data-cs-clplay]");   // (adı "cb" olmasın: stüdyonun geri çağırma nesnesini gölgeler)
+      if (clb && root.contains(clb)) {
+        const ds = clb.dataset;
+        if (ds.csCladd) return clAdd(ds.csCladd);
+        if (ds.csClmv) { const list = cls(), i = list.findIndex(x => x.id === ds.id), j = i + (ds.csClmv === "up" ? -1 : 1); if (i < 0 || j < 0 || j >= list.length) return; [list[i], list[j]] = [list[j], list[i]]; return clRefresh(); }
+        if (ds.csClhide) { const L = clById(ds.csClhide); if (L) { L.hidden = !L.hidden; clRefresh(); } return; }
+        if (ds.csCldel) { const i = cls().findIndex(x => x.id === ds.csCldel); if (i >= 0) { cls().splice(i, 1); if (state.clSel === ds.csCldel) state.clSel = null; clRefresh(); } return; }
+        if (ds.csClsw) { const L = clById(state.clSel); if (L) { L.color = ds.csClsw; clRefresh(); } return; }
+        if (ds.csClrepl) return clReplace(ds.csClrepl);
+        if (ds.csClplay != null) { const { p, k } = tlPlan(); if (!p) return; state.time = Math.max(0, (p.cardStart - 200) * k / 1000); return tlStart(state.time, false); }
+      }
+      const ci = e.target.closest("[data-cs-clsel]");
+      if (ci && root.contains(ci)) { state.clSel = state.clSel === ci.dataset.csClsel ? state.clSel : ci.dataset.csClsel; renderRight(); markCl(); return; }
       const t = e.target.closest("button, [data-cs-sel]"); if (!t || !root.contains(t)) return;
       if (t.dataset.csBgsw) return setBg(t.dataset.csBgsw);
       if (t.dataset.csBgreset != null) return setBg("");
@@ -1058,6 +1205,7 @@
       if (d.cs3dreset != null) { const l = layerById(state.sel); ["rx", "ry", "rz", "persp"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
       if (d.csReset != null) { const l = layerById(state.sel); ["x", "y", "scale", "origin", "depth", "thickness", "light"].forEach(k => delete l[k]); save(); renderRight(); return rebuildStage(); }
     });
+    rightEl.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-cs-clsel]")) { e.preventDefault(); e.target.click(); } });
     leftEl.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-cs-sel][role=button]")) { e.preventDefault(); e.target.click(); } });
     leftEl.addEventListener("input", (e) => {
       if (e.target.matches("[data-cs-bg]")) { liveBg(e.target.value.toUpperCase()); const s = leftEl.querySelector("[data-cs-bgval]"); if (s) s.textContent = e.target.value.toUpperCase(); return; }
@@ -1091,6 +1239,19 @@
       return `${clamp(isFinite(ox) ? ox : 50, -50, 150)}% ${clamp(isFinite(oy) ? oy : 50, -50, 150)}%`;
     }
     rightEl.addEventListener("input", (e) => {
+      const ck = e.target.dataset.csCl;
+      if (ck && ["text", "x", "y", "s", "rot", "opacity", "size", "ls", "w", "color"].includes(ck)) {   // kart katmanı: anında sahnede
+        const L = clById(state.clSel); if (!L) return;
+        const v = e.target.value;
+        if (ck === "text") L.text = v;
+        else if (ck === "color") L.color = v.toUpperCase();
+        else { L[ck] = Number(v); if (ck === "w") L.h = Math.round(L.w * (Number(L.ar) || (L.h && L.w ? L.h / L.w : 1))); }
+        clLive(L);
+        const o = rightEl.querySelector(`[data-cs-clout="${ck}"]`);
+        if (o) o.textContent = ck === "size" || ck === "w" ? v + " px" : ck === "rot" ? v + "°" : ck === "s" || ck === "opacity" ? Math.round(v * 100) + "%" : String(v).replace(".", ",");
+        clearTimeout(state.clT); state.clT = setTimeout(save, 400);
+        return;
+      }
       const kk = e.target.dataset.csK, mk = e.target.dataset.csM;
       if (mk && e.target.type === "range") { const o = rightEl.querySelector(`[data-cs-mout="${mk}"]`); if (o) o.textContent = mk === "period" ? String(e.target.value).replace(".", ",") + " sn" : e.target.value + "°"; return; }
       if (kk && e.target.type === "range") { const o = rightEl.querySelector(`[data-cs-kout="${kk}"]`); if (o) o.textContent = e.target.value + (kk === "depth" ? "" : "°"); return; }
@@ -1106,6 +1267,22 @@
     });
     rightEl.addEventListener("change", (e) => {
       const tg = e.target, l = layerById(state.sel);
+      if (tg.dataset.csCl || tg.dataset.csCla) {   // kart katmanı ayarı
+        const L = clById(state.clSel); if (!L) return;
+        if (tg.dataset.csCl) {
+          const k = tg.dataset.csCl;
+          if (k === "text" || k === "font" || k === "align") L[k] = tg.value;
+          else if (k === "color") L.color = tg.value.toUpperCase();
+          else L[k] = Number(tg.value);
+          if (k === "font" && global.SeozFonts && global.SeozFonts.markFontUsed) global.SeozFonts.markFontUsed(tg.value);
+        } else {
+          const k = tg.dataset.csCla; L.anim = L.anim || {};
+          if (k === "loop") L.anim.loop = tg.checked;
+          else if (k === "type" || k === "start") L.anim[k] = tg.value;
+          else L.anim[k] = Math.max(k === "dur" ? 0.1 : 0, Number(tg.value) || 0);
+        }
+        return clRefresh(tg.type === "range");
+      }
       if (tg.dataset.csK) {   // K1: iç kart ayarları
         const k = cardCfg(), key = tg.dataset.csK;
         if (tg.type === "checkbox") k[key] = tg.checked;

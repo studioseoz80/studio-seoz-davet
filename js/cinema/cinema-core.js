@@ -311,9 +311,10 @@
       if (u.src) out.push(u.src);
       if (u.backSrc) out.push(u.backSrc);
     });
-    if (entry && entry.cardSrc && cfg.cardMode !== "none" && cfg.cardMode !== "title") out.push(entry.cardSrc);
+    if (entry && entry.cardSrc && cfg.cardMode !== "none" && cfg.cardMode !== "title" && cfg.cardMode !== "plain") out.push(entry.cardSrc);
     if (cfg.card && cfg.card.backSrc && cfg.cardMode !== "none") out.push(cfg.card.backSrc);
     if (cfg.brand && cfg.brand.logo) out.push(cfg.brand.logo);
+    if (cfg.cardMode !== "none") cardLayersOf(cfg).forEach(L => { if (L.type === "image" && L.src) out.push(L.src); });   // kart üzerindeki PNG'ler
     return out;
   }
   function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -602,6 +603,10 @@
     let card;
     if (mode === "image") {
       card = h("div", "sc-card sc-card-img", null, [img(src, "", "contain")]);
+    } else if (mode === "plain") {
+      // yazısız düz kart: üzerine "kart katmanları" (yazı / PNG) yerleştirmek için
+      const P = ctx.pal;
+      card = h("div", "sc-card sc-card-title sc-card-plain", { background: P.paper || "#FBF7EF", color: P.ink || "#2A2420", borderColor: P.accent || "#C9A45C" });
     } else {
       const P = ctx.pal;
       const title = c.cardTitle || (doc.meta && doc.meta.title) || "";
@@ -629,9 +634,87 @@
      Arka yüz: yalnızca GERÇEK bir arka yüz varsa (yüklenen görsel ya da yazılı kartın monogramlı
      arkası) gösterilir; yoksa kart arkasını döndüğünde görünmez (sahte arka yüz yok). */
   const CARD_ID = "__card";
+
+  /* ---------------- KART ÜZERİNDEKİ KATMANLAR ----------------
+     cfg.cardLayers = [{ id, type: "text" | "image", x, y (kartın 300×520 kutusunda merkez), rot, s, opacity, hidden,
+                         text, font, size, weight, color, align, ls,          ← yazı
+                         src, w, h,                                           ← PNG
+                         anim: { type, start: "card" | "after", delay, dur, loop } }]
+     Alan yoksa hiçbir şey değişmez. Katmanlar kartın ön yüzündedir; zamanlama kartın göründüğü andan başlar. */
+  const CL_ANIMS = ["none", "down", "up", "left", "right", "fade", "grow"];
+  const CL_EASE = "cubic-bezier(.16,1,.3,1)";
+  const CL_KF = {
+    down: () => [{ opacity: 0, transform: "translateY(-46px)" }, { opacity: 1, transform: "translateY(0)" }],
+    up: () => [{ opacity: 0, transform: "translateY(46px)" }, { opacity: 1, transform: "translateY(0)" }],
+    left: () => [{ opacity: 0, transform: "translateX(-60px)" }, { opacity: 1, transform: "translateX(0)" }],
+    right: () => [{ opacity: 0, transform: "translateX(60px)" }, { opacity: 1, transform: "translateX(0)" }],
+    fade: () => [{ opacity: 0 }, { opacity: 1 }],
+    grow: () => [{ opacity: 0, transform: "scale(.55)" }, { opacity: 1, transform: "scale(1)" }]
+  };
+  function cardLayersOf(c) {
+    const list = c && Array.isArray(c.cardLayers) ? c.cardLayers : [];
+    return list.filter(L => L && typeof L === "object" && !L.hidden &&
+      ((L.type === "text" && String(L.text || "").trim()) || (L.type === "image" && L.src))).slice(0, 40);
+  }
+  function clAnimOf(L) {
+    const a = (L && L.anim) || {};
+    return { type: CL_ANIMS.includes(a.type) ? a.type : "none", start: a.start === "after" ? "after" : "card",
+      delay: num(a.delay, 0, 0, 30) * 1000, dur: num(a.dur, 0.9, 0.1, 10) * 1000, loop: !!a.loop };
+  }
+  const clColor = v => (/^#[0-9a-fA-F]{6}$/.test(String(v || "")) ? v : "#2A2420");
+  const clFont = v => String(v || "Cormorant Garamond").replace(/[^\w\s\u00C0-\u024F-]/g, "").slice(0, 60) || "Cormorant Garamond";
+  function buildCardLayer(ctx, L) {
+    const x = num(L.x, 150, -200, 500), y = num(L.y, 260, -200, 720), rot = num(L.rot, 0, -360, 360), s = num(L.s, 1, 0.1, 6);
+    const o = h("div", "sc-cl sc-cl-" + L.type, { left: x + "px", top: y + "px", opacity: String(num(L.opacity, 1, 0, 1)),
+      transform: `translate(-50%, -50%) rotate(${rot}deg) scale(${s})` });
+    o.dataset.cl = String(L.id || "");
+    const an = h("div", "sc-cl-anim"), fl = h("div", "sc-cl-float");
+    let body;
+    if (L.type === "text") {
+      body = h("div", "sc-cl-text", { fontFamily: `"${clFont(L.font)}", serif`, fontSize: num(L.size, 28, 6, 160) + "px",
+        fontWeight: String([300, 400, 500, 600, 700].includes(Number(L.weight)) ? Number(L.weight) : 400), color: clColor(L.color),
+        textAlign: ["left", "center", "right"].includes(L.align) ? L.align : "center", letterSpacing: num(L.ls, 0, -0.1, 1) + "em",
+        lineHeight: String(num(L.lh, 1.15, 0.8, 2.5)) }, [String(L.text).slice(0, 300)]);
+    } else {
+      const w = num(L.w, 120, 4, 900), hh = num(L.h, w, 4, 1400);
+      body = img(L.src, "sc-cl-img", "contain");
+      Object.assign(body.style, { width: w + "px", height: hh + "px" });
+    }
+    fl.appendChild(body); an.appendChild(fl); o.appendChild(an);
+    // giriş hareketi olan katman, sırası gelene kadar görünmez (sahne donuksa ya da hareket azaltılmışsa görünür)
+    const A = clAnimOf(L);
+    if (A.type !== "none" && !ctx.reduced && !ctx.__freeze) an.style.opacity = "0";
+    ctx.cardLayerEls[L.id] = { o, an, fl, L };
+    return o;
+  }
+  /* kart görünür olduğu an (at, ms, şimdiden itibaren): katmanların hareketleri sırayla başlar. Bir kez çalışır. */
+  function cardLayersIn(ctx, at) {
+    if (!ctx || !ctx.cardLayerList || ctx.__clIn) return;
+    ctx.__clIn = true;
+    let prevEnd = at || 0;
+    ctx.cardLayerList.forEach(L => {
+      const e = ctx.cardLayerEls[L.id]; if (!e) return;
+      const A = clAnimOf(L);
+      const begin = (A.start === "after" ? prevEnd : (at || 0)) + A.delay;
+      const end = begin + (A.type === "none" ? 0 : A.dur);
+      if (A.type !== "none" && !ctx.reduced) {
+        ctx.anim(e.an, CL_KF[A.type](), { d: A.dur, delay: begin, e: A.type === "fade" ? E.inOut : CL_EASE, fill: "both" });
+        e.an.style.opacity = "";
+      } else e.an.style.opacity = "";
+      if (A.loop && !ctx.reduced) ctx.anim(e.fl, [{ transform: "translateY(-5px)" }, { transform: "translateY(5px)" }], { d: 2600, delay: end, e: E.inOut, it: Infinity, dir: "alternate", fill: "none" });
+      prevEnd = end;
+    });
+  }
+  /* kart göründükten sonra katmanların girişlerinin bitmesi için gereken süre (ms) — stüdyo önizlemesi için */
+  function cardLayersSpan(c) {
+    let prevEnd = 0, max = 0;
+    cardLayersOf(c).forEach(L => { const A = clAnimOf(L); const b = (A.start === "after" ? prevEnd : 0) + A.delay, e = b + (A.type === "none" ? 0 : A.dur); prevEnd = e; max = Math.max(max, e); });
+    return max;
+  }
   function card3dOn(c) {
     const k = c && c.card;
     if (k && (k.d3 || k.shadow || k.back)) return true;
+    if (cardLayersOf(c).length) return true;   // kart üzerindeki katmanlar kartın ön yüzüne bağlıdır (3D yapı)
     const onCard = list => Array.isArray(list) && list.some(a => a && a.layer === CARD_ID);
     return onCard(c && c.actions) || onCard(c && c.exitActions);
   }
@@ -675,6 +758,16 @@
       }
     }
     holder.appendChild(lit);
+    // kart üzerindeki katmanlar (yazı / PNG): ön yüze bağlı; kart döner, büyür, süzülürse onlar da gider
+    const cls = cardLayersOf(c);
+    if (cls.length) {
+      holder.classList.add("has-cl");
+      const box = h("div", "sc-cl-box");
+      setHidden(box);
+      ctx.cardLayerList = cls; ctx.cardLayerEls = {};
+      cls.forEach(L => box.appendChild(buildCardLayer(ctx, L)));
+      holder.appendChild(box);
+    }
     inner.appendChild(holder);
     // yumuşak gölge: kartın altında (carry içinde) durur; kartın kendi hareketleri gölgeyi taşımaz
     if (k.shadow) {
@@ -869,7 +962,7 @@
       doc, entry, cfg, model: m, scenario: scenarioOf(cfg), concept: conceptOf(cfg), pal, E,
       // ✨ Sahne uyumu (core/motion.js): yalnızca belgede açıksa dolu; eski belgelerde null → eski hareketler
       motion: global.SeozMotion ? global.SeozMotion.of(doc) : null,
-      L: {}, S: {}, C: {}, box: {}, uploaded: {}, lit: {}, failed: st.failed || {}, overlay, frame: st.frame, backdropEl: st.backdrop,
+      L: {}, S: {}, C: {}, box: {}, uploaded: {}, lit: {}, failed: st.failed || {}, overlay, frame: st.frame, backdropEl: st.backdrop, __freeze: !!st.freeze,
       scale: () => st.scale, dead: false, hasCard: false, reduced: st.reduced, lite: cfg.lite,
       k, h, svg, img, rnd, pick, mix,
       Z: (n) => n * cfg.depth,
@@ -1029,7 +1122,7 @@
     overlay.appendChild(backdrop); overlay.appendChild(view); overlay.appendChild(fxCanvas);
     view.style.perspective = Math.round(1400 / Math.max(0.35, cfg.depth || 0.35)) + "px";
 
-    const st = { overlay, frame, fit, cam, view, backdrop, fxCanvas, anims: [], timers: [], reduced, scale: 1, failed: {}, ctx: null, dead: false };
+    const st = { overlay, frame, fit, cam, view, backdrop, fxCanvas, anims: [], timers: [], reduced, scale: 1, failed: {}, ctx: null, dead: false, freeze: !!opts.freeze };
     if (inBox) opts.container.appendChild(overlay); else document.body.appendChild(overlay);
     if (!opts.freeze) active = st;
     st.onGone = opts.onGone || null;   // K1/Hazırlık: açılış ekranı tamamen kalkınca
@@ -1038,6 +1131,7 @@
     function setPhase(p) {
       phase = p; overlay.dataset.scPhase = p;
       if (p === "opening" && global.SeozMedia) global.SeozMedia.start(overlay, "open");   // otomatik oynamayan videolar açılışla başlar
+      if (p === "card" && st.ctx) cardLayersIn(st.ctx, 0);   // kart katmanları: hazır kapı kurgularında kart görününce başlar (serbest kurguda daha önce zamanlanır)
       if (opts.onPhase) opts.onPhase(p);
     }
 
@@ -1269,7 +1363,7 @@
     concepts: () => CONCEPT_ORDER.map(id => CONCEPTS[id]), concept: id => CONCEPTS[id],
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
-    normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active,
+    normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active, cardLayersIn, cardLayersSpan, cardLayersOf, CL_ANIMS,
     preload, sourcesOf, layoutOf, registerVideos, isVideoRef: ref => VIDEO.has(ref), registerModels, isModelRef: ref => MODEL.has(ref), setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }

@@ -33,7 +33,7 @@
   function hasCardGuess(doc) {
     const e = doc.entry || {};
     if (e.type === "card") return true;
-    if (e.type === "cinema") { const m = (e.cinema && e.cinema.cardMode) || "auto"; return m !== "none" && (!!e.cardSrc || m === "title" || m === "auto"); }
+    if (e.type === "cinema") { const m = (e.cinema && e.cinema.cardMode) || "auto"; return m !== "none" && (!!e.cardSrc || m === "title" || m === "plain" || m === "auto"); }
     return !!e.cardSrc;
   }
   function parseSec(v) { const n = parseFloat(String(v || "").replace(",", ".")); return isFinite(n) && n > 0 ? n : null; }
@@ -64,7 +64,13 @@ ${SCRIPTS.map(s => `<script src="${s}"><\/script>`).join("\n")}
   }
 
   /* bölüm penceresi: sanal saatte [a, b] doğal aralık; bMax'a kadar uzatılabilir */
-  function planFor(part, m, sec) {
+  // kart üzerindeki katmanların (yazı / PNG) girişleri bitene kadar geçen süre (ms, hız ayarı dahil)
+  function cardLayersMs(doc) {
+    const C = global.SeozCinema, e = (doc && doc.entry) || {};
+    if (!C || !C.cardLayersSpan || e.type !== "cinema" || !e.cinema) return 0;
+    try { const n = C.normalize(e.cinema); return C.cardLayersSpan(n) / (n.speed || 1); } catch (er) { return 0; }
+  }
+  function planFor(part, m, sec, clMs) {
     const k = m.marks, notes = [];
     const hold = Math.min(isFinite(m.hold) ? m.hold : 60000, 60000);
     let a = 0, b, bMax;
@@ -78,7 +84,7 @@ ${SCRIPTS.map(s => `<script src="${s}"><\/script>`).join("\n")}
     } else {
       const holdEnd = Math.min(k.holdEnd != null ? k.holdEnd : Infinity, k.cardShown + hold) - 60;
       a = part === "kart" ? Math.max(0, (m.type === "dual-wing" ? k.cardShown - 600 : (k.cardStart != null ? k.cardStart : k.cardShown) - 250)) : 0;
-      b = Math.min(k.cardShown + 2500, holdEnd); bMax = Math.max(b, holdEnd);
+      b = Math.min(k.cardShown + Math.max(2500, (clMs || 0) + 1200), holdEnd); bMax = Math.max(b, holdEnd);   // kart katmanları sonuna kadar görünsün
     }
     const N = Math.max(200, b - a);
     let frames, speed = 1;
@@ -196,7 +202,7 @@ ${SCRIPTS.map(s => `<script src="${s}"><\/script>`).join("\n")}
         f1.remove(); f1 = null;
         if (st.cancel) throw new Error("İptal edildi.");
         if (meas.failed) throw new Error(`${meas.failed} katman görseli yüklenemedi. Görselleri kontrol edip tekrar deneyin.`);
-        const plan = planFor(st.part, meas, sec);
+        const plan = planFor(st.part, meas, sec, cardLayersMs(doc));
         setProg("Kareler çiziliyor…", 0.08, `0 / ${plan.frames} kare`);
         f2 = await makeFrame(host, dpr);
         const t0 = performance.now();

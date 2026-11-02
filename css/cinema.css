@@ -106,3 +106,12 @@
 .sc-lite .sc-cardshadow{ filter:none; opacity:.22; }
 .sc-lite .sc-cardshadow-img{ filter:brightness(0); }
 .has-cardshadow .sc-card-img img{ filter:none; }
+/* Kart üzerindeki katmanlar (yazı / PNG) — yalnızca kartta katman varsa kurulur */
+.sc-cardholder.has-cl{ height:100%; }
+.sc-cardholder.has-cl > .sc-card-title{ height:100%; min-height:0; }
+.sc-card-plain{ display:block; }
+.sc-cl-box{ position:absolute; inset:0; transform:translateZ(1.2px); pointer-events:none; }
+.sc-cl{ position:absolute; transform-origin:50% 50%; }
+.sc-cl-anim, .sc-cl-float{ position:relative; }
+.sc-cl-text{ white-space:pre; line-height:1.15; }
+.sc-cl-img{ display:block; pointer-events:none; }

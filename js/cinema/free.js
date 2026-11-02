@@ -514,7 +514,7 @@
     run(ctx, a, def, begin) {
       const t = timing(a, def), el = ctx.L[a.layer];
       if (!el) return t.dur;
-      if (a.layer === C.CARD_ID && a.start !== "exit") placeCardAt(ctx, begin);   // K1: kartın 3D girişi
+      if (a.layer === C.CARD_ID && a.start !== "exit") placeCardAt(ctx, begin, t.dur);   // K1: kartın 3D girişi
       const fade = P(a, def, "fade"), from = free3dPose(a, false), to = free3dPose(a, true);
       if (a.layer === C.CARD_ID && ctx.cardShadow) {
         // kart uzaktan/dönük gelirken gölge de ona göre belirir ya da kaybolur
@@ -972,15 +972,17 @@
     return { zc, k };
   }
   // K1: kartın girişini Serbest 3D hareketi yapıyorsa kart o anda yerine oturur; görünmesini hareketin kendisi yönetir
-  function placeCardAt(ctx, begin) {
+  function placeCardAt(ctx, begin, dur) {
     if (!ctx.hasCard || ctx.__cardShown) return;
     ctx.__cardShown = true;
+    if (C.cardLayersIn) C.cardLayersIn(ctx, begin + (dur || 0));   // kart üzerindeki katmanlar kart yerine oturunca başlar
     const { zc, k } = cardPlace(ctx), to = `translateY(0) translateZ(${zc}px) scale(${k})`;
     ctx.anim(ctx.cardWrap, [{ opacity: 1, transform: to }, { opacity: 1, transform: to }], { d: 1, delay: begin, fill: "forwards" });
   }
   function revealCard(ctx, style, t, begin) {
     if (!ctx.hasCard || ctx.__cardShown) return;
     ctx.__cardShown = true;
+    if (C.cardLayersIn) C.cardLayersIn(ctx, begin + t.dur);   // kart üzerindeki katmanlar kart göründükten sonra sırayla gelir
     const { zc, k } = cardPlace(ctx);
     const from = { belir: `translateZ(${zc - 160}px) scale(${k * 0.85})`, in: `translateY(-520px) translateZ(${zc}px) rotateX(18deg) scale(${k})` }[style] || `translateY(90px) translateZ(${zc - 20}px) scale(${k * 0.94})`;
     const to = style === "in" ? `translateY(0) translateZ(${zc}px) rotateX(0) scale(${k})` : `translateY(0) translateZ(${zc}px) scale(${k})`;
@@ -1402,7 +1404,7 @@
       t += sp.end;
     });
     const cardItem = items.find(it => it.def.isCard || (it.a.layer === C.CARD_ID && it.def.free3d));
-    const hasCard = !!(entry && (entry.cardSrc || ncfg.cardMode === "title")) && ncfg.cardMode !== "none";
+    const hasCard = !!(entry && (entry.cardSrc || ncfg.cardMode === "title" || ncfg.cardMode === "plain")) && ncfg.cardMode !== "none";
     let cardStart = cardItem ? cardItem.begin : t;
     let cardShown = cardItem ? cardItem.end : (hasCard ? t + CARD_AUTO : t);
     if (prof && !cardItem && hasCard && parts.length) {
