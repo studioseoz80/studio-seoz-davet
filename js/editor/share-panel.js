@@ -56,7 +56,9 @@
     x.filter = "none";
     x.shadowColor = "rgba(0,0,0,.35)"; x.shadowBlur = 30;
     x.drawImage(im, (W - iw * fit) / 2, (H - ih * fit) / 2, iw * fit, ih * fit);
-    return new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error("kapak üretilemedi"))), "image/jpeg", 0.82));
+    // WhatsApp ~300 KB üstü küçük resmi göstermez: kapak 240 KB'ı geçerse kaliteyi adım adım düşür
+    const enc = q => new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error("kapak üretilemedi"))), "image/jpeg", q));
+    return [0.82, 0.72, 0.62, 0.5].reduce((p, q) => p.then(b => (b && b.size <= 240000 ? b : enc(q))), Promise.resolve(null));
   }
   function prepare(doc) {
     doc.meta = doc.meta || {};
@@ -96,14 +98,14 @@
         <button type="button" class="btn sp-share" data-sp-share>${touchShare() ? "Paylaş" : "Paylaş — bağlantıyı kopyala"}</button>
         <div class="sp-actions">
           <button type="button" class="btn btn-outline" data-sp-copy>Kopyala</button>
-          <a class="btn btn-outline sp-wa" data-sp-wa target="_blank" rel="noopener" href="${esc(waLink(title + "\n" + opts.shortUrl))}">WhatsApp</a>
+          <a class="btn btn-outline sp-wa" data-sp-wa target="_blank" rel="noopener" href="${esc(waLink(opts.shortUrl))}">WhatsApp</a>
           <a class="btn btn-outline" target="_blank" rel="noopener" href="${esc(opts.shortUrl)}">Aç</a>
         </div>
-        <p class="sp-note sp-tip" data-sp-tip>Instagram'da bağlantıyı mesaja <b>tek başına</b> yapıştırın. Önizleme kartını Instagram oluşturur; bazen yalnızca bağlantı görünebilir — davetiye yine dokununca açılır.</p>
-        <details class="sp-prev" data-sp-prev>
+        <p class="sp-note sp-tip" data-sp-tip>Bağlantıyı mesaja <b>tek başına</b> yapıştırın ve <b>kart görününce</b> gönderin. Kartı Instagram ve WhatsApp kendisi oluşturur; karta ya da bağlantıya dokunan davetiyeyi açar.</p>
+        <details class="sp-prev" data-sp-prev${share.title ? "" : " open"}>
           <summary>Önizlemeyi düzenle <small>(başlık, açıklama, kapak)</small></summary>
-          <label>Başlık<input type="text" maxlength="90" data-sp-title value="${esc(title)}"></label>
-          <label>Açıklama<textarea rows="2" maxlength="200" data-sp-desc>${esc(desc)}</textarea></label>
+          <label>Başlık <small class="sp-count" data-sp-tc></small><input type="text" maxlength="90" data-sp-title value="${esc(title)}" placeholder="Örn. Ada &amp; Kerem | Nişan Davetiyesi"></label>
+          <label>Açıklama <small class="sp-count" data-sp-dc></small><textarea rows="2" maxlength="200" data-sp-desc placeholder="Örn. 17 Aralık · Altın Köşk. Davetiyeyi açmak için dokunun.">${esc(desc)}</textarea></label>
           <div class="sp-row"><button type="button" class="btn btn-outline" data-sp-cover>Kapak görselini değiştir</button><button type="button" class="btn btn-gold" data-sp-update>Önizlemeyi güncelle</button></div>
           <p class="sp-note sp-status" data-sp-status>WhatsApp ve Instagram önizlemeyi bir süre önbellekte tutabilir; değişiklik yeni paylaşımlarda görünür.</p>
           <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" data-sp-file>
@@ -137,7 +139,8 @@
     $("[data-sp-share]").addEventListener("click", e => {
       const btn = e.currentTarget;
       if (touchShare()) {
-        const data = { title: $("[data-sp-title]").value.trim() || title, url: opts.shortUrl };
+        // Yalnızca bağlantı: uygulama tek mesajda tek kart oluşturur (başlık/açıklama kartın içinde gelir).
+        const data = { url: opts.shortUrl };
         navigator.share(data).catch(err => { if (!err || err.name !== "AbortError") copy(opts.shortUrl, btn); });
       } else {
         copy(opts.shortUrl, btn);
@@ -175,8 +178,13 @@
       }).catch(err => { b.disabled = false; alert("Yeni albüm linki üretilemedi: " + (err && err.message || "")); });
     });
     if ($("[data-sp-copy-panel]")) $("[data-sp-copy-panel]").addEventListener("click", e => copy(opts.panelUrl, e.currentTarget));
-    const sync = () => { $("[data-sp-t]").textContent = $("[data-sp-title]").value || title; $("[data-sp-d]").textContent = $("[data-sp-desc]").value || DEFAULT_DESC; $("[data-sp-wa]").href = waLink(($("[data-sp-title]").value || title) + "\n" + opts.shortUrl); };
-    root.addEventListener("input", sync);
+    const sync = () => { $("[data-sp-t]").textContent = $("[data-sp-title]").value || title; $("[data-sp-d]").textContent = $("[data-sp-desc]").value || DEFAULT_DESC; $("[data-sp-wa]").href = waLink(opts.shortUrl); counts(); };
+    // Kartta tamamı görünsün diye önerilen uzunluklar: başlık ≤ 60, açıklama ≤ 110 karakter
+    function counts() {
+      const c = (el, n, max) => { const k = $(el).value.length; $(n).textContent = k + " / " + max + (k > max ? " — kartta kısalabilir" : ""); $(n).classList.toggle("sp-over", k > max); };
+      c("[data-sp-title]", "[data-sp-tc]", 60); c("[data-sp-desc]", "[data-sp-dc]", 110);
+    }
+    root.addEventListener("input", sync); counts();
     const status = t => { $("[data-sp-status]").textContent = t; };
     const busy = on => root.querySelectorAll("[data-sp-update], [data-sp-cover]").forEach(b => { b.disabled = on; });
     $("[data-sp-update]").addEventListener("click", () => {

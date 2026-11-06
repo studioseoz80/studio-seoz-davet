@@ -44,7 +44,7 @@
   const touchShare = () => !!(navigator.share && global.matchMedia && global.matchMedia("(pointer: coarse)").matches);
   function inviteShareHTML(ev) {
     const u = inviteUrl(ev); if (!u) return "";
-    const wa = "https://wa.me/?text=" + encodeURIComponent((ev.title ? ev.title + "\n" : "") + u);
+    const wa = "https://wa.me/?text=" + encodeURIComponent(u);   // yalnızca bağlantı → tek kart
     return `<div class="pn-share pn-noprint">
         <div class="pn-share-txt"><b>Davetiye bağlantısı</b><span data-invite-url>${esc(u.replace(/^https?:\/\//, ""))}</span></div>
         <div class="pn-share-actions">
@@ -62,7 +62,7 @@
     const ev = state.data && state.data.event, u = inviteUrl(ev);
     b.addEventListener("click", () => {
       const fallback = () => copyText(u).then(() => toast("Bağlantı kopyalandı — mesaja yapıştırıp gönderin."), () => global.prompt("Bağlantıyı kopyalayın:", u));
-      if (touchShare()) navigator.share({ title: (ev && ev.title) || "Davetiye", url: u }).catch(err => { if (!err || err.name !== "AbortError") fallback(); });
+      if (touchShare()) navigator.share({ url: u }).catch(err => { if (!err || err.name !== "AbortError") fallback(); });
       else fallback();
     });
   }

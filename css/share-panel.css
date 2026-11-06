@@ -35,3 +35,4 @@
 .sp-owner h4{ margin-top:0; }
 .sp-owner .sp-panel h4{ margin:10px 0 4px; font-size:.68rem; }
 @media (max-width: 480px){ .sp-actions{ flex-wrap:nowrap; } .sp-actions .btn{ padding-left:6px; padding-right:6px; font-size:.85rem; } }
+.sp-count{ float:right; font-weight:400; color:#8A8272; font-size:.72rem; } .sp-count.sp-over{ color:#9A4A2A; }

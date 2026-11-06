@@ -55,6 +55,10 @@ cp css/anket-panel.css "$OUT/css/anket-panel.css"
 cp anket-sonuc.html "$OUT/anket-sonuc.html"
 
 if [ -d assets ]; then cp -R assets "$OUT/assets"; fi
+# Bağlantı önizleme botları (Instagram/Facebook, WhatsApp...) için açık robots.txt.
+# (Yoksa bu adres davetiye sayfasını döndürüyordu.) Davetiyeler arama motorlarında
+# yine listelenmez: kısa bağlantılar "noindex" başlığıyla sunulur.
+printf 'User-agent: *\nAllow: /\n' > "$OUT/robots.txt"
 cp _headers.public "$OUT/_headers"
 
 # Güvenlik kontrolü: editör dosyası yanlışlıkla girdiyse derlemeyi durdur.

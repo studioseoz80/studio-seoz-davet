@@ -11,9 +11,10 @@
    - Kapak görseli HER ZAMAN küçük, boyutu bilinen bir görseldir (Instagram /
      Facebook büyük ya da boyutu bilinmeyen görselleri ilk paylaşımda çoğu
      zaman göstermez): editörün hazırladığı 1200×630 kapak; yoksa davetiyenin
-     kendi küçük (≤ 1 MB) görseli; o da yoksa Studio SEOZ'un hazır
+     kendi küçük (≤ 250 KB — WhatsApp daha büyük küçük resmi atlar) görseli; o da yoksa Studio SEOZ'un hazır
      "Davetlisiniz" kapağı (assets/og/davetiye-paylasim.jpg).
-   ESKİ BAĞLANTILAR AYNEN ÇALIŞIR: view.html?slug=... bu dosyadan geçmez.
+   ESKİ UZUN BAĞLANTILAR (view.html?slug=...) da aynı önizlemeyi alır: bkz.
+   functions/view.js (bu dosyadaki renderInvite'ı kullanır).
 
    GÜVENLİK
    - Yalnızca herkese açık okuma yapar (yayınlanmış davetiye; tarayıcının da
@@ -28,7 +29,7 @@ const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,78})[a-z0-9]$/;
 const RESERVED = new Set(["view", "index", "panel", "album", "anket", "anket-panel", "anket-sonuc", "css", "js", "assets", "functions"]);
 const DEFAULT_DESC = "Davetlisiniz! Davetiyeyi açmak için dokunun.";
 const DEFAULT_IMG = { path: "/assets/og/davetiye-paylasim.jpg", w: 1200, h: 630, type: "image/jpeg" };
-const SMALL_MAX = 1000000;   // bundan büyük yedek görseller önizlemede güvenilir görünmez
+const SMALL_MAX = 250000;    // WhatsApp ~300 KB üstü küçük resmi sessizce atlar; güvenli pay
 const imgType = u => (/\.png(\?|$)/i.test(u) ? "image/png" : /\.jpe?g(\?|$)/i.test(u) ? "image/jpeg" : /\.webp(\?|$)/i.test(u) ? "image/webp" : "");
 let CFG = null;
 
@@ -70,7 +71,7 @@ function shareInfo(doc) {
   };
 }
 
-// Editörün kapağı yoksa: davetiyenin kendi görseli yalnızca küçükse (JPEG/PNG, ≤ 1 MB) kullanılır,
+// Editörün kapağı yoksa: davetiyenin kendi görseli yalnızca küçükse (JPEG/PNG, ≤ 250 KB) kullanılır,
 // değilse hazır "Davetlisiniz" kapağı. Görsel kontrolü kısa sürer; yanıt gecikirse hazır kapak.
 async function settleImage(info, origin) {
   if (info.image) return info;
@@ -109,34 +110,41 @@ function injectMeta(html, info, pageUrl) {
   return out;
 }
 
+// Davetiye sayfasını önizleme bilgileriyle hazırlar. Davetiye bulunamazsa null döner.
+// og:url her zaman kısa bağlantıdır (alan-adı/<slug>): uzun bağlantı da aynı karta bağlanır.
+export async function renderInvite(context, slug) {
+  const { request, env } = context;
+  const page = await env.ASSETS.fetch(new URL("/view.html", request.url));
+  if (!page.ok) return null;
+  let html = await page.text();
+  const pageUrl = new URL("/" + slug, request.url).href;
+  try {
+    const cfg = await supabaseConfig(env, request);
+    if (!cfg) return null;
+    const res = await fetch(`${cfg.url}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`,
+      { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" }, cf: { cacheTtl: 60 } });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!(Array.isArray(rows) && rows[0] && rows[0].document_data)) return { html, found: false };
+    const info = await settleImage(shareInfo(rows[0].document_data), new URL(request.url).origin);
+    return { html: injectMeta(html, info, pageUrl), found: true };
+  } catch (e) { return null; /* önizleme bilgisi eklenemedi; sayfa yine açılır */ }
+}
+
+export const htmlHeaders = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Content-Type-Options": "nosniff" };
+export const isInviteSlug = s => SLUG_RE.test(s) && !RESERVED.has(s);
+
 export async function onRequest(context) {
   const { request, env, params, next } = context;
   const slug = String(params.slug || "").toLowerCase();
   if (env.EDITOR_PASSWORD || request.method !== "GET" && request.method !== "HEAD") return next();
-  if (!SLUG_RE.test(slug) || RESERVED.has(slug)) return next();
-
-  const page = await env.ASSETS.fetch(new URL("/view.html", request.url));
-  if (!page.ok) return next();
-  let html = await page.text();
-  const pageUrl = new URL("/" + slug, request.url).href;
-  let found = false;
-  try {
-    const cfg = await supabaseConfig(env, request);
-    if (cfg) {
-      const res = await fetch(`${cfg.url}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`,
-        { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" }, cf: { cacheTtl: 60 } });
-      if (res.ok) {
-        const rows = await res.json();
-        if (Array.isArray(rows) && rows[0] && rows[0].document_data) {
-          found = true;
-          const info = await settleImage(shareInfo(rows[0].document_data), new URL(request.url).origin);
-          html = injectMeta(html, info, pageUrl);
-        }
-      }
-    }
-  } catch (e) { /* önizleme bilgisi eklenemedi; sayfa yine açılır */ }
-  return new Response(request.method === "HEAD" ? null : html, {
-    status: found ? 200 : 404,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Content-Type-Options": "nosniff" }
-  });
+  if (!isInviteSlug(slug)) return next();
+  const r = await renderInvite(context, slug);
+  if (!r) {
+    // Supabase'e ulaşılamadı: sayfa önizlemesiz açılır (davetiye yine yüklenir)
+    const page = await context.env.ASSETS.fetch(new URL("/view.html", request.url));
+    if (!page.ok) return next();
+    return new Response(request.method === "HEAD" ? null : await page.text(), { status: 200, headers: htmlHeaders });
+  }
+  return new Response(request.method === "HEAD" ? null : r.html, { status: r.found ? 200 : 404, headers: htmlHeaders });
 }
