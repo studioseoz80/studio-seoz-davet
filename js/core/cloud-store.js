@@ -287,7 +287,8 @@
       .normalize("NFD").replace(/[̀-ͯ]/g, "") // ç ğ ö ş ü → c g o s u
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
-    if (s.length > 40) s = s.slice(0, 40).replace(/-[^-]*$/, "") || s.slice(0, 40);
+    // kısa ve okunur bağlantı: başlığın ilk kelimeleri (en çok 24 harf). Var olan bağlantılar değişmez.
+    if (s.length > 24) s = s.slice(0, 24).replace(/-[^-]*$/, "") || s.slice(0, 24);
     s = s.replace(/-+$/g, "");
     return s || "davetiye";
   }

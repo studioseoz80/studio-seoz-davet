@@ -18,3 +18,20 @@
 .sp-long{ margin-top:12px; font-size:.8rem; } .sp-long input{ width:100%; margin-top:6px; padding:8px; border:1px solid #DDD5C4; border-radius:8px; font:inherit; }
 @media (max-width: 480px){ .sp-card{ padding:16px 14px; } .sp-link{ flex-direction:column; } }
 .sp-poll{ margin:8px 0; } .sp-poll small{ display:block; font-weight:700; margin-bottom:4px; }
+
+/* Sade paylaşım: önizleme kartı + bağlantı + tek "Paylaş" düğmesi */
+.sp-hero{ margin:10px 0 12px; box-shadow:0 6px 18px rgba(35,38,31,.12); }
+.sp-link input{ text-align:center; color:#3A3328; }
+.sp-share{ display:flex; width:100%; margin-top:10px; min-height:50px; align-items:center; justify-content:center; border:0; border-radius:12px; background:#23261F; color:#FBF9F4; font-weight:700; font-size:1.02rem; letter-spacing:.02em; cursor:pointer; }
+.sp-share:hover{ background:#3A3328; }
+.sp-share:focus-visible{ outline:3px solid #C9A45C; outline-offset:2px; }
+.sp-actions .btn{ flex:1 1 0; min-height:42px; }
+.sp-actions .sp-wa{ background:#fff; color:#178F48; border:1px solid #BFE3C8; font-weight:700; flex:1 1 0; }
+.sp-actions .sp-wa:hover{ background:#EEF8F0; }
+.sp-tip{ background:#F3EEE3; border-radius:10px; padding:8px 10px; margin-top:8px; }
+.sp-prev, .sp-owner{ margin-top:12px; border-top:1px solid #E6DECF; padding-top:10px; }
+.sp-prev > summary{ cursor:pointer; font-weight:700; font-size:.85rem; list-style-position:inside; }
+.sp-prev > summary small{ font-weight:400; color:#7A7466; }
+.sp-owner h4{ margin-top:0; }
+.sp-owner .sp-panel h4{ margin:10px 0 4px; font-size:.68rem; }
+@media (max-width: 480px){ .sp-actions{ flex-wrap:nowrap; } .sp-actions .btn{ padding-left:6px; padding-right:6px; font-size:.85rem; } }

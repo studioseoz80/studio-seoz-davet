@@ -37,6 +37,36 @@
            d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
   }
   function norm(s) { return String(s || "").toLocaleLowerCase("tr-TR").replace(/\s+/g, " ").trim(); }
+  /* DAVETİYEYİ PAYLAŞ: etkinlik sahibi davetiye bağlantısını tek dokunuşla gönderir.
+     Telefonda sistemin paylaşım menüsü (Instagram, WhatsApp…) yalnızca bağlantıyla açılır;
+     bilgisayarda bağlantı kopyalanır. Panelin kendi adresi (gizli anahtar) hiçbir yere gitmez. */
+  const inviteUrl = ev => (ev && /^[a-z0-9-]{3,80}$/.test(String(ev.slug || "")) ? global.location.origin + "/" + ev.slug : "");
+  const touchShare = () => !!(navigator.share && global.matchMedia && global.matchMedia("(pointer: coarse)").matches);
+  function inviteShareHTML(ev) {
+    const u = inviteUrl(ev); if (!u) return "";
+    const wa = "https://wa.me/?text=" + encodeURIComponent((ev.title ? ev.title + "\n" : "") + u);
+    return `<div class="pn-share pn-noprint">
+        <div class="pn-share-txt"><b>Davetiye bağlantısı</b><span data-invite-url>${esc(u.replace(/^https?:\/\//, ""))}</span></div>
+        <div class="pn-share-actions">
+          <button class="pn-btn primary" data-invite-share>${touchShare() ? "Davetiyeyi paylaş" : "Paylaş — bağlantıyı kopyala"}</button>
+          <a class="pn-btn" data-invite-wa href="${esc(wa)}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+      </div>`;
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise((res, rej) => { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy") ? res() : rej(new Error("kopyalanamadı")); } catch (e) { rej(e); } ta.remove(); });
+  }
+  function wireInviteShare() {
+    const b = root.querySelector("[data-invite-share]"); if (!b) return;
+    const ev = state.data && state.data.event, u = inviteUrl(ev);
+    b.addEventListener("click", () => {
+      const fallback = () => copyText(u).then(() => toast("Bağlantı kopyalandı — mesaja yapıştırıp gönderin."), () => global.prompt("Bağlantıyı kopyalayın:", u));
+      if (touchShare()) navigator.share({ title: (ev && ev.title) || "Davetiye", url: u }).catch(err => { if (!err || err.name !== "AbortError") fallback(); });
+      else fallback();
+    });
+  }
+
   function toast(msg) {
     document.querySelectorAll(".pn-toast").forEach(x => x.remove());   // bildirimler üst üste binmesin
     const t = document.createElement("div");
@@ -214,6 +244,7 @@
           <button class="pn-btn" data-refresh>↻ Yenile</button>
         </div>
       </div>
+      ${inviteShareHTML(ev)}
       ${dupCount ? `<div class="pn-alert">⚠ ${dupCount} isim birden fazla kez yanıt vermiş görünüyor. Tabloda <b>Olası tekrar</b> etiketiyle işaretlendi; gerekirse ayrıntıdan silebilirsiniz.</div>` : ""}
       <div class="pn-cards">
         ${card("total", "", s.total)}
@@ -251,6 +282,7 @@
     `;
 
     root.querySelector("[data-refresh]").addEventListener("click", () => load(false));
+    wireInviteShare();
     root.querySelector("[data-toggle-open]").addEventListener("click", toggleOpen);
     root.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { state.tab = b.getAttribute("data-tab"); renderShell(); }));
     root.querySelectorAll("[data-status]").forEach(b => b.addEventListener("click", () => { state.status = b.getAttribute("data-status"); renderShell(); }));

@@ -6,9 +6,15 @@
      üretir (WhatsApp önizlemesi büyük PNG'leri göstermez). Görsel değişmediyse
      yeniden üretilmez. Sonuç doc.meta.share içine yazılır; yayında diğer
      görseller gibi Storage'a yüklenir.
-   - show(...): yayından SONRA kısa bağlantı, Kopyala, WhatsApp'ta paylaş,
-     önizleme kartı (başlık/açıklama düzenlenebilir), eski uzun bağlantı ve
-     varsa müşteri paneli linki.
+   - show(...): yayından SONRA sade paylaşım penceresi: önizleme kartı, kısa
+     bağlantı ve tek bir "Paylaş" düğmesi (telefonda sistemin paylaşım
+     menüsü → Instagram, WhatsApp…; bilgisayarda bağlantıyı kopyalar).
+     Yanında Kopyala / WhatsApp / Aç. Önizleme düzenleme ve etkinlik sahibi
+     bağlantıları (müşteri paneli, anket, albüm, eski uzun bağlantı) ayrı,
+     katlanır bölümlerde.
+   - Paylaşım yalnızca BAĞLANTIYI gönderir (ek metin yok): Instagram DM'de
+     mesaj tek bir bağlantı + önizleme kartı olarak görünür. Kartı Instagram
+     kendisi oluşturur; görünmediği durumlarda da bağlantı tıklanabilir kalır.
    Davetiye içeriğine, modüllere ve mevcut bağlantılara dokunmaz.
    ========================================================================= */
 (function (global) {
@@ -16,6 +22,9 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const W = 1200, H = 630;
   const DEFAULT_DESC = "Davetlisiniz! Davetiyeyi açmak için dokunun.";
+  const DEFAULT_COVER = "assets/og/davetiye-paylasim.jpg";   // kapak yoksa sunucunun da kullandığı hazır kapak
+  // telefon / tablet: sistemin paylaşım menüsü; bilgisayar: bağlantıyı kopyala
+  const touchShare = () => !!(navigator.share && global.matchMedia && global.matchMedia("(pointer: coarse)").matches);
 
   function coverSource(doc) {
     const share = (doc.meta && doc.meta.share) || {};
@@ -75,27 +84,31 @@
     const title = share.title || (doc.meta && doc.meta.title) || "Davetiye", desc = share.description || DEFAULT_DESC;
     const root = document.createElement("div");
     root.className = "sp-root"; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "Davetiye yayında");
+    const domain = String(opts.shortUrl).replace(/^https?:\/\//, "").split("/")[0];
+    const hasOwner = !!(opts.panelUrl || opts.panelMissing || (opts.polls || []).length || opts.albumUrl || opts.albumMissing);
     root.innerHTML = `
       <div class="sp-card">
         <button type="button" class="sp-x" data-sp-close aria-label="Kapat">×</button>
         <h3>Davetiye yayında 🎉</h3>
-        <p class="sp-note">Bu bağlantıyı davetlilerinize gönderin.</p>
-        <div class="sp-link"><input readonly data-share-url value="${esc(opts.shortUrl)}" data-long="${esc(opts.longUrl)}"><button type="button" class="btn btn-outline" data-sp-copy>Kopyala</button></div>
+        <div class="sp-wa-card sp-hero"><div class="sp-img" data-sp-img></div>
+          <div class="sp-txt"><b data-sp-t>${esc(title)}</b><small data-sp-d>${esc(desc)}</small><i>${esc(domain)}</i></div></div>
+        <div class="sp-link"><input readonly data-share-url value="${esc(opts.shortUrl)}" data-long="${esc(opts.longUrl)}" aria-label="Davetiye bağlantısı"></div>
+        <button type="button" class="btn sp-share" data-sp-share>${touchShare() ? "Paylaş" : "Paylaş — bağlantıyı kopyala"}</button>
         <div class="sp-actions">
-          <a class="btn sp-wa" data-sp-wa target="_blank" rel="noopener" href="${esc(waLink(title + "\n" + opts.shortUrl))}">WhatsApp'ta paylaş</a>
-          ${navigator.share ? '<button type="button" class="btn btn-outline" data-sp-native>Diğer uygulamalar…</button>' : ""}
+          <button type="button" class="btn btn-outline" data-sp-copy>Kopyala</button>
+          <a class="btn btn-outline sp-wa" data-sp-wa target="_blank" rel="noopener" href="${esc(waLink(title + "\n" + opts.shortUrl))}">WhatsApp</a>
           <a class="btn btn-outline" target="_blank" rel="noopener" href="${esc(opts.shortUrl)}">Aç</a>
         </div>
-        <section class="sp-prev">
-          <h4>WhatsApp önizlemesi</h4>
-          <div class="sp-wa-card"><div class="sp-img" data-sp-img>${share.image ? "" : "<span>Kapak görseli yok</span>"}</div>
-            <div class="sp-txt"><b data-sp-t>${esc(title)}</b><small data-sp-d>${esc(desc)}</small><i>${esc(String(opts.shortUrl).replace(/^https?:\/\//, "").split("/")[0])}</i></div></div>
+        <p class="sp-note sp-tip" data-sp-tip>Instagram'da bağlantıyı mesaja <b>tek başına</b> yapıştırın. Önizleme kartını Instagram oluşturur; bazen yalnızca bağlantı görünebilir — davetiye yine dokununca açılır.</p>
+        <details class="sp-prev" data-sp-prev>
+          <summary>Önizlemeyi düzenle <small>(başlık, açıklama, kapak)</small></summary>
           <label>Başlık<input type="text" maxlength="90" data-sp-title value="${esc(title)}"></label>
           <label>Açıklama<textarea rows="2" maxlength="200" data-sp-desc>${esc(desc)}</textarea></label>
           <div class="sp-row"><button type="button" class="btn btn-outline" data-sp-cover>Kapak görselini değiştir</button><button type="button" class="btn btn-gold" data-sp-update>Önizlemeyi güncelle</button></div>
-          <p class="sp-note sp-status" data-sp-status>WhatsApp önizlemeyi bir süre önbellekte tutabilir; değişiklik yeni paylaşımlarda görünür.</p>
+          <p class="sp-note sp-status" data-sp-status>WhatsApp ve Instagram önizlemeyi bir süre önbellekte tutabilir; değişiklik yeni paylaşımlarda görünür.</p>
           <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" data-sp-file>
-        </section>
+        </details>
+        ${hasOwner ? `<div class="sp-owner"><h4>Etkinlik sahibi bağlantıları</h4><p class="sp-note">Bunlar davetlilere gönderilmez; yalnızca etkinlik sahibine verin.</p>` : ""}
         ${opts.panelUrl ? `<section class="sp-panel"><h4>Müşteri paneli</h4><p class="sp-note">Yalnızca etkinlik sahibine verin — davetlilerle paylaşmayın.</p>
           <div class="sp-link"><input readonly data-share-panel value="${esc(opts.panelUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-panel>Kopyala</button></div></section>` : ""}
         ${(opts.polls || []).length ? `<section class="sp-panel"><h4>Anket sonuçları</h4><p class="sp-note">Canlı sonuç paneli (grafikler, yanıtlar, QR kod). Yalnızca anket sahibine verin.</p>
@@ -106,17 +119,31 @@
           ${opts.albumUrl ? `<div class="sp-link"><input readonly data-share-album value="${esc(opts.albumUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-album>Kopyala</button></div>`
             : `<p class="sp-note sp-warn">Albüm linki bu tarayıcıda kayıtlı değil (başka tarayıcıdan oluşturulmuş olabilir).</p><button type="button" class="btn btn-outline" data-sp-album-new>Yeni albüm linki üret (eski link iptal olur)</button>`}</section>` : ""}
         ${opts.panelMissing ? `<p class="sp-note sp-warn">Müşteri paneli linki bu tarayıcıda kayıtlı değil. Katılım Formu ayarlarındaki "Yeni panel linki üret" ile yeni bir link oluşturabilirsiniz.</p>` : ""}
+        ${hasOwner ? "</div>" : ""}
         <details class="sp-long"><summary>Eski (uzun) bağlantı</summary><input readonly value="${esc(opts.longUrl)}"><p class="sp-note">Daha önce gönderilen bağlantılar aynen çalışmaya devam eder.</p></details>
       </div>`;
     document.body.appendChild(root);
     const $ = q => root.querySelector(q);
-    if (share.image) SeozBlobStore.resolveToObjectURL(share.image).then(u => { if (u) $("[data-sp-img]").style.backgroundImage = `url("${u}")`; });
+    const showImg = u => { $("[data-sp-img]").style.backgroundImage = `url("${u}")`; };
+    if (share.image) SeozBlobStore.resolveToObjectURL(share.image).then(u => showImg(u || DEFAULT_COVER), () => showImg(DEFAULT_COVER));
+    else { showImg(DEFAULT_COVER); $("[data-sp-img]").title = "Kapak görseli yok: hazır Studio SEOZ kapağı kullanılır"; }
     const close = () => { root.remove(); document.removeEventListener("keydown", onKey, true); };
     const onKey = e => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", onKey, true);
     root.addEventListener("click", e => { if (e.target === root) close(); });
     $("[data-sp-close]").addEventListener("click", close);
     $("[data-sp-copy]").addEventListener("click", e => copy(opts.shortUrl, e.currentTarget));
+    // Tek düğme: telefonda sistemin paylaşım menüsü (yalnızca bağlantı), bilgisayarda kopyala
+    $("[data-sp-share]").addEventListener("click", e => {
+      const btn = e.currentTarget;
+      if (touchShare()) {
+        const data = { title: $("[data-sp-title]").value.trim() || title, url: opts.shortUrl };
+        navigator.share(data).catch(err => { if (!err || err.name !== "AbortError") copy(opts.shortUrl, btn); });
+      } else {
+        copy(opts.shortUrl, btn);
+        $("[data-sp-tip]").innerHTML = "<b>Bağlantı kopyalandı.</b> Instagram, WhatsApp ya da istediğiniz uygulamada mesaja yapıştırıp gönderin.";
+      }
+    });
     root.addEventListener("click", e => {
       const cp = e.target.closest("[data-sp-copy-poll]");
       if (cp) return copy(cp.parentNode.querySelector("input").value, cp);
@@ -148,7 +175,6 @@
       }).catch(err => { b.disabled = false; alert("Yeni albüm linki üretilemedi: " + (err && err.message || "")); });
     });
     if ($("[data-sp-copy-panel]")) $("[data-sp-copy-panel]").addEventListener("click", e => copy(opts.panelUrl, e.currentTarget));
-    if ($("[data-sp-native]")) $("[data-sp-native]").addEventListener("click", () => navigator.share({ title: $("[data-sp-title]").value, text: $("[data-sp-desc]").value, url: opts.shortUrl }).catch(() => {}));
     const sync = () => { $("[data-sp-t]").textContent = $("[data-sp-title]").value || title; $("[data-sp-d]").textContent = $("[data-sp-desc]").value || DEFAULT_DESC; $("[data-sp-wa]").href = waLink(($("[data-sp-title]").value || title) + "\n" + opts.shortUrl); };
     root.addEventListener("input", sync);
     const status = t => { $("[data-sp-status]").textContent = t; };
