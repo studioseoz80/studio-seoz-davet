@@ -17,14 +17,15 @@
   "use strict";
 
   const CHOICE_TYPES = ["yesno", "radio", "choice", "select", "checkbox"];
+  const I = global.SeozPanelI18n;
+  const t = (k, v) => I.t(k, v);
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
-  function fmtNum(n) {
-    return Number(n).toLocaleString("tr-TR", { maximumFractionDigits: 1 });
-  }
+  function fmtNum(n) { return I.fmtNum(n); }
   function pct(v, base) { return base ? Math.round((v / base) * 100) : 0; }
+  const pctTxt = (v, base) => I.pct(pct(v, base));
 
   function weight(r, mode) { return mode === "people" ? Math.max(0, r.party_size || 0) : 1; }
   function answered(r, qid) {
@@ -37,8 +38,8 @@
   /* Bir seçenekli sorunun dağılımı: [{label, value}] + taban */
   function distribution(q, list, mode) {
     let rows;
-    if (q.type === "yesno") rows = [{ key: true, label: q.yesLabel || "Evet" }, { key: false, label: q.noLabel || "Hayır" }];
-    else rows = (q.options || []).map(o => ({ key: o.id, label: o.label || "(adsız seçenek)" }));
+    if (q.type === "yesno") rows = [{ key: true, label: q.yesLabel || t("yes") }, { key: false, label: q.noLabel || t("no") }];
+    else rows = (q.options || []).map(o => ({ key: o.id, label: o.label || t("unnamedOption") }));
     rows.forEach(r => { r.value = 0; });
     let base = 0, unanswered = 0;
     list.forEach(r => {
@@ -59,9 +60,9 @@
 
   function attendanceRows(list, q) {
     const rows = [
-      { label: (q && q.yesLabel) || "Katılıyor", value: 0 },
-      { label: (q && q.noLabel) || "Katılmıyor", value: 0 },
-      { label: "Belirtilmedi", value: 0 }
+      { label: (q && q.yesLabel) || t("stYes"), value: 0 },
+      { label: (q && q.noLabel) || t("stNo"), value: 0 },
+      { label: t("stUnknown"), value: 0 }
     ];
     list.forEach(r => { rows[r.attending === true ? 0 : r.attending === false ? 1 : 2].value += 1; });
     if (!rows[2].value) rows.pop();
@@ -71,72 +72,71 @@
   function groupSizeRows(list) {
     const counts = {};
     list.filter(r => r.attending !== false).forEach(r => { const n = r.party_size || 1; counts[n] = (counts[n] || 0) + 1; });
-    return Object.keys(counts).map(Number).sort((a, b) => a - b).map(n => ({ label: n + " kişilik", value: counts[n] }));
+    return Object.keys(counts).map(Number).sort((a, b) => a - b).map(n => ({ label: t("partyOfN", { n }), value: counts[n] }));
   }
 
   /* ---------------- çizim ---------------- */
-  function barsHtml(rows, base, unitLabel) {
+  function barsHtml(rows, base, unit) {
     const max = Math.max(1, ...rows.map(r => r.value));
     return `<div class="pn-bars" role="list">${rows.map(r => {
       const w = (r.value / max) * 100;
-      const tip = `${r.label}: ${fmtNum(r.value)} ${unitLabel}${base ? " (%" + pct(r.value, base) + ")" : ""}`;
+      const tip = `${r.label}: ${fmtNum(r.value)} ${t("unitWord", { people: unit === "people", n: r.value })}${base ? " (" + pctTxt(r.value, base) + ")" : ""}`;
       return `<div class="pn-bar-row" role="listitem" tabindex="0" title="${esc(tip)}" aria-label="${esc(tip)}">
         <div class="pn-bar-label">${esc(r.label)}</div>
         <div class="pn-bar-track"><div class="pn-bar" style="width:${w.toFixed(2)}%"></div>
-          <span class="pn-bar-val">${fmtNum(r.value)}${base ? ` <span class="pn-muted">· %${pct(r.value, base)}</span>` : ""}</span></div>
+          <span class="pn-bar-val">${fmtNum(r.value)}${base ? ` <span class="pn-muted">· ${pctTxt(r.value, base)}</span>` : ""}</span></div>
       </div>`;
     }).join("")}</div>`;
   }
 
-  function tableHtml(rows, base, unitLabel) {
-    return `<table class="pn-mini-table"><thead><tr><th>Cevap</th><th>${esc(unitLabel)}</th>${base ? "<th>Oran</th>" : ""}</tr></thead>
-      <tbody>${rows.map(r => `<tr><td>${esc(r.label)}</td><td>${fmtNum(r.value)}</td>${base ? `<td>%${pct(r.value, base)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
+  function tableHtml(rows, base, unit) {
+    return `<table class="pn-mini-table"><thead><tr><th>${esc(t("thAnswer"))}</th><th>${esc(t(unit === "people" ? "unitGuests" : "unitResponses"))}</th>${base ? `<th>${esc(t("thShare"))}</th>` : ""}</tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${esc(r.label)}</td><td>${fmtNum(r.value)}</td>${base ? `<td>${pctTxt(r.value, base)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
   }
 
-  function card(id, title, sub, rows, base, unitLabel, view) {
-    const content = view === "table" ? tableHtml(rows, base, unitLabel) : barsHtml(rows, base, unitLabel);
+  function card(id, title, sub, rows, base, unit, view) {
+    const content = view === "table" ? tableHtml(rows, base, unit) : barsHtml(rows, base, unit);
     return `<section class="pn-chart" data-chart="${esc(id)}">
       <div class="pn-chart-head">
         <div><h3>${esc(title)}</h3>${sub ? `<div class="pn-chart-sub">${sub}</div>` : ""}</div>
-        <div class="pn-seg pn-seg-sm pn-noprint" role="group" aria-label="Görünüm">
-          <button data-view="chart" aria-pressed="${view !== "table"}">Grafik</button>
-          <button data-view="table" aria-pressed="${view === "table"}">Tablo</button>
+        <div class="pn-seg pn-seg-sm pn-noprint" role="group" aria-label="${esc(t("viewAria"))}">
+          <button data-view="chart" aria-pressed="${view !== "table"}">${esc(t("viewChart"))}</button>
+          <button data-view="table" aria-pressed="${view === "table"}">${esc(t("viewTable"))}</button>
         </div>
       </div>
-      ${rows.length ? content : `<p class="pn-muted">Henüz bu soruya cevap yok.</p>`}
+      ${rows.length ? content : `<p class="pn-muted">${esc(t("noAnswersYet"))}</p>`}
     </section>`;
   }
 
   function statsCard(q, list) {
     const vals = list.filter(r => answered(r, q.id)).map(r => Number(r.answers[q.id].v)).filter(v => isFinite(v));
-    if (!vals.length) return `<section class="pn-chart"><div class="pn-chart-head"><div><h3>${esc(q.label)}</h3></div></div><p class="pn-muted">Henüz bu soruya cevap yok.</p></section>`;
+    if (!vals.length) return `<section class="pn-chart"><div class="pn-chart-head"><div><h3>${esc(q.label)}</h3></div></div><p class="pn-muted">${esc(t("noAnswersYet"))}</p></section>`;
     const sum = vals.reduce((a, b) => a + b, 0);
-    const tiles = [["Ortalama", sum / vals.length], ["En az", Math.min(...vals)], ["En çok", Math.max(...vals)], ["Toplam", sum]];
+    const tiles = [[t("stAvg"), sum / vals.length], [t("stMin"), Math.min(...vals)], [t("stMax"), Math.max(...vals)], [t("stSum"), sum]];
     return `<section class="pn-chart">
-      <div class="pn-chart-head"><div><h3>${esc(q.label)}</h3><div class="pn-chart-sub">${vals.length} yanıt üzerinden</div></div></div>
-      <div class="pn-stats">${tiles.map(([k, v]) => `<div class="pn-stat"><div class="pn-stat-label">${k}</div><div class="pn-stat-value">${fmtNum(v)}</div></div>`).join("")}</div>
+      <div class="pn-chart-head"><div><h3>${esc(q.label)}</h3><div class="pn-chart-sub">${esc(t("basedOn", { n: vals.length }))}</div></div></div>
+      <div class="pn-stats">${tiles.map(([k, v]) => `<div class="pn-stat"><div class="pn-stat-label">${esc(k)}</div><div class="pn-stat-value">${fmtNum(v)}</div></div>`).join("")}</div>
     </section>`;
   }
 
   /* ctx: { questions, list (süzülmüş yanıtlar), total, hasAttendance, attendanceQ, mode, views, narrowed } */
   function render(container, ctx, onChange) {
-    const unit = ctx.mode === "people" ? "kişi" : "yanıt";
+    const unit = ctx.mode === "people" ? "people" : "responses";
+    const uw = n => t("unitWord", { people: unit === "people", n });
     const parts = [];
 
     parts.push(`<div class="pn-chart-toolbar pn-noprint">
-      <span class="pn-muted">Sayım:</span>
-      <div class="pn-seg pn-seg-sm" role="group" aria-label="Sayım türü">
-        <button data-mode="responses" aria-pressed="${ctx.mode !== "people"}">Yanıt</button>
-        <button data-mode="people" aria-pressed="${ctx.mode === "people"}">Kişi</button>
+      <span class="pn-muted">${esc(t("countBy"))}</span>
+      <div class="pn-seg pn-seg-sm" role="group" aria-label="${esc(t("countTypeAria"))}">
+        <button data-mode="responses" aria-pressed="${ctx.mode !== "people"}">${esc(t("unitResponses"))}</button>
+        <button data-mode="people" aria-pressed="${ctx.mode === "people"}">${esc(t("unitGuests"))}</button>
       </div>
-      <span class="pn-muted pn-chart-hint">${ctx.mode === "people"
-        ? "Her yanıt, gruptaki kişi sayısı kadar sayılır (grubun cevabı gruptaki herkes için geçerli kabul edilir)."
-        : "Her yanıt 1 sayılır."}</span>
+      <span class="pn-muted pn-chart-hint">${esc(t(ctx.mode === "people" ? "hintPeople" : "hintResponses"))}</span>
     </div>`);
-    if (ctx.narrowed) parts.push(`<p class="pn-count">Grafikler arama/filtre sonucundaki ${ctx.list.length} yanıta göre çizildi (toplam ${ctx.total}).</p>`);
+    if (ctx.narrowed) parts.push(`<p class="pn-count">${esc(t("chartsNarrowed", { n: ctx.list.length, t: ctx.total }))}</p>`);
 
     if (!ctx.list.length) {
-      container.innerHTML = parts.join("") + `<div class="pn-empty">Grafik için henüz yanıt yok.</div>`;
+      container.innerHTML = parts.join("") + `<div class="pn-empty">${esc(t("noChartData"))}</div>`;
       bind(container, ctx, onChange);
       return;
     }
@@ -146,29 +146,29 @@
       // Katılım her zaman YANIT sayısıyla gösterilir (katılmayanların kişi sayısı 0'dır).
       const rows = attendanceRows(ctx.list, ctx.attendanceQ);
       const base = rows.reduce((n, r) => n + r.value, 0);
-      grid.push(card("__att", "Katılım durumu", `${fmtNum(base)} yanıt`, rows, base, "yanıt", ctx.views.__att));
+      grid.push(card("__att", t("chAttendance"), esc(t("responsesN", { n: fmtNum(base) })), rows, base, "responses", ctx.views.__att));
     }
     const cq = ctx.questions.find(q => q.role === "count" && q.active !== false);
     if (cq) {
       const rows = groupSizeRows(ctx.list);
       const base = rows.reduce((n, r) => n + r.value, 0);
-      grid.push(card("__size", "Grup büyüklüğü", `Katılan ${fmtNum(base)} yanıtın kaç kişilik olduğu`, rows, base, "yanıt", ctx.views.__size));
+      grid.push(card("__size", t("chPartySize"), esc(t("chPartySizeSub", { n: fmtNum(base) })), rows, base, "responses", ctx.views.__size));
     }
     ctx.questions.forEach(q => {
       if (q.role === "attendance" || q.role === "count") return;
       if (CHOICE_TYPES.includes(q.type)) {
         const d = distribution(q, ctx.list, ctx.mode);
-        const notes = [`${fmtNum(d.base)} ${unit} cevapladı`];
-        if (d.unanswered) notes.push(`${fmtNum(d.unanswered)} ${unit} boş bıraktı`);
-        if (q.type === "checkbox") notes.push("birden fazla seçilebildiği için oranların toplamı %100'ü geçebilir");
-        grid.push(card(q.id, q.label || "(başlıksız soru)", esc(notes.join(" · ")) + (q.active === false ? " · <i>pasif soru</i>" : ""),
+        const notes = [t("nAnswered", { n: fmtNum(d.base), u: uw(d.base) })];
+        if (d.unanswered) notes.push(t("nBlank", { n: fmtNum(d.unanswered), u: uw(d.unanswered) }));
+        if (q.type === "checkbox") notes.push(t("multiNote"));
+        grid.push(card(q.id, q.label || t("untitledQ"), esc(notes.join(" · ")) + (q.active === false ? ` · <i>${esc(t("inactiveQ"))}</i>` : ""),
           d.rows, d.base, unit, ctx.views[q.id]));
       } else if (q.type === "number") {
         grid.push(statsCard(q, ctx.list));
       }
     });
     if (grid.length === (ctx.hasAttendance ? 1 : 0) + (cq ? 1 : 0)) {
-      grid.push(`<section class="pn-chart"><p class="pn-muted">Formda seçenekli soru (Evet/Hayır, Tek seçim, Çoktan seçmeli, Açılır liste, Çoklu seçim) yok. Böyle bir soru eklendiğinde dağılımı burada otomatik görünür.</p></section>`);
+      grid.push(`<section class="pn-chart"><p class="pn-muted">${esc(t("noChoiceQs"))}</p></section>`);
     }
     container.innerHTML = parts.join("") + `<div class="pn-charts">${grid.join("")}</div>`;
     bind(container, ctx, onChange);
