@@ -206,6 +206,7 @@
   function showMessage(titleKey, textKey, extraHtml) {
     lastScreen = () => showMessage(titleKey, textKey, extraHtml);
     root.classList.remove("pn-tab-seating");
+    setDocTitle();
     root.innerHTML = `<div class="pn-topbar pn-topbar-msg">${I.switchHtml()}</div>
       <div class="pn-message"><div class="pn-brand">STUDIO SEOZ</div><h2>${esc(t(titleKey))}</h2><p>${esc(t(textKey))}</p>${typeof extraHtml === "function" ? extraHtml() : (extraHtml || "")}</div>`;
   }
@@ -564,7 +565,7 @@
 
   /* ---------------- yükleme ---------------- */
   async function load(firstTime) {
-    if (firstTime && !state.data) { lastScreen = null; root.innerHTML = `<div class="pn-loading">${esc(t("loading"))}</div>`; }
+    if (firstTime && !state.data) { lastScreen = null; setDocTitle(); root.innerHTML = `<div class="pn-loading">${esc(t("loading"))}</div>`; }
     try {
       const [d, seating] = await Promise.all([rpc("rsvp_panel_get", {}), loadSeating()]);
       state.data = d;
