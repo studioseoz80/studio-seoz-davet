@@ -69,7 +69,10 @@
         { value: "Europe/Istanbul", label: "Türkiye (İstanbul)" },
         { value: "Europe/Berlin", label: "Almanya / Orta Avrupa" },
         { value: "Europe/London", label: "İngiltere" },
-        { value: "Europe/Amsterdam", label: "Hollanda / Belçika" }
+        { value: "Europe/Amsterdam", label: "Hollanda / Belçika" },
+        // ABD Doğu Saati (New York, Charleston, Miami, Atlanta, Boston…): EST −05:00 / EDT −04:00,
+        // yaz/kış saati geçişi tarayıcının saat dilimi bilgisiyle otomatik hesaplanır.
+        { value: "America/New_York", label: "America/New_York (ABD Doğu Saati)" }
       ]
     },
     { key: "fontFamily", type: "font-select", label: "Buton Fontu" },
