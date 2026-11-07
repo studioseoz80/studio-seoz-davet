@@ -21,6 +21,8 @@
   const LOGICAL_W = 1000;     // salon planının mantıksal genişliği
   const MIN_CANVAS_PX = 720;  // telefonda plan bu genişlikten küçülmez (yatay kaydırılır)
   const MAX_AREAS = 300;
+  const I = global.SeozPanelI18n;
+  const t = (k, v) => I.t(k, v);
 
   let ctx = null;        // son render bağlamı (panel-app'ten)
   let container = null;
@@ -35,12 +37,14 @@
   function seat() { return ctx.seating; }
   function areas() { return seat().areas; }
   function areaById(id) { return areas().find(a => a.id === id) || null; }
+  /* Masa adı: müşterinin verdiği ad aynen; panelin ürettiği "Masa 7" seçilen dilde
+     ("Table 7"). Kayıttaki ad değişmez. */
   function areaName(a) {
     if (!a) return "";
-    if (a.label) return a.label;
-    return a.number != null ? "Masa " + a.number : "Adsız alan";
+    if (a.label) return I.displayAreaLabel(a.label);
+    return a.number != null ? t("tableN", { n: a.number }) : t("unnamedArea");
   }
-  function showNumberBadge(a) { return a.number != null && !String(a.label || "").includes(String(a.number)); }
+  function showNumberBadge(a) { return a.number != null && !areaName(a).includes(String(a.number)); }
   function sortedAreas() {
     const key = a => (a.number == null ? 1e9 : a.number);
     return areas().slice().sort((a, b) => key(a) - key(b) || (a.sort || 0) - (b.sort || 0));
@@ -58,7 +62,7 @@
       const list = r.attendees || [];
       list.forEach(a => out.push({
         id: a.id, rid: r.id, pos: a.position, group: r.name, size: list.length,
-        name: a.name || (a.position === 0 ? r.name : "İsimsiz katılımcı")
+        name: a.name || (a.position === 0 ? r.name : t("unnamedGuest"))
       }));
     });
     return out;
@@ -86,13 +90,13 @@
   function draw() {
     if (!container || !ctx) return;
     const s = seat();
-    if (!s) { container.innerHTML = `<div class="pn-empty">Yerleşim yükleniyor...</div>`; return; }
+    if (!s) { container.innerHTML = `<div class="pn-empty">${esc(t("seatLoading"))}</div>`; return; }
     if (s.error === "not_installed") {
-      container.innerHTML = `<div class="pn-empty"><b>Yerleşim planı henüz etkin değil.</b><br>Studio SEOZ bu özelliği açtığında masa planınızı buradan hazırlayabileceksiniz.</div>`;
+      container.innerHTML = `<div class="pn-empty">${t("seatNotInstalled")}</div>`;
       return;
     }
     if (s.error) {
-      container.innerHTML = `<div class="pn-empty">Yerleşim bilgileri yüklenemedi.<br><br><button class="pn-btn" data-seat-retry>Tekrar dene</button></div>`;
+      container.innerHTML = `<div class="pn-empty">${esc(t("seatLoadFail"))}<br><br><button class="pn-btn" data-seat-retry>${esc(t("retry"))}</button></div>`;
       container.querySelector("[data-seat-retry]").addEventListener("click", () => ctx.reload());
       return;
     }
@@ -108,34 +112,34 @@
     const overList = areas().filter(a => capState(a) === "over");
 
     let alert;
-    if (!total) alert = `<div class="pn-seat-alert info">Henüz gelecek katılımcı yok. Masaları şimdiden hazırlayabilirsiniz; yanıt geldikçe kişiler burada görünür.</div>`;
-    else if (unplaced) alert = `<div class="pn-seat-alert warn" data-unplaced-alert>⚠ <b>Yerleştirilmemiş: ${unplaced} kişi</b>${cap < total ? ` · Toplam kapasite (${cap}) gelecek kişi sayısından (${total}) az.` : ""}</div>`;
-    else alert = `<div class="pn-seat-alert ok">✓ Herkes yerleştirildi.</div>`;
-    if (overList.length) alert += `<div class="pn-seat-alert over">${overList.length} masada kapasite aşıldı: ${overList.map(a => esc(areaName(a)) + " (" + countIn(a.id) + "/" + a.capacity + ")").join(", ")}</div>`;
+    if (!total) alert = `<div class="pn-seat-alert info">${esc(t("seatNoGuests"))}</div>`;
+    else if (unplaced) alert = `<div class="pn-seat-alert warn" data-unplaced-alert>${t("seatUnplacedAlert", { n: unplaced })}${cap < total ? esc(t("seatCapLow", { c: cap, t: total })) : ""}</div>`;
+    else alert = `<div class="pn-seat-alert ok">${esc(t("seatAllPlaced"))}</div>`;
+    if (overList.length) alert += `<div class="pn-seat-alert over">${t("seatOverAlert", { n: overList.length, list: overList.map(a => esc(areaName(a)) + " (" + countIn(a.id) + "/" + a.capacity + ")").join(", ") })}</div>`;
 
     const root = document.createElement("div");
     root.className = "pn-seat";
     root.innerHTML = `
       <div class="pn-seat-stats pn-noprint">
-        ${stat("Masa / alan", areas().length)}
-        ${stat("Toplam kapasite", cap)}
-        ${stat("Yerleşen kişi", placed + (total ? " / " + total : ""))}
-        ${stat("Yerleştirilmemiş", unplaced, unplaced ? "warn" : "")}
+        ${stat(t("statAreas"), areas().length)}
+        ${stat(t("statCapacity"), cap)}
+        ${stat(t("statSeated"), placed + (total ? " / " + total : ""))}
+        ${stat(t("statUnplaced"), unplaced, unplaced ? "warn" : "")}
       </div>
       <div class="pn-noprint">${alert}</div>
       <div class="pn-seat-bar pn-noprint">
-        <button class="pn-btn primary" data-add>+ Masa / alan ekle</button>
-        <div class="pn-seg" role="group" aria-label="Görünüm">
-          <button data-view="plan" aria-pressed="${ui.view === "plan"}">Salon planı</button>
-          <button data-view="list" aria-pressed="${ui.view !== "plan"}">Masa listesi</button>
+        <button class="pn-btn primary" data-add>${esc(t("addArea"))}</button>
+        <div class="pn-seg" role="group" aria-label="${esc(t("viewAria"))}">
+          <button data-view="plan" aria-pressed="${ui.view === "plan"}">${esc(t("viewPlan"))}</button>
+          <button data-view="list" aria-pressed="${ui.view !== "plan"}">${esc(t("viewList"))}</button>
         </div>
-        ${areas().length > 1 ? `<button class="pn-link" data-renumber>Numaraları sırala</button>` : ""}
+        ${areas().length > 1 ? `<button class="pn-link" data-renumber>${esc(t("renumber"))}</button>` : ""}
       </div>
       ${selectionBar()}
       <div class="pn-seat-grid pn-noprint">
-        <aside class="pn-seat-side" data-drop="unplaced" aria-label="Yerleştirilmemiş katılımcılar">${sideHtml(unplaced)}</aside>
+        <aside class="pn-seat-side" data-drop="unplaced" aria-label="${esc(t("unplacedAria"))}">${sideHtml(unplaced)}</aside>
         <section class="pn-seat-main">${ui.view === "plan" ? `<div class="pn-plan-wrap"><div class="pn-plan" data-plan></div></div>
-          <p class="pn-muted pn-small">Masaları sürükleyerek salondaki yerlerine taşıyın. Bir masaya dokunarak adını, numarasını ve kapasitesini değiştirebilirsiniz.</p>` : listHtml()}</section>
+          <p class="pn-muted pn-small">${esc(t("planHint"))}</p>` : listHtml()}</section>
       </div>
       ${printHtml()}`;
     container.innerHTML = "";
@@ -157,24 +161,24 @@
     const one = sel.length === 1 ? sel[0] : null;
     const anySeated = sel.some(p => areaOf(p.id));
     const groupOthers = one ? PL.filter(p => p.rid === one.rid && p.id !== one.id).length : 0;
-    const what = one ? `<b>${esc(one.name)}</b> seçildi` : `<b>${sel.length} kişi</b> seçildi`;
-    const hint = one && anySeated ? "Bir masaya dokunun ya da yer değiştireceği kişiye dokunun." : "Şimdi yerleştirmek istediğiniz masaya dokunun.";
+    const what = one ? t("selOne", { name: esc(one.name) }) : t("selMany", { n: sel.length });
+    const hint = esc(t(one && anySeated ? "selHintSwap" : "selHintPlace"));
     return `<div class="pn-seat-sel pn-noprint" role="status">
       <div>${what}<span class="pn-seat-sel-hint">${hint}</span></div>
       <div class="pn-seat-sel-actions">
-        ${groupOthers ? `<button class="pn-btn" data-sel-group-of>Tüm grubu seç (${groupOthers + 1} kişi)</button>` : ""}
-        ${anySeated ? `<button class="pn-btn" data-sel-unplace>Masadan çıkar</button>` : ""}
-        <button class="pn-btn" data-sel-clear>Vazgeç</button>
+        ${groupOthers ? `<button class="pn-btn" data-sel-group-of>${esc(t("selWholeParty", { n: groupOthers + 1 }))}</button>` : ""}
+        ${anySeated ? `<button class="pn-btn" data-sel-unplace>${esc(t("removeFromTable"))}</button>` : ""}
+        <button class="pn-btn" data-sel-clear>${esc(t("cancel"))}</button>
       </div></div>`;
   }
 
   function chip(p, seated) {
     const sel = ctx.ui.sel.includes(p.id);
-    const sub = seated && p.pos > 0 ? `<small>${esc(p.group)} grubu</small>` : "";
-    const title = p.pos > 0 ? `${p.name} — ${p.group} grubundan` : p.size > 1 ? `${p.name} — ${p.size} kişilik grup` : p.name;
+    const sub = seated && p.pos > 0 ? `<small>${esc(t("chipGroup", { g: p.group }))}</small>` : "";
+    const title = p.pos > 0 ? t("chipInGroup", { name: p.name, g: p.group }) : p.size > 1 ? t("chipPartyOf", { name: p.name, n: p.size }) : p.name;
     return `<span class="pn-pchip${sel ? " sel" : ""}${seated ? " seated" : ""}" data-person="${esc(p.id)}" ${seated ? `data-drop="person:${esc(p.id)}"` : ""}
         role="button" tabindex="0" aria-pressed="${sel}" title="${esc(title)}"><span class="pn-pchip-name">${esc(p.name)}${sub}</span>${seated
-        ? `<button type="button" class="pn-pchip-x" data-unseat="${esc(p.id)}" aria-label="${esc(p.name)} masadan çıkar" title="Masadan çıkar">✕</button>` : ""}</span>`;
+        ? `<button type="button" class="pn-pchip-x" data-unseat="${esc(p.id)}" aria-label="${esc(t("unseatAria", { name: p.name }))}" title="${esc(t("removeFromTable"))}">✕</button>` : ""}</span>`;
   }
 
   function sideHtml(unplaced) {
@@ -187,22 +191,23 @@
       byRid[p.rid].members.push(p);
     });
     const shown = groups.reduce((n, g) => n + g.members.length, 0);
-    const head = `<div class="pn-seat-side-head"><h3>Yerleştirilmemiş Katılımcılar</h3><span class="pn-seat-count${unplaced ? " warn" : ""}">${unplaced} kişi</span></div>`;
-    if (!PL.length) return head + `<p class="pn-muted pn-small">Katılacağını bildiren kişiler burada listelenir.</p>`;
-    if (!unplaced) return head + `<p class="pn-muted pn-small">Herkes bir masaya yerleştirildi. Bir kişiyi masadan çıkarmak için ✕ işaretine dokunun ya da buraya sürükleyin.</p>`;
-    let html = head + `<p class="pn-muted pn-small">Kişiye dokunup masaya dokunun ya da sürükleyip bırakın.</p>`;
+    const head = `<div class="pn-seat-side-head"><h3>${esc(t("sideTitle"))}</h3><span class="pn-seat-count${unplaced ? " warn" : ""}">${esc(t("guestsN", { n: unplaced }))}</span></div>`;
+    if (!PL.length) return head + `<p class="pn-muted pn-small">${esc(t("sideNoGuests"))}</p>`;
+    if (!unplaced) return head + `<p class="pn-muted pn-small">${esc(t("sideAllPlaced"))}</p>`;
+    let html = head + `<p class="pn-muted pn-small">${esc(t("sideHint"))}</p>`;
     if (ctx.narrowed) {
-      html += `<p class="pn-small pn-seat-filtered">Arama/filtreye uyan ${shown} kişi gösteriliyor.</p>`;
-      if (shown) html += `<button class="pn-btn pn-btn-block" data-sel-visible>Görünenlerin hepsini seç (${shown} kişi)</button>`;
+      html += `<p class="pn-small pn-seat-filtered">${esc(t("sideFiltered", { n: shown }))}</p>`;
+      if (shown) html += `<button class="pn-btn pn-btn-block" data-sel-visible>${esc(t("selVisible", { n: shown }))}</button>`;
     }
-    if (!groups.length) return html + `<p class="pn-muted pn-small">Bu arama/filtreyle eşleşen yerleştirilmemiş kişi yok.</p>`;
+    if (!groups.length) return html + `<p class="pn-muted pn-small">${esc(t("sideNoMatch"))}</p>`;
     html += groups.map(g => {
       const seatedOthers = PL.filter(p => p.rid === g.rid && areaOf(p.id));
-      const where = seatedOthers.length ? ` · ${seatedOthers.length} kişisi ${esc(areaName(areaById(areaOf(seatedOthers[0].id))))}${seatedOthers.length > 1 && new Set(seatedOthers.map(p => areaOf(p.id))).size > 1 ? " ve diğer masalarda" : "'da"}` : "";
+      const where = seatedOthers.length ? esc(t(seatedOthers.length > 1 && new Set(seatedOthers.map(p => areaOf(p.id))).size > 1 ? "whereMany" : "whereOne",
+        { n: seatedOthers.length, area: areaName(areaById(areaOf(seatedOthers[0].id))) })) : "";
       return `<div class="pn-sgroup">
         <div class="pn-sgroup-head"><span class="pn-sgroup-name">${esc(g.name)}</span>
-          <span class="pn-muted pn-small">${PL.filter(p => p.rid === g.rid).length} kişilik grup${where}</span>
-          ${g.members.length > 1 ? `<button class="pn-link" data-sel-group="${esc(g.rid)}">Grubu seç (${g.members.length})</button>` : ""}</div>
+          <span class="pn-muted pn-small">${esc(t("partyOfGroup", { n: PL.filter(p => p.rid === g.rid).length }))}${where}</span>
+          ${g.members.length > 1 ? `<button class="pn-link" data-sel-group="${esc(g.rid)}">${esc(t("selParty", { n: g.members.length }))}</button>` : ""}</div>
         <div class="pn-chips">${g.members.map(p => chip(p, false)).join("")}</div></div>`;
     }).join("");
     return html;
@@ -215,25 +220,25 @@
       const ppl = seatedIn(a.id);
       const st = capState(a);
       const free = a.capacity - ppl.length;
-      const note = st === "full" ? `${esc(areaName(a))} kapasitesine ulaştı – ${ppl.length}/${a.capacity}`
-                 : st === "over" ? `Kapasite aşıldı – ${ppl.length}/${a.capacity} (${ppl.length - a.capacity} kişi fazla)` : "";
+      const note = st === "full" ? esc(t("tcFull", { area: areaName(a), n: ppl.length, c: a.capacity }))
+                 : st === "over" ? esc(t("tcOver", { n: ppl.length, c: a.capacity, x: ppl.length - a.capacity })) : "";
       return `<div class="pn-tcard ${st}${hasSel ? " hint" : ""}" data-area="${esc(a.id)}" data-drop="area:${esc(a.id)}" role="button" tabindex="0"
-          aria-label="${esc(areaName(a))}, ${ppl.length}/${a.capacity} kişi">
+          aria-label="${esc(t("tcAria", { area: areaName(a), n: ppl.length, c: a.capacity }))}">
         <div class="pn-tcard-head">
           <div class="pn-tcard-title"><span class="pn-shape ${a.shape}" aria-hidden="true"></span><b>${esc(areaName(a))}</b>${showNumberBadge(a) ? `<span class="pn-numbadge">${a.number}</span>` : ""}</div>
           <span class="pn-cap ${st}">${ppl.length}/${a.capacity}</span>
-          <button class="pn-link" data-edit="${esc(a.id)}">Düzenle</button>
+          <button class="pn-link" data-edit="${esc(a.id)}">${esc(t("edit"))}</button>
         </div>
         <div class="pn-capbar"><div style="width:${Math.min(100, (ppl.length / a.capacity) * 100).toFixed(1)}%"></div></div>
         ${note ? `<div class="pn-tcard-note ${st}">${note}</div>` : ""}
-        <div class="pn-chips">${ppl.length ? ppl.map(p => chip(p, true)).join("") : `<span class="pn-muted pn-small">Boş — kişileri buraya sürükleyin ya da dokunarak yerleştirin.</span>`}</div>
-        ${free > 0 && ppl.length ? `<div class="pn-muted pn-small pn-tcard-free">${free} boş yer</div>` : ""}
+        <div class="pn-chips">${ppl.length ? ppl.map(p => chip(p, true)).join("") : `<span class="pn-muted pn-small">${esc(t("tcEmpty"))}</span>`}</div>
+        ${free > 0 && ppl.length ? `<div class="pn-muted pn-small pn-tcard-free">${esc(t("tcFree", { n: free }))}</div>` : ""}
       </div>`;
     }).join("")}</div>`;
   }
 
   function emptyAreas() {
-    return `<div class="pn-empty">Henüz masa veya alan yok.<br><b>+ Masa / alan ekle</b> düğmesiyle başlayın; her birine istediğiniz kapasiteyi verebilirsiniz.</div>`;
+    return `<div class="pn-empty">${t("noAreas")}</div>`;
   }
 
   /* Salon planı: düğümler ölçeklenerek mutlak konumlanır. */
@@ -265,7 +270,7 @@
       const names = ppl.map(p => p.name).join(", ");
       return `<div class="pn-node ${a.shape} ${st}${hasSel ? " hint" : ""}" data-area="${esc(a.id)}" data-drop="area:${esc(a.id)}" role="button" tabindex="0"
           style="left:${(a.x * s).toFixed(1)}px;top:${(a.y * s).toFixed(1)}px;width:${(z.w * s).toFixed(1)}px;height:${(z.h * s).toFixed(1)}px;font-size:${Math.max(10, 13 * s).toFixed(1)}px"
-          title="${esc(areaName(a) + (names ? " — " + names : " — boş"))}" aria-label="${esc(areaName(a))}, ${ppl.length}/${a.capacity} kişi">
+          title="${esc(areaName(a) + " — " + (names || t("nodeEmpty")))}" aria-label="${esc(t("tcAria", { area: areaName(a), n: ppl.length, c: a.capacity }))}">
         ${dotsHtml(a, z, s, ppl.length)}
         <div class="pn-node-in">${showNumberBadge(a) ? `<span class="pn-numbadge">${a.number}</span>` : ""}<b>${esc(areaName(a))}</b><span class="pn-node-cap">${ppl.length}/${a.capacity}</span></div>
       </div>`;
@@ -294,13 +299,13 @@
     const list = sortedAreas();
     const un = PL.filter(p => !areaOf(p.id));
     return `<div class="pn-seat-print">
-      <h2>Masa listesi</h2>
+      <h2>${esc(t("printTitle"))}</h2>
       <div class="pn-print-cols">${list.map(a => {
         const ppl = seatedIn(a.id);
         return `<div class="pn-print-table"><h4>${esc(areaName(a))} <span>(${ppl.length}/${a.capacity})</span></h4>
-          ${ppl.length ? `<ol>${ppl.map(p => `<li>${esc(p.name)}${p.pos > 0 ? ` <span class="pn-muted">(${esc(p.group)})</span>` : ""}</li>`).join("")}</ol>` : `<p class="pn-muted">Boş</p>`}</div>`;
+          ${ppl.length ? `<ol>${ppl.map(p => `<li>${esc(p.name)}${p.pos > 0 ? ` <span class="pn-muted">(${esc(p.group)})</span>` : ""}</li>`).join("")}</ol>` : `<p class="pn-muted">${esc(t("printEmpty"))}</p>`}</div>`;
       }).join("")}</div>
-      ${un.length ? `<h3>Yerleştirilmemiş (${un.length} kişi)</h3><p>${un.map(p => esc(p.name)).join(", ")}</p>` : ""}
+      ${un.length ? `<h3>${esc(t("printUnplaced", { n: un.length }))}</h3><p>${un.map(p => esc(p.name)).join(", ")}</p>` : ""}
     </div>`;
   }
 
@@ -454,7 +459,7 @@
     d.ids = ctx.ui.sel.includes(d.id) ? ctx.ui.sel.slice() : [d.id];
     const g = document.createElement("div");
     g.className = "pn-ghost";
-    g.textContent = d.ids.length > 1 ? `${d.ids.length} kişi` : (P[d.id] ? P[d.id].name : "");
+    g.textContent = d.ids.length > 1 ? t("guestsN", { n: d.ids.length }) : (P[d.id] ? P[d.id].name : "");
     g.style.transform = `translate(${d.x + 12}px, ${d.y + 12}px)`;
     document.body.appendChild(g);
     d.ghost = g;
@@ -509,7 +514,7 @@
     if (areaId && !a) return;
     if (a) {
       const after = countIn(a.id) + ids.length;
-      if (after > a.capacity && !global.confirm(`${areaName(a)} kapasitesi ${a.capacity} kişi.\nBu yerleşimle ${after}/${a.capacity} olacak (${after - a.capacity} kişi fazla).\n\nYine de yerleştirilsin mi?`)) return;
+      if (after > a.capacity && !global.confirm(t("confirmOverCap", { area: areaName(a), c: a.capacity, after, x: after - a.capacity }))) return;
     }
     const prev = {};
     ids.forEach(id => { prev[id] = s.assignments[id]; if (areaId) s.assignments[id] = areaId; else delete s.assignments[id]; });
@@ -519,10 +524,10 @@
       await ctx.rpc("rsvp_panel_assign", { p_attendee_ids: ids, p_area_id: areaId });
       if (a) {
         const n = countIn(a.id);
-        if (n === a.capacity) ctx.toast(`${areaName(a)} kapasitesine ulaştı – ${n}/${a.capacity}`);
-        else ctx.toast(ids.length > 1 ? `${ids.length} kişi yerleştirildi → ${areaName(a)}` : `${P[ids[0]].name} → ${areaName(a)}`);
+        if (n === a.capacity) ctx.toast(t("tcFull", { area: areaName(a), n, c: a.capacity }));
+        else ctx.toast(ids.length > 1 ? t("placedMany", { n: ids.length, area: areaName(a) }) : `${P[ids[0]].name} → ${areaName(a)}`);
       } else {
-        ctx.toast(ids.length > 1 ? `${ids.length} kişi Yerleştirilmemiş listesine alındı.` : `${P[ids[0]].name} masadan çıkarıldı.`);
+        ctx.toast(ids.length > 1 ? t("unplacedMany", { n: ids.length }) : t("unplacedOne", { name: P[ids[0]].name }));
       }
     } catch (e) {
       ids.forEach(id => { if (prev[id]) s.assignments[id] = prev[id]; else delete s.assignments[id]; });
@@ -534,14 +539,14 @@
   async function swap(a, b) {
     const s = seat();
     const A = areaOf(a), B = areaOf(b);
-    if (A === B) { ctx.ui.sel = []; ctx.toast("İkisi zaten aynı yerde."); return draw(); }
+    if (A === B) { ctx.ui.sel = []; ctx.toast(t("sameSpot")); return draw(); }
     const set = (id, v) => { if (v) s.assignments[id] = v; else delete s.assignments[id]; };
     set(a, B); set(b, A);
     ctx.ui.sel = [];
     draw();
     try {
       await ctx.rpc("rsvp_panel_swap", { p_a: a, p_b: b });
-      ctx.toast(`${P[a].name} ↔ ${P[b].name} yer değiştirdi.`);
+      ctx.toast(t("swapped", { a: P[a].name, b: P[b].name }));
     } catch (e) {
       set(a, A); set(b, B); draw(); ctx.onError(e);
     }
@@ -571,16 +576,17 @@
 
   async function renumber() {
     const list = areas().slice().sort((a, b) => (Math.round(a.y / 80) - Math.round(b.y / 80)) || (a.x - b.x));
-    if (!global.confirm("Masa numaraları salon planındaki yerlerine göre (yukarıdan aşağıya, soldan sağa) 1'den başlayarak yeniden verilsin mi?\n\n\"Masa 7\" gibi isimler yeni numarayla güncellenir; özel isimler (ör. VIP, Sahne önü) değişmez.")) return;
+    if (!global.confirm(t("confirmRenumber"))) return;
     try {
       for (let i = 0; i < list.length; i++) {
         const a = list[i], n = i + 1;
-        const label = !a.label || /^masa\s*\d+$/i.test(a.label.trim()) ? "Masa " + n : a.label;
+        // Panelin ürettiği adlar ("Masa 7" / "Table 7") yeni numarayı alır; kayıt biçimi eskisiyle aynı ("Masa N").
+        const label = !a.label || I.autoTableNo(a.label) != null ? I.canonicalTable(n) : a.label;
         if (a.number === n && a.label === label && a.sort === i) continue;
         const r = await ctx.rpc("rsvp_panel_area_save", { p_area: { id: a.id, number: n, label, sort: i } });
         Object.assign(a, normArea(r));
       }
-      ctx.toast("Numaralar yeniden sıralandı.");
+      ctx.toast(t("renumbered"));
     } catch (e) { ctx.onError(e); }
     draw();
   }
@@ -588,36 +594,37 @@
   /* ---------------- masa / alan penceresi ---------------- */
   function areaDialog(a) {
     const isNew = !a;
-    if (isNew && areas().length >= MAX_AREAS) return global.alert(`En fazla ${MAX_AREAS} masa/alan eklenebilir.`);
+    if (isNew && areas().length >= MAX_AREAS) return global.alert(t("maxAreas", { n: MAX_AREAS }));
     const nextNum = areas().reduce((m, x) => Math.max(m, x.number || 0), 0) + 1;
     const cur = a || { label: "", number: nextNum, capacity: ctx.ui.lastCap || 8, shape: ctx.ui.lastShape || "round" };
     const seated = a ? seatedIn(a.id) : [];
     const bg = document.createElement("div");
     bg.className = "pn-modal-bg";
-    bg.innerHTML = `<form class="pn-modal pn-area-form" role="dialog" aria-modal="true" aria-label="${isNew ? "Masa / alan ekle" : "Masa / alan düzenle"}" novalidate>
-      <h3>${isNew ? "Masa / alan ekle" : esc(areaName(a))}</h3>
+    // Ad kutusunda panelin ürettiği ad seçilen dilde görünür ("Table 7"); kaydederken eski biçimde ("Masa 7") saklanır.
+    bg.innerHTML = `<form class="pn-modal pn-area-form" role="dialog" aria-modal="true" aria-label="${esc(t(isNew ? "dlgAdd" : "dlgEditAria"))}" novalidate>
+      <h3>${isNew ? esc(t("dlgAdd")) : esc(areaName(a))}</h3>
       <div class="pn-field-row">
-        <label class="pn-field">Ad <input name="label" maxlength="60" placeholder="ör. Masa ${nextNum}, VIP, Sahne önü" value="${esc(cur.label)}" autocomplete="off"></label>
-        <label class="pn-field narrow">Numara <input name="number" type="number" min="0" max="9999" inputmode="numeric" value="${cur.number == null ? "" : cur.number}"></label>
+        <label class="pn-field">${esc(t("fName"))} <input name="label" maxlength="60" placeholder="${esc(t("fNamePh", { n: nextNum }))}" value="${esc(I.displayAreaLabel(cur.label))}" autocomplete="off"></label>
+        <label class="pn-field narrow">${esc(t("fNumber"))} <input name="number" type="number" min="0" max="9999" inputmode="numeric" value="${cur.number == null ? "" : cur.number}"></label>
       </div>
       <div class="pn-field-row">
-        <label class="pn-field narrow">Kapasite <input name="capacity" type="number" min="1" max="500" inputmode="numeric" value="${cur.capacity}"></label>
-        <div class="pn-field">Şekil
-          <div class="pn-seg" role="group" aria-label="Şekil">
-            <button type="button" data-shape="round" aria-pressed="${cur.shape !== "rect"}">◯ Yuvarlak</button>
-            <button type="button" data-shape="rect" aria-pressed="${cur.shape === "rect"}">▭ Dikdörtgen</button>
+        <label class="pn-field narrow">${esc(t("fCapacity"))} <input name="capacity" type="number" min="1" max="500" inputmode="numeric" value="${cur.capacity}"></label>
+        <div class="pn-field">${esc(t("fShape"))}
+          <div class="pn-seg" role="group" aria-label="${esc(t("fShape"))}">
+            <button type="button" data-shape="round" aria-pressed="${cur.shape !== "rect"}">${esc(t("shapeRound"))}</button>
+            <button type="button" data-shape="rect" aria-pressed="${cur.shape === "rect"}">${esc(t("shapeRect"))}</button>
           </div></div>
-        ${isNew ? `<label class="pn-field narrow">Adet <input name="qty" type="number" min="1" max="50" inputmode="numeric" value="1"></label>` : ""}
+        ${isNew ? `<label class="pn-field narrow">${esc(t("fQty"))} <input name="qty" type="number" min="1" max="50" inputmode="numeric" value="1"></label>` : ""}
       </div>
-      ${isNew ? `<p class="pn-muted pn-small">Birden fazla eklerseniz numaralar sırayla verilir (ör. Masa ${nextNum}, Masa ${nextNum + 1}...).</p>` : ""}
+      ${isNew ? `<p class="pn-muted pn-small">${esc(t("multiHint", { a: nextNum, b: nextNum + 1 }))}</p>` : ""}
       <p class="pn-form-err" data-err hidden></p>
-      ${!isNew ? `<div class="pn-area-people"><div class="pn-muted pn-small">Bu masadakiler (${seated.length}/${a.capacity})</div>
+      ${!isNew ? `<div class="pn-area-people"><div class="pn-muted pn-small">${esc(t("seatedHere", { n: seated.length, c: a.capacity }))}</div>
         ${seated.length ? `<ul>${seated.map(p => `<li data-row="${esc(p.id)}"><span>${esc(p.name)}${p.pos > 0 ? ` <span class="pn-muted">(${esc(p.group)})</span>` : ""}</span>
-          <button type="button" class="pn-link" data-out="${esc(p.id)}">Masadan çıkar</button></li>`).join("")}</ul>` : `<p class="pn-muted pn-small">Henüz kimse yok.</p>`}</div>` : ""}
+          <button type="button" class="pn-link" data-out="${esc(p.id)}">${esc(t("removeFromTable"))}</button></li>`).join("")}</ul>` : `<p class="pn-muted pn-small">${esc(t("noOneYet"))}</p>`}</div>` : ""}
       <div class="pn-modal-actions">
-        ${!isNew ? `<button type="button" class="pn-btn danger" data-del>Sil</button>` : "<span></span>"}
-        <div class="pn-modal-actions-r"><button type="button" class="pn-btn" data-close>Vazgeç</button>
-        <button type="submit" class="pn-btn primary">${isNew ? "Ekle" : "Kaydet"}</button></div>
+        ${!isNew ? `<button type="button" class="pn-btn danger" data-del>${esc(t("del"))}</button>` : "<span></span>"}
+        <div class="pn-modal-actions-r"><button type="button" class="pn-btn" data-close>${esc(t("cancel"))}</button>
+        <button type="submit" class="pn-btn primary">${esc(t(isNew ? "add" : "save"))}</button></div>
       </div></form>`;
     document.body.appendChild(bg);
     const f = bg.querySelector("form");
@@ -638,47 +645,50 @@
     const del = bg.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {
       const n = countIn(a.id);
-      if (!global.confirm(`"${areaName(a)}" silinsin mi?` + (n ? `\n\nBu masadaki ${n} kişi Yerleştirilmemiş listesine döner.` : ""))) return;
+      if (!global.confirm(t("confirmDeleteArea", { area: areaName(a) }) + (n ? t("confirmDeleteAreaPeople", { n }) : ""))) return;
       try {
         await ctx.rpc("rsvp_panel_area_delete", { p_area_id: a.id });
         const s = seat();
         s.areas = s.areas.filter(x => x.id !== a.id);
         Object.keys(s.assignments).forEach(k => { if (s.assignments[k] === a.id) delete s.assignments[k]; });
         close(); draw();
-        ctx.toast(`${areaName(a)} silindi.` + (n ? ` ${n} kişi Yerleştirilmemiş listesine döndü.` : ""));
+        ctx.toast(t("areaDeleted", { area: areaName(a) }) + (n ? t("areaDeletedPeople", { n }) : ""));
       } catch (e) { ctx.onError(e); }
     });
     const err = (m) => { const p = bg.querySelector("[data-err]"); p.textContent = m; p.hidden = !m; };
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const label = f.label.value.trim();
+      // Panelin ürettiği ad ("Table 7" / "Masa 7") eski kayıt biçiminde saklanır: dil değişse de kayıt aynı kalır.
+      const rawLabel = f.label.value.trim();
+      const autoNo = I.autoTableNo(rawLabel);
+      const label = autoNo != null ? I.canonicalTable(autoNo) : rawLabel;
       const numRaw = f.number.value.trim();
       const number = numRaw === "" ? null : parseInt(numRaw, 10);
       const capacity = parseInt(f.capacity.value, 10);
-      if (!(capacity >= 1 && capacity <= 500)) return err("Kapasite 1 ile 500 arasında olmalı.");
-      if (number != null && !(number >= 0 && number <= 9999)) return err("Numara 0 ile 9999 arasında olmalı.");
+      if (!(capacity >= 1 && capacity <= 500)) return err(t("errCapacity"));
+      if (number != null && !(number >= 0 && number <= 9999)) return err(t("errNumber"));
       const submitBtn = f.querySelector("[type=submit]");
       submitBtn.disabled = true;
       ctx.ui.lastCap = capacity; ctx.ui.lastShape = shape;
       try {
         if (isNew) {
           const qty = Math.max(1, Math.min(50, parseInt(f.qty.value, 10) || 1));
-          if (areas().length + qty > MAX_AREAS) { submitBtn.disabled = false; return err(`En fazla ${MAX_AREAS} masa/alan eklenebilir.`); }
+          if (areas().length + qty > MAX_AREAS) { submitBtn.disabled = false; return err(t("maxAreas", { n: MAX_AREAS })); }
           for (let i = 0; i < qty; i++) {
             const n = number == null ? null : number + i;
-            const lbl = qty > 1 ? (label ? `${label} ${i + 1}` : (n != null ? "Masa " + n : "")) : (label || (n != null ? "Masa " + n : ""));
+            const lbl = qty > 1 ? (label ? `${label} ${i + 1}` : (n != null ? I.canonicalTable(n) : "")) : (label || (n != null ? I.canonicalTable(n) : ""));
             const pos = freeSlot();
             const r = await ctx.rpc("rsvp_panel_area_save", { p_area: { label: lbl, number: n, capacity, shape, x: pos.x, y: pos.y, sort: areas().length } });
             seat().areas.push(normArea(r));
           }
           close(); draw();
-          ctx.toast(qty > 1 ? `${qty} masa/alan eklendi.` : `${areaName(areas()[areas().length - 1])} eklendi.`);
+          ctx.toast(qty > 1 ? t("areasAdded", { n: qty }) : t("areaAdded", { area: areaName(areas()[areas().length - 1]) }));
         } else {
           const r = await ctx.rpc("rsvp_panel_area_save", { p_area: { id: a.id, label, number, capacity, shape } });
           Object.assign(a, normArea(r));
           close(); draw();
           const n = countIn(a.id);
-          ctx.toast(n > a.capacity ? `Kaydedildi. Dikkat: ${areaName(a)} kapasiteyi aşıyor – ${n}/${a.capacity}` : "Kaydedildi.");
+          ctx.toast(n > a.capacity ? t("savedOver", { area: areaName(a), n, c: a.capacity }) : t("saved"));
         }
       } catch (e2) {
         submitBtn.disabled = false;
@@ -695,18 +705,18 @@
     if (!seat() || seat().error) return 0;
     PL = persons(); P = {}; PL.forEach(p => { P[p.id] = p; });
     const cols = ctx.cols || [];
-    const rows = [["Masa / Alan", "Masa no", "Kapasite", "Masadaki kişi", "Sıra", "Ad Soyad", "Grup (yanıtlayan)"].concat(cols.map(c => c.label))];
+    const rows = [[t("csvArea"), t("csvAreaNo"), t("csvCapacity"), t("csvAtTable"), t("csvNo"), t("thName"), t("csvParty")].concat(cols.map(c => c.label))];
     const respById = {};
     ctx.responses.forEach(r => { respById[r.id] = r; });
     const line = (aName, aNo, cap, cnt, i, p) => rows.push([aName, aNo, cap, cnt, i, p.name, p.group].concat(cols.map(c => ctx.answerText(respById[p.rid], c.id))));
     sortedAreas().forEach(a => {
       const ppl = seatedIn(a.id);
-      if (!ppl.length) rows.push([areaName(a), a.number == null ? "" : a.number, a.capacity, 0, "", "(boş)", ""]);
+      if (!ppl.length) rows.push([areaName(a), a.number == null ? "" : a.number, a.capacity, 0, "", t("csvEmpty"), ""]);
       ppl.forEach((p, i) => line(areaName(a), a.number == null ? "" : a.number, a.capacity, ppl.length, i + 1, p));
     });
-    PL.filter(p => !areaOf(p.id)).forEach((p, i) => line("Yerleştirilmemiş", "", "", "", i + 1, p));
+    PL.filter(p => !areaOf(p.id)).forEach((p, i) => line(t("statUnplaced"), "", "", "", i + 1, p));
     const stamp = new Date().toISOString().slice(0, 10);
-    global.SeozPanelExport.download(`${global.SeozPanelExport.safeName(ctx.title)}-masa-listesi-${stamp}.csv`, rows);
+    global.SeozPanelExport.download(`${global.SeozPanelExport.safeName(ctx.title)}-${t("fileSeating")}-${stamp}.csv`, rows);
     return PL.length;
   }
 
@@ -715,8 +725,7 @@
     if (!seating || seating.error) return "";
     const id = seating.assignments[attendeeId];
     const a = id && seating.areas.find(x => x.id === id);
-    if (!a) return "";
-    return a.label || (a.number != null ? "Masa " + a.number : "Adsız alan");
+    return areaName(a);
   }
 
   global.SeozPanelSeating = { render, exportCsv, normArea, areaNameOf };

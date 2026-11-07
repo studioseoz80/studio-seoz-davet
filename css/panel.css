@@ -312,3 +312,13 @@ body.pn-dragging, body.pn-dragging *{ cursor:grabbing !important; user-select:no
 .pn-share-actions .pn-btn{ text-decoration:none; display:inline-flex; align-items:center; min-height:40px; }
 .pn-share-actions a.pn-btn{ color:#178F48; font-weight:700; } .pn-share-actions a.pn-btn:visited{ color:#178F48; }
 @media (max-width: 560px){ .pn-share-actions{ width:100%; } .pn-share-actions .pn-btn{ flex:1 1 0; justify-content:center; } }
+
+/* TR / EN dil seçici (sağ üst). Başlık satırının sağına oturur ve sayfa akışında yer
+   kaplamaz: panelin geri kalanı eskisiyle aynı yerde durur. */
+.pn-topbar{ position:relative; padding-right:104px; }
+.pn-topbar-msg{ min-height:30px; padding-right:0; }
+.pn-lang{ position:absolute; right:0; top:50%; transform:translateY(-50%); display:inline-flex; border:1px solid var(--line); border-radius:999px; background:var(--card); padding:2px; }
+.pn-topbar-msg .pn-lang{ top:0; transform:none; }
+.pn-lang button{ border:0; background:none; border-radius:999px; padding:3px 10px; min-width:40px; min-height:26px; font-weight:700; font-size:.74rem; letter-spacing:.06em; color:var(--soft); cursor:pointer; }
+.pn-lang button[aria-pressed="true"]{ background:var(--gold); color:#fff; }
+.pn-lang button:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }

@@ -14,7 +14,11 @@
   "use strict";
 
   const root = document.getElementById("panel-root");
-  const DEFAULT_LABELS = { total: "Toplam yanıt", yes: "Katılacak", no: "Katılmayacak", people: "Toplam gelecek kişi" };
+  /* TR / EN: arayüz metinleri panel-i18n.js'ten gelir; kayıtlar değişmez. */
+  const I = global.SeozPanelI18n;
+  const t = (k, v) => I.t(k, v);
+  const LABEL_KEYS = ["total", "yes", "no", "people"];
+  let lastScreen = null;   // veri yokken gösterilen ekran (dil değişince yeniden çizilir)
   const OPTION_TYPES = ["radio", "choice", "checkbox", "select"];
 
   const state = {
@@ -30,12 +34,7 @@
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
-  function fmtDate(iso) {
-    const d = new Date(iso);
-    if (isNaN(d)) return "";
-    return d.toLocaleDateString("tr-TR", { day: "numeric", month: "short" }) + " " +
-           d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-  }
+  function fmtDate(iso) { return I.fmtDate(iso); }
   function norm(s) { return String(s || "").toLocaleLowerCase("tr-TR").replace(/\s+/g, " ").trim(); }
   /* DAVETİYEYİ PAYLAŞ: etkinlik sahibi davetiye bağlantısını tek dokunuşla gönderir.
      Telefonda sistemin paylaşım menüsü (Instagram, WhatsApp…) yalnızca bağlantıyla açılır;
@@ -46,9 +45,9 @@
     const u = inviteUrl(ev); if (!u) return "";
     const wa = "https://wa.me/?text=" + encodeURIComponent(u);   // yalnızca bağlantı → tek kart
     return `<div class="pn-share pn-noprint">
-        <div class="pn-share-txt"><b>Davetiye bağlantısı</b><span data-invite-url>${esc(u.replace(/^https?:\/\//, ""))}</span></div>
+        <div class="pn-share-txt"><b>${esc(t("inviteLink"))}</b><span data-invite-url>${esc(u.replace(/^https?:\/\//, ""))}</span></div>
         <div class="pn-share-actions">
-          <button class="pn-btn primary" data-invite-share>${touchShare() ? "Davetiyeyi paylaş" : "Paylaş — bağlantıyı kopyala"}</button>
+          <button class="pn-btn primary" data-invite-share>${esc(t(touchShare() ? "shareTouch" : "shareDesk"))}</button>
           <a class="pn-btn" data-invite-wa href="${esc(wa)}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
         </div>
       </div>`;
@@ -61,7 +60,7 @@
     const b = root.querySelector("[data-invite-share]"); if (!b) return;
     const ev = state.data && state.data.event, u = inviteUrl(ev);
     b.addEventListener("click", () => {
-      const fallback = () => copyText(u).then(() => toast("Bağlantı kopyalandı — mesaja yapıştırıp gönderin."), () => global.prompt("Bağlantıyı kopyalayın:", u));
+      const fallback = () => copyText(u).then(() => toast(t("linkCopied")), () => global.prompt(t("copyPrompt"), u));
       if (touchShare()) navigator.share({ url: u }).catch(err => { if (!err || err.name !== "AbortError") fallback(); });
       else fallback();
     });
@@ -109,7 +108,9 @@
   function form() { return (state.data && state.data.event.form) || {}; }
   function questions() { return Array.isArray(form().questions) ? form().questions : []; }
   function hasAttendanceQ() { return questions().some(q => q.active !== false && q.role === "attendance"); }
-  function labels() { return Object.assign({}, DEFAULT_LABELS, ((state.data && state.data.event.settings) || {}).labels || {}); }
+  /* Kayıttaki kart adları (müşteri değiştirmediyse Türkçe varsayılan) → ekranda seçilen dilde. */
+  function storedLabels() { return ((state.data && state.data.event.settings) || {}).labels || {}; }
+  function labels() { const S = storedLabels(), L = {}; LABEL_KEYS.forEach(k => { L[k] = I.displayLabel(k, S[k]); }); return L; }
   function responses() { return (state.data && state.data.responses) || []; }
 
   /* Tabloda gösterilecek soru sütunları: formdaki sorular (katılım ve kişi
@@ -120,12 +121,12 @@
     questions().forEach(q => {
       seen.add(q.id);
       if (q.role === "attendance" || q.role === "count") return;
-      cols.push({ id: q.id, label: q.label || "(başlıksız soru)", q: q, removed: false });
+      cols.push({ id: q.id, label: q.label || t("untitledQ"), q: q, removed: false });
     });
     responses().forEach(r => Object.keys(r.answers || {}).forEach(id => {
       if (seen.has(id)) return;
       seen.add(id);
-      cols.push({ id: id, label: (r.answers[id].q || "Soru") + " (kaldırılmış soru)", q: null, removed: true });
+      cols.push({ id: id, label: t("removedQ", { q: r.answers[id].q || t("question") }), q: null, removed: true });
     }));
     return cols;
   }
@@ -137,11 +138,11 @@
   }
   function statusText(r) {
     const s = statusOf(r);
-    if (!hasAttendanceQ()) return "Kayıtlı";
+    if (!hasAttendanceQ()) return t("stRegistered");
     const aq = questions().find(q => q.role === "attendance");
-    if (s === "yes") return (aq && aq.yesLabel) || "Katılıyor";
-    if (s === "no") return (aq && aq.noLabel) || "Katılmıyor";
-    return "Belirtilmedi";
+    if (s === "yes") return (aq && aq.yesLabel) || t("stYes");
+    if (s === "no") return (aq && aq.noLabel) || t("stNo");
+    return t("stUnknown");
   }
   function answerText(r, id) { const a = (r.answers || {})[id]; return a ? (a.d == null ? "" : String(a.d)) : ""; }
   function companions(r) { return (r.attendees || []).filter(a => a.position > 0); }
@@ -154,7 +155,7 @@
 
   /* ---------------- filtreler ---------------- */
   function filterChoices(q) {
-    if (q.type === "yesno") return [{ value: "true", label: q.yesLabel || "Evet" }, { value: "false", label: q.noLabel || "Hayır" }];
+    if (q.type === "yesno") return [{ value: "true", label: q.yesLabel || t("yes") }, { value: "false", label: q.noLabel || t("no") }];
     if (OPTION_TYPES.includes(q.type)) return (q.options || []).map(o => ({ value: o.id, label: o.label }));
     return [];
   }
@@ -183,9 +184,9 @@
   }
   function filterLabel(f) {
     const q = questions().find(x => x.id === f.qid);
-    const qlabel = q ? q.label : "Soru";
-    if (f.kind === "answered") return `${qlabel}: yanıtlayanlar`;
-    if (f.kind === "empty") return `${qlabel}: boş bırakanlar`;
+    const qlabel = q ? q.label : t("question");
+    if (f.kind === "answered") return t("fLabelAnswered", { q: qlabel });
+    if (f.kind === "empty") return t("fLabelEmpty", { q: qlabel });
     const ch = q ? filterChoices(q).find(c => c.value === f.value) : null;
     return `${qlabel}: ${ch ? ch.label : f.value}`;
   }
@@ -201,13 +202,18 @@
   }
 
   /* ---------------- ekranlar ---------------- */
-  function showMessage(title, text, extraHtml) {
-    root.innerHTML = `<div class="pn-message"><div class="pn-brand">STUDIO SEOZ</div><h2>${esc(title)}</h2><p>${esc(text)}</p>${extraHtml || ""}</div>`;
+  /* Veri yokken gösterilen ekranlar anahtarla çizilir: dil değişince aynı ekran yeni dilde yeniden çizilir. */
+  function showMessage(titleKey, textKey, extraHtml) {
+    lastScreen = () => showMessage(titleKey, textKey, extraHtml);
+    root.classList.remove("pn-tab-seating");
+    root.innerHTML = `<div class="pn-topbar pn-topbar-msg">${I.switchHtml()}</div>
+      <div class="pn-message"><div class="pn-brand">STUDIO SEOZ</div><h2>${esc(t(titleKey))}</h2><p>${esc(t(textKey))}</p>${typeof extraHtml === "function" ? extraHtml() : (extraHtml || "")}</div>`;
   }
 
   function showPinForm(wrong) {
-    showMessage("Panel PIN ile korunuyor", wrong ? "PIN hatalı, lütfen tekrar deneyin." : "Devam etmek için size verilen PIN'i girin.",
-      `<form data-pin-form><input type="password" inputmode="numeric" autocomplete="off" class="pn-search" data-pin style="max-width:160px" aria-label="PIN"><button class="pn-btn primary" type="submit">Giriş</button></form>`);
+    showMessage("pinTitle", wrong ? "pinWrong" : "pinAsk",
+      () => `<form data-pin-form><input type="password" inputmode="numeric" autocomplete="off" class="pn-search" data-pin style="max-width:160px" aria-label="PIN"><button class="pn-btn primary" type="submit">${esc(t("pinButton"))}</button></form>`);
+    lastScreen = () => showPinForm(wrong);
     root.querySelector("[data-pin-form]").addEventListener("submit", (e) => {
       e.preventDefault();
       state.pin = root.querySelector("[data-pin]").value.trim() || null;
@@ -224,28 +230,29 @@
     const card = (key, cls, value) => `
       <div class="pn-card ${cls}">
         <div class="pn-card-label">${state.editingLabels
-          ? `<input data-label-key="${key}" value="${esc(L[key])}" maxlength="40" aria-label="Kart ismi">`
+          ? `<input data-label-key="${key}" value="${esc(L[key])}" maxlength="40" aria-label="${esc(t("cardNameAria"))}">`
           : esc(L[key])}</div>
         <div class="pn-card-value">${value}</div>
       </div>`;
 
+    lastScreen = null;
     root.classList.toggle("pn-tab-seating", state.tab === "seating");
     root.innerHTML = `
-      <div class="pn-brand">STUDIO SEOZ · KATILIMCI PANELİ</div>
+      <div class="pn-topbar"><div class="pn-brand">${esc(t("brand"))}</div>${I.switchHtml()}</div>
       <div class="pn-head">
         <div>
-          <h1 class="pn-title">${esc(ev.title || "Etkinlik")}</h1>
-          <div class="pn-sub pn-print-only">Rapor tarihi: ${esc(fmtDate(new Date().toISOString()))}</div>
-          <div class="pn-sub pn-noprint">Son güncelleme: ${esc(fmtDate(new Date(state.loadedAt).toISOString()))}</div>
+          <h1 class="pn-title">${esc(ev.title || t("untitledEvent"))}</h1>
+          <div class="pn-sub pn-print-only">${esc(t("reportDate", { d: fmtDate(new Date().toISOString()) }))}</div>
+          <div class="pn-sub pn-noprint">${esc(t("lastUpdate", { d: fmtDate(new Date(state.loadedAt).toISOString()) }))}</div>
         </div>
         <div class="pn-head-actions">
-          <span class="pn-pill ${ev.is_open ? "open" : "closed"}">${ev.is_open ? "● Yanıtlara açık" : "● Yanıtlara kapalı"}</span>
-          <button class="pn-btn" data-toggle-open>${ev.is_open ? "Formu kapat" : "Formu aç"}</button>
-          <button class="pn-btn" data-refresh>↻ Yenile</button>
+          <span class="pn-pill ${ev.is_open ? "open" : "closed"}">${esc(t(ev.is_open ? "pillOpen" : "pillClosed"))}</span>
+          <button class="pn-btn" data-toggle-open>${esc(t(ev.is_open ? "closeForm" : "openForm"))}</button>
+          <button class="pn-btn" data-refresh>${esc(t("refresh"))}</button>
         </div>
       </div>
       ${inviteShareHTML(ev)}
-      ${dupCount ? `<div class="pn-alert">⚠ ${dupCount} isim birden fazla kez yanıt vermiş görünüyor. Tabloda <b>Olası tekrar</b> etiketiyle işaretlendi; gerekirse ayrıntıdan silebilirsiniz.</div>` : ""}
+      ${dupCount ? `<div class="pn-alert">${t("dupAlert", { n: dupCount })}</div>` : ""}
       <div class="pn-cards">
         ${card("total", "", s.total)}
         ${att ? card("yes", "yes", s.yes) : ""}
@@ -254,30 +261,30 @@
       </div>
       <div class="pn-cards-foot pn-noprint">
         ${state.editingLabels
-          ? `<button class="pn-link" data-labels-cancel>Vazgeç</button><button class="pn-btn primary" data-labels-save>İsimleri kaydet</button>`
-          : `<button class="pn-link" data-labels-edit>Kart isimlerini düzenle</button>`}
+          ? `<button class="pn-link" data-labels-cancel>${esc(t("cancel"))}</button><button class="pn-btn primary" data-labels-save>${esc(t("labelsSave"))}</button>`
+          : `<button class="pn-link" data-labels-edit>${esc(t("labelsEdit"))}</button>`}
       </div>
       <div class="pn-tabs" role="tablist">
-        <button class="pn-tab" role="tab" data-tab="responses" aria-selected="${state.tab === "responses"}">Yanıtlar</button>
-        <button class="pn-tab" role="tab" data-tab="people" aria-selected="${state.tab === "people"}">Kişi Listesi</button>
-        <button class="pn-tab" role="tab" data-tab="charts" aria-selected="${state.tab === "charts"}">Grafikler</button>
-        <button class="pn-tab" role="tab" data-tab="seating" aria-selected="${state.tab === "seating"}">Yerleşim</button>
+        <button class="pn-tab" role="tab" data-tab="responses" aria-selected="${state.tab === "responses"}">${esc(t("tabResponses"))}</button>
+        <button class="pn-tab" role="tab" data-tab="people" aria-selected="${state.tab === "people"}">${esc(t("tabPeople"))}</button>
+        <button class="pn-tab" role="tab" data-tab="charts" aria-selected="${state.tab === "charts"}">${esc(t("tabCharts"))}</button>
+        <button class="pn-tab" role="tab" data-tab="seating" aria-selected="${state.tab === "seating"}">${esc(t("tabSeating"))}</button>
       </div>
       <div class="pn-toolbar">
-        <input class="pn-search" type="search" placeholder="İsim veya cevap ara..." data-search value="${esc(state.search)}">
-        ${att && state.tab !== "seating" ? `<div class="pn-seg" role="group" aria-label="Durum">
-          ${[["all", "Tümü"], ["yes", L.yes], ["no", L.no]].map(([v, t]) => `<button data-status="${v}" aria-pressed="${state.status === v}">${esc(t)}</button>`).join("")}
+        <input class="pn-search" type="search" placeholder="${esc(t("searchPh"))}" data-search value="${esc(state.search)}">
+        ${att && state.tab !== "seating" ? `<div class="pn-seg" role="group" aria-label="${esc(t("statusAria"))}">
+          ${[["all", t("all")], ["yes", L.yes], ["no", L.no]].map(([v, t]) => `<button data-status="${v}" aria-pressed="${state.status === v}">${esc(t)}</button>`).join("")}
         </div>` : ""}
       </div>
       <div class="pn-filters" data-filters></div>
       <p class="pn-count" data-count></p>
       <div data-body></div>
       <div class="pn-export">${state.tab === "seating" ? `
-        <button class="pn-btn" data-export="seating">⬇ Excel — Masa listesi</button>
-        <button class="pn-btn" data-print>🖨 Masa listesini yazdır / PDF</button>` : `
-        <button class="pn-btn" data-export="responses">⬇ Excel — Yanıtlar</button>
-        <button class="pn-btn" data-export="people">⬇ Excel — Kişi listesi</button>
-        <button class="pn-btn" data-print>🖨 Yazdır / PDF</button>`}
+        <button class="pn-btn" data-export="seating">${esc(t("exSeating"))}</button>
+        <button class="pn-btn" data-print>${esc(t("printSeating"))}</button>` : `
+        <button class="pn-btn" data-export="responses">${esc(t("exResponses"))}</button>
+        <button class="pn-btn" data-export="people">${esc(t("exPeople"))}</button>
+        <button class="pn-btn" data-print>${esc(t("print"))}</button>`}
       </div>
     `;
 
@@ -302,11 +309,11 @@
     const box = root.querySelector("[data-filters]");
     const qs = questions().filter(q => q.role !== "attendance");
     box.innerHTML = state.filters.map((f, i) =>
-      `<span class="pn-chip">${esc(filterLabel(f))}<button data-rm-filter="${i}" aria-label="Filtreyi kaldır">✕</button></span>`).join("") +
+      `<span class="pn-chip">${esc(filterLabel(f))}<button data-rm-filter="${i}" aria-label="${esc(t("removeFilter"))}">✕</button></span>`).join("") +
       (qs.length ? `<span class="pn-addfilter">
-        <select data-f-q aria-label="Soruya göre filtrele"><option value="">+ Soruya göre filtrele</option>
-          ${qs.map(q => `<option value="${esc(q.id)}">${esc(q.label || "(başlıksız soru)")}</option>`).join("")}</select>
-        <select data-f-v hidden aria-label="Cevap"></select>
+        <select data-f-q aria-label="${esc(t("filterByQAria"))}"><option value="">${esc(t("filterByQ"))}</option>
+          ${qs.map(q => `<option value="${esc(q.id)}">${esc(q.label || t("untitledQ"))}</option>`).join("")}</select>
+        <select data-f-v hidden aria-label="${esc(t("answerAria"))}"></select>
       </span>` : "");
     box.querySelectorAll("[data-rm-filter]").forEach(b => b.addEventListener("click", () => {
       state.filters.splice(parseInt(b.getAttribute("data-rm-filter"), 10), 1); renderBody();
@@ -318,9 +325,9 @@
       const q = questions().find(x => x.id === selQ.value);
       if (!q) { selV.hidden = true; return; }
       const choices = filterChoices(q);
-      selV.innerHTML = `<option value="">Cevap seçin</option>` +
+      selV.innerHTML = `<option value="">${esc(t("chooseAnswer"))}</option>` +
         choices.map(c => `<option value="eq:${esc(c.value)}">${esc(c.label)}</option>`).join("") +
-        `<option value="answered">Yanıtlayanlar</option><option value="empty">Boş bırakanlar</option>`;
+        `<option value="answered">${esc(t("fAnswered"))}</option><option value="empty">${esc(t("fEmpty"))}</option>`;
       selV.hidden = false;
       selV.focus();
     });
@@ -340,15 +347,15 @@
     const people = list.filter(r => r.attending !== false).reduce((n, r) => n + (r.party_size || 0), 0);
     const narrowed = list.length !== responses().length;
     root.querySelector("[data-count]").textContent =
-      `${list.length} yanıt · ${people} kişi` + (narrowed ? ` (toplam ${responses().length} yanıttan süzüldü)` : "");
+      t("countLine", { n: list.length, p: people }) + (narrowed ? t("countNarrowed", { t: responses().length }) : "");
     const body = root.querySelector("[data-body]");
 
     if (!responses().length) {
-      body.innerHTML = `<div class="pn-empty">Henüz yanıt yok. Davetli linkini paylaştığınızda yanıtlar burada görünecek.</div>`;
+      body.innerHTML = `<div class="pn-empty">${esc(t("noResponses"))}</div>`;
       return;
     }
     if (!list.length) {
-      body.innerHTML = `<div class="pn-empty">Bu arama/filtreyle eşleşen yanıt yok.</div>`;
+      body.innerHTML = `<div class="pn-empty">${esc(t("noMatch"))}</div>`;
       return;
     }
     if (state.tab === "people") { renderPeople(body, list); return; }
@@ -357,15 +364,15 @@
     const cols = columns();
     const dup = duplicates();
     const badges = (r) =>
-      (r.update_count > 0 ? `<span class="pn-badge upd" title="Son güncelleme: ${esc(fmtDate(r.updated_at))}">Güncellendi</span>` : "") +
-      (dup[norm(r.name)] > 1 ? `<span class="pn-badge dup">Olası tekrar</span>` : "");
+      (r.update_count > 0 ? `<span class="pn-badge upd" title="${esc(t("lastUpdate", { d: fmtDate(r.updated_at) }))}">${esc(t("badgeUpdated"))}</span>` : "") +
+      (dup[norm(r.name)] > 1 ? `<span class="pn-badge dup">${esc(t("badgeDup"))}</span>` : "");
 
     body.innerHTML = `
       <div class="pn-tablewrap"><table class="pn-table">
         <thead><tr>
-          <th>Ad Soyad</th><th>Durum</th><th>Kişi</th>
+          <th>${esc(t("thName"))}</th><th>${esc(t("thStatus"))}</th><th>${esc(t("thGuests"))}</th>
           ${cols.map(c => `<th>${esc(c.label)}</th>`).join("")}
-          <th>Diğer katılımcılar</th><th>Yanıt</th>
+          <th>${esc(t("thCompanions"))}</th><th>${esc(t("thResponded"))}</th>
         </tr></thead>
         <tbody>${list.map(r => `
           <tr data-rid="${esc(r.id)}">
@@ -373,15 +380,15 @@
             <td class="pn-status ${statusOf(r)}">${esc(statusText(r))}</td>
             <td>${r.attending === false ? "—" : esc(r.party_size)}</td>
             ${cols.map(c => `<td>${esc(answerText(r, c.id)) || '<span class="pn-muted">—</span>'}</td>`).join("")}
-            <td>${companions(r).map(a => esc(a.name || "İsimsiz")).join(", ") || '<span class="pn-muted">—</span>'}</td>
+            <td>${companions(r).map(a => esc(a.name || t("unnamed"))).join(", ") || '<span class="pn-muted">—</span>'}</td>
             <td class="pn-muted" style="white-space:nowrap">${esc(fmtDate(r.updated_at))}</td>
           </tr>`).join("")}
         </tbody></table></div>
       <div class="pn-list">${list.map(r => `
         <div class="pn-item" data-rid="${esc(r.id)}">
           <div class="pn-item-top"><span class="pn-name">${esc(r.name)}${badges(r)}</span>
-            <span class="pn-status ${statusOf(r)}">${esc(statusText(r))}${r.attending === false ? "" : " · " + esc(r.party_size) + " kişi"}</span></div>
-          ${companions(r).length ? `<div class="pn-item-meta">+ ${companions(r).map(a => esc(a.name || "İsimsiz")).join(", ")}</div>` : ""}
+            <span class="pn-status ${statusOf(r)}">${esc(statusText(r))}${r.attending === false ? "" : " · " + esc(t("guestsN", { n: r.party_size }))}</span></div>
+          ${companions(r).length ? `<div class="pn-item-meta">+ ${companions(r).map(a => esc(a.name || t("unnamed"))).join(", ")}</div>` : ""}
           <div class="pn-item-meta">${cols.filter(c => answerText(r, c.id)).slice(0, 3).map(c => `${esc(c.label)}: <b>${esc(answerText(r, c.id))}</b>`).join(" · ")}</div>
         </div>`).join("")}
       </div>`;
@@ -390,7 +397,7 @@
 
   /* FAZ C: grafikler (panel-charts.js). Arama ve filtrelere uyar. */
   function renderCharts(body, list) {
-    if (!global.SeozPanelCharts) { body.innerHTML = `<div class="pn-empty">Grafikler yüklenemedi.</div>`; return; }
+    if (!global.SeozPanelCharts) { body.innerHTML = `<div class="pn-empty">${esc(t("chartsFail"))}</div>`; return; }
     global.SeozPanelCharts.render(body, {
       questions: questions(),
       list: list,
@@ -426,8 +433,8 @@
   }
   function renderSeating(body) {
     const c = seatingCtx();
-    root.querySelector("[data-count]").textContent = c.narrowed ? "Arama ve filtreler yalnızca Yerleştirilmemiş listesini süzer; masalar her zaman tam görünür." : "";
-    if (!global.SeozPanelSeating) { body.innerHTML = `<div class="pn-empty">Yerleşim yüklenemedi.</div>`; return; }
+    root.querySelector("[data-count]").textContent = c.narrowed ? t("seatingNarrowed") : "";
+    if (!global.SeozPanelSeating) { body.innerHTML = `<div class="pn-empty">${esc(t("seatingFail"))}</div>`; return; }
     global.SeozPanelSeating.render(body, c);
   }
   function seatOf(attendeeId) {
@@ -445,12 +452,12 @@
 
   function renderPeople(body, list) {
     const groups = list.filter(r => r.attending !== false);
-    if (!groups.length) { body.innerHTML = `<div class="pn-empty">Bu süzgeçte gelecek kişi yok.</div>`; return; }
+    if (!groups.length) { body.innerHTML = `<div class="pn-empty">${esc(t("noPeople"))}</div>`; return; }
     body.innerHTML = `<div class="pn-people">${groups.map(r => {
       const ppl = (r.attendees || []).length ? r.attendees : [{ position: 0, name: r.name }];
-      return `<div class="pn-group"><h4>${esc(r.name)} <span class="pn-muted">· ${esc(r.party_size)} kişi</span></h4>
-        <ol>${ppl.map(a => { const t = a.id ? seatOf(a.id) : "";
-          return `<li>${esc(a.name || "İsimsiz katılımcı")}${a.position === 0 ? ' <span class="pn-muted">(yanıtlayan)</span>' : ""}${t ? ` <span class="pn-seat-tag">${esc(t)}</span>` : ""}</li>`; }).join("")}</ol></div>`;
+      return `<div class="pn-group"><h4>${esc(r.name)} <span class="pn-muted">· ${esc(t("guestsN", { n: r.party_size }))}</span></h4>
+        <ol>${ppl.map(a => { const seatName = a.id ? seatOf(a.id) : "";
+          return `<li>${esc(a.name || t("unnamedGuest"))}${a.position === 0 ? ` <span class="pn-muted">${esc(t("respondent"))}</span>` : ""}${seatName ? ` <span class="pn-seat-tag">${esc(seatName)}</span>` : ""}</li>`; }).join("")}</ol></div>`;
     }).join("")}</div>`;
   }
 
@@ -460,32 +467,32 @@
     const qs = questions();
     const rows = [];
     qs.forEach(q => { const t = answerText(r, q.id); if (t) rows.push([q.label, t]); });
-    Object.keys(r.answers || {}).forEach(k => { if (!qs.some(q => q.id === k)) rows.push([(r.answers[k].q || "Soru") + " (kaldırılmış soru)", answerText(r, k)]); });
+    Object.keys(r.answers || {}).forEach(k => { if (!qs.some(q => q.id === k)) rows.push([t("removedQ", { q: r.answers[k].q || t("question") }), answerText(r, k)]); });
     const bg = document.createElement("div");
     bg.className = "pn-modal-bg";
-    bg.innerHTML = `<div class="pn-modal" role="dialog" aria-modal="true" aria-label="Yanıt ayrıntısı">
+    bg.innerHTML = `<div class="pn-modal" role="dialog" aria-modal="true" aria-label="${esc(t("detailAria"))}">
       <h3>${esc(r.name)}</h3>
-      <div class="pn-muted">${esc(statusText(r))}${r.attending === false ? "" : " · " + esc(r.party_size) + " kişi"}</div>
+      <div class="pn-muted">${esc(statusText(r))}${r.attending === false ? "" : " · " + esc(t("guestsN", { n: r.party_size }))}</div>
       <dl>
         ${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}
-        ${companions(r).length ? `<dt>Diğer katılımcılar</dt><dd>${companions(r).map(a => esc(a.name || "İsimsiz")).join("\n")}</dd>` : ""}
-        <dt>İlk yanıt</dt><dd>${esc(fmtDate(r.created_at))}</dd>
-        ${r.update_count > 0 ? `<dt>Son güncelleme</dt><dd>${esc(fmtDate(r.updated_at))} (${esc(r.update_count)} kez güncellendi)</dd>` : ""}
-        ${r.consent ? `<dt>Onay</dt><dd>Onay metni işaretlendi</dd>` : ""}
+        ${companions(r).length ? `<dt>${esc(t("thCompanions"))}</dt><dd>${companions(r).map(a => esc(a.name || t("unnamed"))).join("\n")}</dd>` : ""}
+        <dt>${esc(t("firstResponse"))}</dt><dd>${esc(fmtDate(r.created_at))}</dd>
+        ${r.update_count > 0 ? `<dt>${esc(t("csvLastUpdate"))}</dt><dd>${esc(fmtDate(r.updated_at))} ${esc(t("updatedTimes", { n: r.update_count }))}</dd>` : ""}
+        ${r.consent ? `<dt>${esc(t("consent"))}</dt><dd>${esc(t("consentChecked"))}</dd>` : ""}
       </dl>
       <div class="pn-modal-actions">
-        <button class="pn-btn danger" data-del>Yanıtı sil</button>
-        <button class="pn-btn primary" data-close>Kapat</button>
+        <button class="pn-btn danger" data-del>${esc(t("deleteResponse"))}</button>
+        <button class="pn-btn primary" data-close>${esc(t("close"))}</button>
       </div></div>`;
     document.body.appendChild(bg);
     const close = () => bg.remove();
     bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
     bg.querySelector("[data-close]").addEventListener("click", close);
     bg.querySelector("[data-del]").addEventListener("click", async () => {
-      if (!confirm(`"${r.name}" yanıtı kalıcı olarak silinsin mi?\n\nBu işlem geri alınamaz. Genellikle yalnızca mükerrer kayıtlar için kullanılır.`)) return;
+      if (!confirm(t("confirmDeleteResponse", { name: r.name }))) return;
       try {
         await rpc("rsvp_panel_delete_response", { p_response_id: r.id });
-        close(); toast("Yanıt silindi."); load(false);
+        close(); toast(t("responseDeleted")); load(false);
       } catch (e) { handleActionError(e); }
     });
   }
@@ -493,29 +500,29 @@
   /* ---------------- işlemler ---------------- */
   async function toggleOpen() {
     const ev = state.data.event;
-    const msg = ev.is_open
-      ? "Form yanıtlara kapatılsın mı?\n\nDavetliler yeni yanıt gönderemez ve mevcut yanıtlarını değiştiremez. İstediğiniz zaman tekrar açabilirsiniz."
-      : "Form tekrar yanıtlara açılsın mı?";
+    const msg = t(ev.is_open ? "confirmCloseForm" : "confirmOpenForm");
     if (!confirm(msg)) return;
     try {
       await rpc("rsvp_panel_set_open", { p_open: !ev.is_open });
-      toast(ev.is_open ? "Form kapatıldı." : "Form açıldı.");
+      toast(t(ev.is_open ? "formClosed" : "formOpened"));
       load(false);
     } catch (e) { handleActionError(e); }
   }
 
   async function saveLabels() {
-    const L = labels();
+    // Kayıt biçimi eskisiyle aynı: dört ad birlikte; varsayılan ad (TR ya da EN) Türkçe varsayılan olarak saklanır.
+    const S = storedLabels(), L = {};
+    LABEL_KEYS.forEach(k => { L[k] = I.storeLabel(k, S[k]); });
     root.querySelectorAll("[data-label-key]").forEach(inp => {
-      const v = inp.value.trim();
-      L[inp.getAttribute("data-label-key")] = v || DEFAULT_LABELS[inp.getAttribute("data-label-key")];
+      const k = inp.getAttribute("data-label-key");
+      L[k] = I.storeLabel(k, inp.value.trim());
     });
     const settings = Object.assign({}, state.data.event.settings || {}, { labels: L });
     try {
       await rpc("rsvp_panel_save_settings", { p_settings: settings });
       state.data.event.settings = settings;
       state.editingLabels = false;
-      toast("Kart isimleri kaydedildi.");
+      toast(t("labelsSaved"));
       renderShell();
     } catch (e) { handleActionError(e); }
   }
@@ -528,36 +535,36 @@
     const base = SeozPanelExport.safeName(ev.title);
     if (kind === "seating") {
       const n = global.SeozPanelSeating ? global.SeozPanelSeating.exportCsv(seatingCtx()) : 0;
-      toast(`Excel dosyası indirildi (${n} kişi).`);
+      toast(t("excelGuests", { n }));
       return;
     }
     if (kind === "responses") {
-      const rows = [["Ad Soyad", "Durum", "Kişi sayısı"].concat(cols.map(c => c.label), ["Diğer katılımcılar", "İlk yanıt", "Son güncelleme", "Güncelleme sayısı"])];
+      const rows = [[t("thName"), t("thStatus"), t("csvPartySize")].concat(cols.map(c => c.label), [t("thCompanions"), t("firstResponse"), t("csvLastUpdate"), t("csvUpdateCount")])];
       list.forEach(r => rows.push([r.name, statusText(r), r.attending === false ? 0 : r.party_size]
-        .concat(cols.map(c => answerText(r, c.id)), [companions(r).map(a => a.name || "İsimsiz").join(", "), fmtDate(r.created_at), fmtDate(r.updated_at), r.update_count])));
-      SeozPanelExport.download(`${base}-yanitlar-${stamp}.csv`, rows);
+        .concat(cols.map(c => answerText(r, c.id)), [companions(r).map(a => a.name || t("unnamed")).join(", "), fmtDate(r.created_at), fmtDate(r.updated_at), r.update_count])));
+      SeozPanelExport.download(`${base}-${t("fileResponses")}-${stamp}.csv`, rows);
     } else {
       const withSeat = state.seating && !state.seating.error && state.seating.areas.length > 0;
-      const rows = [["Sıra", "Ad Soyad", "Grup (yanıtlayan)", "Gruptaki sıra"].concat(withSeat ? ["Masa / Alan"] : [], cols.map(c => c.label))];
+      const rows = [[t("csvNo"), t("thName"), t("csvParty"), t("csvPartyPos")].concat(withSeat ? [t("csvArea")] : [], cols.map(c => c.label))];
       let n = 0;
       list.filter(r => r.attending !== false).forEach(r => {
         const ppl = (r.attendees || []).length ? r.attendees : [{ position: 0, name: r.name }];
-        ppl.forEach(a => { n++; rows.push([n, a.name || "İsimsiz katılımcı", r.name, a.position + 1].concat(withSeat ? [(a.id && seatOf(a.id)) || "Yerleştirilmemiş"] : [], cols.map(c => answerText(r, c.id)))); });
+        ppl.forEach(a => { n++; rows.push([n, a.name || t("unnamedGuest"), r.name, a.position + 1].concat(withSeat ? [(a.id && seatOf(a.id)) || t("statUnplaced")] : [], cols.map(c => answerText(r, c.id)))); });
       });
-      SeozPanelExport.download(`${base}-kisi-listesi-${stamp}.csv`, rows);
+      SeozPanelExport.download(`${base}-${t("filePeople")}-${stamp}.csv`, rows);
     }
-    toast(`Excel dosyası indirildi (${list.length} yanıt).`);
+    toast(t("excelResponses", { n: list.length }));
   }
 
   function handleActionError(e) {
-    if (e && e.code === "invalid_panel") return showMessage("Panel linki geçersiz", "Bu panel linki geçersiz ya da yenilenmiş. Lütfen Studio SEOZ ile iletişime geçin.");
-    if (e && e.code === "network") return alert("Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.");
-    alert("İşlem yapılamadı: " + ((e && e.message) || "bilinmeyen hata"));
+    if (e && e.code === "invalid_panel") return showMessage("invalidTitle", "invalidText");
+    if (e && e.code === "network") return alert(t("networkAlert"));
+    alert(t("actionFailed", { m: (e && e.message) || t("unknownError") }));
   }
 
   /* ---------------- yükleme ---------------- */
   async function load(firstTime) {
-    if (firstTime && !state.data) root.innerHTML = `<div class="pn-loading">Panel yükleniyor...</div>`;
+    if (firstTime && !state.data) { lastScreen = null; root.innerHTML = `<div class="pn-loading">${esc(t("loading"))}</div>`; }
     try {
       const [d, seating] = await Promise.all([rpc("rsvp_panel_get", {}), loadSeating()]);
       state.data = d;
@@ -566,20 +573,39 @@
       // Filtrelerde artık var olmayan soru kalmasın
       state.filters = state.filters.filter(f => questions().some(q => q.id === f.qid));
       const ev = d.event;
-      document.title = (ev.title ? ev.title + " — " : "") + "Katılımcı Paneli";
+      setDocTitle();
       renderShell();
     } catch (e) {
       if (e.code === "pin_required") return showPinForm(state.pin != null);
-      if (e.code === "invalid_panel") return showMessage("Panel linki geçersiz", "Bu panel linki geçersiz ya da yenilenmiş. Lütfen Studio SEOZ ile iletişime geçin.");
-      if (e.code === "network") return showMessage("Bağlantı kurulamadı", "İnternet bağlantınızı kontrol edip sayfayı yenileyin.");
-      showMessage("Panel açılamadı", "Lütfen daha sonra tekrar deneyin.");
+      if (e.code === "invalid_panel") return showMessage("invalidTitle", "invalidText");
+      if (e.code === "network") return showMessage("netTitle", "netText");
+      showMessage("failTitle", "failText");
       console.error("[Studio SEOZ] Panel yüklenemedi:", e);
     }
   }
 
   function showMissing() {
-    showMessage("Panel linki eksik", "Bu sayfa yalnızca size özel panel linkiyle açılır. Lütfen size gönderilen linki kullanın.");
+    showMessage("missingTitle", "missingText");
   }
+
+  function setDocTitle() {
+    const ev = state.data && state.data.event;
+    document.title = (ev && ev.title ? ev.title + " — " : "") + t("docTitle") + " — Studio SEOZ";
+  }
+
+  /* DİL DEĞİŞİNCE: yalnızca ekran yeni dilde yeniden çizilir. Veri yeniden
+     yüklenmez, hiçbir kayıt gönderilmez; sekme, arama, filtre ve seçimler korunur. */
+  I.onChange(() => {
+    setDocTitle();
+    document.querySelectorAll(".pn-toast").forEach(x => x.remove());   // eski dildeki bildirim kalmasın
+    if (state.data) {
+      const y = global.scrollY;
+      const q = document.activeElement && document.activeElement.matches && document.activeElement.matches("[data-search]");
+      renderShell();
+      global.scrollTo(0, y);
+      if (q) { const s = root.querySelector("[data-search]"); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }
+    } else if (lastScreen) lastScreen();
+  });
 
   function boot() {
     // Adresteki anahtar değişirse (ör. yeni link yapıştırıldı) eski veriler

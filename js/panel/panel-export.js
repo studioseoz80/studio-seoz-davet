@@ -2,7 +2,8 @@
    STUDIO SEOZ — panel/panel-export.js  (MÜŞTERİ PANELİ — DIŞA AKTARMA)
    -----------------------------------------------------------------------------
    Excel'in doğrudan açabildiği CSV üretir. Dış kütüphane YOK.
-   - Türkçe Excel için ayırıcı ";" ve dosya başında UTF-8 BOM (ş, ğ, ı bozulmaz).
+   - Türkçe Excel için ayırıcı ";", İngilizce (ABD) Excel için "," (panel dili
+     İngilizceyse); dosya başında UTF-8 BOM (ş, ğ, ı bozulmaz).
    - Güvenlik: "=", "+", "-", "@" ile başlayan hücrelerin başına ' eklenir
      (Excel formül enjeksiyonuna karşı — misafir metinleri dışarıdan gelir).
    Yazdırma/PDF için tarayıcının kendi "Yazdır → PDF olarak kaydet" özelliği
@@ -15,12 +16,14 @@
   function cell(v) {
     let s = v == null ? "" : String(v);
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    if (/[";\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    if (/[";,\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   }
 
-  function toCsv(rows) {
-    return "﻿" + rows.map(r => r.map(cell).join(";")).join("\r\n");
+  const sep = () => (global.SeozPanelI18n && global.SeozPanelI18n.lang() === "en" ? "," : ";");
+  function toCsv(rows, separator) {
+    const d = separator || sep();
+    return "\ufeff" + rows.map(r => r.map(cell).join(d)).join("\r\n");
   }
 
   function download(filename, rows) {
@@ -35,10 +38,11 @@
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
+  const fallback = () => (global.SeozPanelI18n ? global.SeozPanelI18n.t("fileEvent") : "etkinlik");
   function safeName(s) {
-    return String(s || "etkinlik").toLowerCase()
+    return String(s || fallback()).toLowerCase()
       .replace(/ç/g, "c").replace(/ğ/g, "g").replace(/ı/g, "i").replace(/ö/g, "o").replace(/ş/g, "s").replace(/ü/g, "u")
-      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "etkinlik";
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || fallback();
   }
 
   global.SeozPanelExport = { toCsv, download, safeName, cell };
