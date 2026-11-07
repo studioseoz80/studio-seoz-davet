@@ -37,7 +37,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&a
 const clip = (s, n) => { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s; };
 const isHttp = u => /^https:\/\//i.test(String(u || ""));
 
-async function supabaseConfig(env, request) {
+export async function supabaseConfig(env, request) {
   if (CFG) return CFG;
   if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) return (CFG = { url: env.SUPABASE_URL, key: env.SUPABASE_ANON_KEY });
   // Tarayıcının kullandığı yapılandırma dosyası tek kaynak: kod iki yerde tutulmaz.

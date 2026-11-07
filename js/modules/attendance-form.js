@@ -704,9 +704,30 @@
     const prevHtml = html.style.overflow, prevBody = document.body.style.overflow;
     const prevFocus = document.activeElement;
     function onKey(e) { if (e.key === "Escape") close(); }
+    /* TELEFONUN GERİ TUŞU: Form açılırken tarayıcı geçmişine bir adım eklenir.
+       Geri tuşu (ya da iPhone'da kenardan kaydırma) sayfadan çıkmak yerine bu
+       adımı geri alır → form, X ile kapanmış gibi kapanır; davetiye kaldığı
+       yerde kalır, zarf/açılış yeniden başlamaz. X / boşluğa dokunma / Esc ile
+       kapanınca eklenen adım geri alınır; geçmişte fazladan adım kalmaz.
+       Editörde (çift tıklamayla açılan önizleme) geçmişe dokunulmaz. */
+    let histStep = false;
+    if (mode !== "edit" && global.history && typeof global.history.pushState === "function") {
+      try {
+        const base = (global.history.state && typeof global.history.state === "object") ? global.history.state : {};
+        global.history.pushState(Object.assign({}, base, { seozAfModal: 1 }), "");
+        histStep = true;
+      } catch (e) { histStep = false; }
+    }
+    function onPop() { if (overlay.isConnected) { histStep = false; close(); } }
+    if (histStep) global.addEventListener("popstate", onPop);
     function close() {
       if (!overlay.isConnected) return;
       overlay.remove();
+      global.removeEventListener("popstate", onPop);
+      if (histStep) {
+        histStep = false;
+        try { if (global.history.state && global.history.state.seozAfModal) global.history.back(); } catch (e) { /* önemsiz */ }
+      }
       html.style.overflow = prevHtml; document.body.style.overflow = prevBody;
       document.removeEventListener("keydown", onKey);
       st.modal = null; st.closeModal = null;

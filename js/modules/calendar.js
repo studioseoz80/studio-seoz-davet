@@ -5,10 +5,16 @@
    "Takvime Ekle" butonuna basılınca küçük bir alt seçim alanı açılır:
      1) Google Takvim            → takvim şablon bağlantısı yeni sekmede açılır
                                    (internet YALNIZCA bu tıklamada gerekir)
-     2) Apple / Diğer Takvimler  → tarayıcıda Blob ile standart .ics dosyası
-                                   üretilip indirilir (Outlook dahil tüm
-                                   takvim uygulamaları açabilir). Sunucu veya
-                                   harici kütüphane GEREKTİRMEZ.
+     2) Apple / Diğer Takvimler  → standart .ics dosyası:
+        - iPhone/iPad'de, yayınlanmış davetiyede: sitenin kendi adresi
+          /takvim/<slug>/<katman>.ics (functions/takvim/...) aynı sekmede
+          açılır → Safari "Takvime Ekle" penceresini gösterir, davetiye
+          sayfası yerinde kalır. (iPhone, tarayıcıda üretilen blob .ics'i
+          takvime eklemez; dosyayı sessizce İndirilenler'e kaydeder.)
+        - Diğer cihazlar ve editör önizlemesi: tarayıcıda Blob ile üretilip
+          indirilir (Outlook dahil tüm takvim uygulamaları açabilir).
+        - Instagram/Facebook gibi uygulama içi tarayıcılar takvim dosyası
+          açamaz: misafire "tarayıcıda aç" yönlendirmesi gösterilir.
 
    Diğer modüller GİBİ kendi kendini registerModule() ile tanıtır; hiçbir
    modülün ayarlarını okumaz/değiştirmez. Konum, Geri Sayım vb. ile
@@ -277,6 +283,44 @@
     setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
   }
 
+  /* ---------------- Apple Takvim (iPhone) ---------------- */
+
+  function isIOS() {
+    const n = global.navigator || {}, ua = n.userAgent || "";
+    // iPadOS 13+ masaüstü Safari gibi görünür: dokunmatik Mac = iPad
+    return /iPad|iPhone|iPod/.test(ua) || (n.platform === "MacIntel" && n.maxTouchPoints > 1);
+  }
+  function inAppBrowser() {
+    return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Messenger|Line\/|LinkedInApp|Snapchat|musical_ly|BytedanceWebview|TikTok/i.test((global.navigator && global.navigator.userAgent) || "");
+  }
+  function serverIcsUrl(ctx) {
+    const slug = global.SeozPublishedSlug;
+    if (!slug || !ctx || !ctx.layerId) return null;
+    return "/takvim/" + encodeURIComponent(slug) + "/" + encodeURIComponent(ctx.layerId) + ".ics";
+  }
+  /* true dönerse seçim alanı kapanır; false → açık kalır (uyarı gösterildi). */
+  function addToApple(s, mode, ctx, note) {
+    if (mode !== "edit" && inAppBrowser()) {
+      note.textContent = "Bu uygulamanın içindeki tarayıcı takvim dosyasını açamıyor. Sağ üstteki ••• menüsünden “Tarayıcıda aç”ı (Safari/Chrome) seçip tekrar deneyin ya da Google Takvim'i kullanın.";
+      note.style.display = "block";
+      return false;
+    }
+    const url = mode === "view" && isIOS() ? serverIcsUrl(ctx) : null;
+    if (!url) { downloadIcs(s); return true; }
+    // Önce adres hazır mı bak (yoksa sayfa bir hata sayfasına gitmesin); değilse eski yönteme dön.
+    let done = false;
+    const fallback = () => { if (!done) { done = true; downloadIcs(s); } };
+    const timer = setTimeout(fallback, 4000);
+    fetch(url, { method: "HEAD", cache: "no-store" }).then(r => {
+      clearTimeout(timer);
+      if (done) return;
+      done = true;
+      if (r.ok && /text\/calendar/i.test(r.headers.get("content-type") || "")) global.location.href = url;
+      else downloadIcs(s);
+    }).catch(() => { clearTimeout(timer); fallback(); });
+    return true;
+  }
+
   /* ---------------- Görünüm ---------------- */
 
   function buttonBackground(s) {
@@ -288,7 +332,7 @@
      DEĞİL) — böylece canvas ne kadar küçültülürse küçültülsün dokunma
      alanları gerçek ekran boyutunda kalır, katman sınırlarına taşmaz ve
      sürükle-bırak etkileşimleriyle çakışmaz. Aynı anda tek alan açık kalır. */
-  function openSheet(s) {
+  function openSheet(s, mode, ctx) {
     const existing = document.querySelector("[data-seoz-calendar-sheet]");
     if (existing) existing.remove();
 
@@ -347,7 +391,7 @@
         color: primary ? s.textColor : "#1E2A22",
         padding: "10px 14px"
       });
-      b.addEventListener("click", () => { onClick(); close(); });
+      b.addEventListener("click", () => { if (onClick() !== false) close(); });
       return b;
     }
 
@@ -355,7 +399,12 @@
       const url = buildGoogleUrl(s);
       if (url) window.open(url, "_blank", "noopener");
     }));
-    sheet.appendChild(optionBtn("Apple / Diğer Takvimler", false, () => downloadIcs(s)));
+    const note = document.createElement("div");
+    note.setAttribute("role", "status");
+    note.setAttribute("data-seoz-calendar-note", "");
+    Object.assign(note.style, { display: "none", fontSize: "13px", lineHeight: "1.45", color: "#5C4A2A", background: "#F3ECDD", borderRadius: "10px", padding: "10px 12px" });
+    sheet.appendChild(optionBtn("Apple / Diğer Takvimler", false, () => addToApple(s, mode, ctx, note)));
+    sheet.appendChild(note);
 
     const cancel = document.createElement("button");
     cancel.type = "button";
@@ -408,7 +457,7 @@
       // Tıklama anındaki güncel ayarlarla çalışır; yalnızca BU modülün
       // kendi alanları kullanılır.
       if (!computeRange(s)) return;
-      openSheet(s);
+      openSheet(s, mode, ctx);
     });
     wrap.appendChild(btn);
     return wrap;
@@ -430,5 +479,5 @@
   });
 
   // Yalnızca test/araç kullanımı içindir — diğer dosyalar buna bağımlı değil.
-  global.SeozCalendar = { buildGoogleUrl, buildIcs, computeRange, wallToUtc, icsEscape };
+  global.SeozCalendar = { buildGoogleUrl, buildIcs, computeRange, wallToUtc, icsEscape, serverIcsUrl, isIOS, inAppBrowser };
 })(window);

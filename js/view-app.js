@@ -62,6 +62,9 @@
             showMessage("Davetiye bulunamadı veya henüz yayınlanmadı.");
             return;
           }
+          // Yayınlanmış davetiyenin adı: modüller sitenin kendi adreslerini kurarken kullanır
+          // (ör. iPhone'da Apple Takvim → /takvim/<slug>/<katman>.ics).
+          window.SeozPublishedSlug = slug;
           start(doc);
         })
         .catch(err => {
