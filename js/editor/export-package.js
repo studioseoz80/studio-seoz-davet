@@ -36,6 +36,7 @@
   const CORE_FILES = [
     "css/canvas.css",
     "js/core/document-model.js",
+    "js/core/invite-i18n.js",          // davetiye dili (TR/EN)
     "js/core/layout-engine.js",
     "js/core/blob-store.js",
     "js/core/renderer.js",
@@ -181,6 +182,7 @@
 <div id="stage"></div>
 <script type="application/json" id="seoz-doc-data">${json}</script>
 <script src="js/core/document-model.js"></script>
+<script src="js/core/invite-i18n.js"></script>
 <script src="js/core/layout-engine.js"></script>
 <script src="js/core/blob-store.js"></script>
 <script src="js/supabase-config.js"></script>

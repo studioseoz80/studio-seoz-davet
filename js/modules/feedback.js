@@ -26,6 +26,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     title: "Görüş Bildir",
@@ -154,7 +157,7 @@
     // Alan kimliği ayrı girilmemişse ad/iletişim mesajın sonuna eklenir —
     // böylece bilgi kaybolmaz.
     if (!s.fbFormNameFieldId && data.name) body.set(s.fbFormMessageFieldId, body.get(s.fbFormMessageFieldId) + `\n\nAd Soyad: ${data.name}`);
-    if (!s.fbFormContactFieldId && data.contact) body.set(s.fbFormMessageFieldId, body.get(s.fbFormMessageFieldId) + `\nİletişim: ${data.contact}`);
+    if (!s.fbFormContactFieldId && data.contact) body.set(s.fbFormMessageFieldId, body.get(s.fbFormMessageFieldId) + "\n" + L("İletişim: {c}", { c: data.contact }));
     return fetch(actionUrl, {
       method: "POST",
       mode: "no-cors",
@@ -325,7 +328,7 @@
     styleField(msg);
     msg.style.resize = "vertical";
     msg.style.minHeight = "110px";
-    wrap.appendChild(fieldBlock(s.messageLabel || "Mesajınız", msg));
+    wrap.appendChild(fieldBlock(s.messageLabel || L("Mesajınız"), msg));
 
     let nameInput = null;
     if (s.collectName !== "off") {
@@ -333,7 +336,7 @@
       nameInput.type = "text";
       nameInput.autocomplete = "name";
       styleField(nameInput);
-      wrap.appendChild(fieldBlock("Ad Soyad" + (s.collectName === "optional" ? " (isteğe bağlı)" : ""), nameInput));
+      wrap.appendChild(fieldBlock(L("Ad Soyad") + (s.collectName === "optional" ? L(" (isteğe bağlı)") : ""), nameInput));
     }
 
     let contactInput = null;
@@ -343,7 +346,7 @@
       contactInput.autocomplete = "email";
       contactInput.placeholder = "Telefon veya e-posta";
       styleField(contactInput);
-      wrap.appendChild(fieldBlock("İletişim" + (s.collectContact === "optional" ? " (isteğe bağlı)" : ""), contactInput));
+      wrap.appendChild(fieldBlock(L("İletişim") + (s.collectContact === "optional" ? L(" (isteğe bağlı)") : ""), contactInput));
     }
 
     let consentBox = null;
@@ -371,7 +374,7 @@
 
     const footer = document.createElement("div");
     Object.assign(footer.style, { display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" });
-    const submitBtn = primaryButton(s.submitButtonText || "Gönder");
+    const submitBtn = primaryButton(s.submitButtonText || L("Gönder"));
     const statusEl = document.createElement("div");
     statusEl.setAttribute("aria-live", "polite");
     Object.assign(statusEl.style, { fontSize: (fs - 2) + "px", textAlign: "center", minHeight: "1.3em" });
@@ -398,29 +401,29 @@
         name: nameInput ? nameInput.value.trim() : "",
         contact: contactInput ? contactInput.value.trim() : ""
       };
-      if (!data.message) return showStatus("Lütfen mesajınızı yazın.", true);
-      if (s.collectName === "required" && !data.name) return showStatus("Lütfen adınızı girin.", true);
-      if (s.collectContact === "required" && !data.contact) return showStatus("Lütfen iletişim bilginizi girin.", true);
-      if (consentBox && !consentBox.checked) return showStatus("Devam etmek için onay kutusunu işaretleyin.", true);
+      if (!data.message) return showStatus(L("Lütfen mesajınızı yazın."), true);
+      if (s.collectName === "required" && !data.name) return showStatus(L("Lütfen adınızı girin."), true);
+      if (s.collectContact === "required" && !data.contact) return showStatus(L("Lütfen iletişim bilginizi girin."), true);
+      if (consentBox && !consentBox.checked) return showStatus(L("Devam etmek için onay kutusunu işaretleyin."), true);
 
       if (trap.value) { submitted = true; lock(); showStatus(s.successMessage, false); return; }
 
       if (s.sendMethod === "whatsapp") {
-        if (!digits(s.fbWhatsappNumber)) return showStatus("WhatsApp numarası tanımlanmamış.", true);
+        if (!digits(s.fbWhatsappNumber)) return showStatus(L("WhatsApp numarası tanımlanmamış."), true);
         const lines = [];
         if (s.title) lines.push(`*${s.title}*`, "");
         lines.push(data.message);
         if (data.name) lines.push("", `Ad Soyad: ${data.name}`);
-        if (data.contact) lines.push(`İletişim: ${data.contact}`);
+        if (data.contact) lines.push(L("İletişim: {c}", { c: data.contact }));
         openUrl(`https://wa.me/${digits(s.fbWhatsappNumber)}?text=${encodeURIComponent(lines.join("\n"))}`);
         // Form kilitlenmez: WhatsApp'ta göndermeden kapatılırsa tekrar denenebilir.
-        return showStatus("WhatsApp açıldı. Mesajınızı iletmek için WhatsApp'ta Gönder'e dokunun.", false);
+        return showStatus(L("WhatsApp açıldı. Mesajınızı iletmek için WhatsApp'ta Gönder'e dokunun."), false);
       }
 
       submitted = true;
       submitBtn.disabled = true;
       submitBtn.style.opacity = ".6";
-      showStatus("Gönderiliyor...", false);
+      showStatus(L("Gönderiliyor..."), false);
 
       let job;
       if (s.sendMethod === "google-form") job = submitToGoogleForm(s, data);
@@ -433,7 +436,7 @@
           submitted = false;
           submitBtn.disabled = false;
           submitBtn.style.opacity = "1";
-          return showStatus("Gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin.", true);
+          return showStatus(L("Gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin."), true);
         }
         lock();
         showStatus(s.successMessage || DEFAULTS.successMessage, false);

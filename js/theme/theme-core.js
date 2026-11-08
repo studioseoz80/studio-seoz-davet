@@ -792,7 +792,7 @@ onmessage = e => { const m = e.data;
         const onTilt = e => { tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 30)); tiltY = Math.max(-1, Math.min(1, ((e.beta || 0) - 40) / 30)); onScroll(); };
         const start = () => { global.addEventListener("deviceorientation", onTilt); st.cleanups.push(() => global.removeEventListener("deviceorientation", onTilt)); };
         if (typeof DeviceOrientationEvent.requestPermission === "function") {
-          const btn = el("button", "th-tilt-btn"); btn.type = "button"; btn.textContent = "📱 Eğerek derinlik";
+          const btn = el("button", "th-tilt-btn"); btn.type = "button"; btn.textContent = global.SeozInviteI18n ? global.SeozInviteI18n.L("📱 Eğerek derinlik") : "📱 Eğerek derinlik";
           btn.addEventListener("click", () => { DeviceOrientationEvent.requestPermission().then(r => { if (r === "granted") start(); }).catch(() => {}).finally(() => btn.remove()); });
           document.body.appendChild(btn); st.cleanups.push(() => btn.remove());
         } else start();

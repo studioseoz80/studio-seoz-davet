@@ -33,6 +33,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     title: "",
@@ -182,7 +185,7 @@
     if (!r) return null;
     const params = [
       ["action", "TEMPLATE"],
-      ["text", s.title || "Etkinlik"],
+      ["text", s.title || L("Etkinlik")],
       ["dates", compact(wallParts(r.startWall)) + "/" + compact(wallParts(r.endWall))],
       ["ctz", s.timezone || DEFAULTS.timezone]
     ];
@@ -251,7 +254,7 @@
       "DTSTAMP:" + utcStamp(new Date()),
       "DTSTART:" + utcStamp(wallToUtc(r.startWall, tz)),
       "DTEND:" + utcStamp(wallToUtc(r.endWall, tz)),
-      "SUMMARY:" + icsEscape(s.title || "Etkinlik"),
+      "SUMMARY:" + icsEscape(s.title || L("Etkinlik")),
       "DESCRIPTION:" + icsEscape(s.description),
       "LOCATION:" + icsEscape(s.location),
       "END:VEVENT",
@@ -304,7 +307,7 @@
   /* true dönerse seçim alanı kapanır; false → açık kalır (uyarı gösterildi). */
   function addToApple(s, mode, ctx, note) {
     if (mode !== "edit" && inAppBrowser()) {
-      note.textContent = "Bu uygulamanın içindeki tarayıcı takvim dosyasını açamıyor. Sağ üstteki ••• menüsünden “Tarayıcıda aç”ı (Safari/Chrome) seçip tekrar deneyin ya da Google Takvim'i kullanın.";
+      note.textContent = L("Bu uygulamanın içindeki tarayıcı takvim dosyasını açamıyor. Sağ üstteki ••• menüsünden “Tarayıcıda aç”ı (Safari/Chrome) seçip tekrar deneyin ya da Google Takvim'i kullanın.");
       note.style.display = "block";
       return false;
     }
@@ -349,7 +352,7 @@
 
     const sheet = document.createElement("div");
     sheet.setAttribute("role", "dialog");
-    sheet.setAttribute("aria-label", s.buttonText || "Takvime Ekle");
+    sheet.setAttribute("aria-label", s.buttonText || L("Takvime Ekle"));
     Object.assign(sheet.style, {
       width: "100%", maxWidth: "420px", boxSizing: "border-box",
       background: "#FBF8F2", color: "#1E2A22",
@@ -361,7 +364,7 @@
     });
 
     const heading = document.createElement("div");
-    heading.textContent = s.buttonText || "Takvime Ekle";
+    heading.textContent = s.buttonText || L("Takvime Ekle");
     Object.assign(heading.style, {
       fontFamily: "'Cormorant Garamond', serif", fontSize: "20px",
       fontWeight: "600", textAlign: "center"
@@ -398,7 +401,7 @@
       return b;
     }
 
-    sheet.appendChild(optionBtn("Google Takvim", true, () => {
+    sheet.appendChild(optionBtn(L("Google Takvim"), true, () => {
       const url = buildGoogleUrl(s);
       if (url) window.open(url, "_blank", "noopener");
     }));
@@ -406,12 +409,12 @@
     note.setAttribute("role", "status");
     note.setAttribute("data-seoz-calendar-note", "");
     Object.assign(note.style, { display: "none", fontSize: "13px", lineHeight: "1.45", color: "#5C4A2A", background: "#F3ECDD", borderRadius: "10px", padding: "10px 12px" });
-    sheet.appendChild(optionBtn("Apple / Diğer Takvimler", false, () => addToApple(s, mode, ctx, note)));
+    sheet.appendChild(optionBtn(L("Apple / Diğer Takvimler"), false, () => addToApple(s, mode, ctx, note)));
     sheet.appendChild(note);
 
     const cancel = document.createElement("button");
     cancel.type = "button";
-    cancel.textContent = "Vazgeç";
+    cancel.textContent = L("Vazgeç");
     Object.assign(cancel.style, {
       background: "none", border: "none", color: "#5C5A4E",
       fontFamily: "inherit", fontSize: "14px", minHeight: "40px", cursor: "pointer"
@@ -435,7 +438,7 @@
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = s.buttonText || "Takvime Ekle";
+    btn.textContent = s.buttonText || L("Takvime Ekle");
     // Tarih veya başlangıç saati yoksa buton PASİF (Konum modülüyle aynı
     // davranış) — misafir hiçbir zaman eksik bir etkinlik eklemez.
     const ready = !!computeRange(s);

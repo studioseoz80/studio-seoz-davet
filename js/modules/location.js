@@ -10,6 +10,8 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
 
   const DEFAULTS = {
     venueName: "Mekân Adı",
@@ -85,7 +87,7 @@
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = s.buttonText || "Konumu Gör";
+    btn.textContent = s.buttonText || L("Konumu Gör");
     // MADDE 7: bağlantı yoksa buton görsel ve işlevsel olarak PASİF.
     const hasLink = !!s.mapsUrl;
     Object.assign(btn.style, {

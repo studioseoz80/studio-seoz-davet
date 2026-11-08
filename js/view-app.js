@@ -40,8 +40,13 @@
     return m && ["view", "index", "panel"].indexOf(m[1]) < 0 ? m[1] : null;
   }
 
+  /* Davetiye dili: belge yüklenmeden önceki mesajlar için sunucunun sayfaya yazdığı dil
+     (functions/[slug].js → <html data-invite-lang="en">); yoksa Türkçe (eskisi gibi). */
+  const I = window.SeozInviteI18n;
+  if (I) I.setLang(document.documentElement.getAttribute("data-invite-lang"));
+  const L = (t) => (I ? I.L(t) : t);
   function showMessage(html) {
-    stage.innerHTML = `<div class="view-message">${html}</div>`;
+    stage.innerHTML = `<div class="view-message">${L(html)}</div>`;
   }
 
   function boot() {
@@ -90,6 +95,7 @@
 
   function start(doc) {
     document.title = doc.meta.title + " — Studio SEOZ";
+    if (I) { I.setLang(doc.meta && doc.meta.lang); document.documentElement.lang = I.lang(); }
 
     stage.innerHTML = `
       <div class="seoz-canvas-outer seoz-view-outer">
@@ -128,7 +134,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "seoz-replay-btn";
-    btn.textContent = "↺ Baştan İzle";
+    btn.textContent = L("↺ Baştan İzle");
     btn.addEventListener("click", () => SeozEntryScene.play(doc, () => {}));
     document.body.appendChild(btn);
   }

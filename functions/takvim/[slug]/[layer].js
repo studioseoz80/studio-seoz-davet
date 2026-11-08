@@ -100,6 +100,7 @@ export async function onRequest(context) {
   } catch (e) { return new Response("Takvim bilgisi şu anda alınamadı.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } }); }
   const L = doc && Array.isArray(doc.layers) ? doc.layers.find(l => l && l.type === "module" && l.moduleId === "calendar" && l.id === layer) : null;
   const s = Object.assign({ timezone: DEFAULT_TZ }, L && L.settings);
+  if (!s.title && doc && doc.meta && doc.meta.lang === "en") s.title = "Event";   // İngilizce davetiye: başlıksız etkinlik
   const text = L ? buildIcs(s, `${slug}-${layer}@studioseoz`) : null;
   if (!text) return notFound();
   return new Response(request.method === "HEAD" ? null : text, {

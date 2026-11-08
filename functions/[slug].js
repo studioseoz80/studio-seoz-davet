@@ -29,6 +29,9 @@ const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,78})[a-z0-9]$/;
 const RESERVED = new Set(["view", "index", "panel", "album", "anket", "anket-panel", "anket-sonuc", "css", "js", "assets", "functions"]);
 const DEFAULT_DESC = "Davetlisiniz! Davetiyeyi açmak için dokunun.";
 const DEFAULT_IMG = { path: "/assets/og/davetiye-paylasim.jpg", w: 1200, h: 630, type: "image/jpeg" };
+// İngilizce davetiye (meta.lang "en"): hazır açıklama, hazır kapak ve sayfa dili İngilizce
+const DEFAULT_DESC_EN = "You're invited! Tap to open your invitation.";
+const DEFAULT_IMG_EN = { path: "/assets/og/davetiye-paylasim-en.jpg", w: 1200, h: 630, type: "image/jpeg" };
 const SMALL_MAX = 250000;    // WhatsApp ~300 KB üstü küçük resmi sessizce atlar; güvenli pay
 const imgType = u => (/\.png(\?|$)/i.test(u) ? "image/png" : /\.jpe?g(\?|$)/i.test(u) ? "image/jpeg" : /\.webp(\?|$)/i.test(u) ? "image/webp" : "");
 let CFG = null;
@@ -60,9 +63,11 @@ function shareInfo(doc) {
   const bg = doc && doc.canvas && doc.canvas.background;
   const fallbacks = [pic(entry.cardOnlySrc, entry.cardOnlyMedia), pic(entry.cardSrc, entry.cardMedia), pic(entry.pngSrc, entry.pngMedia), firstLayer && pic(firstLayer.src, firstLayer.media, firstLayer.model), bg && bg.type === "image" ? bg.value : ""].filter(isHttp);
   const cover = isHttp(share.image) ? share.image : "";
+  const en = meta.lang === "en";
   return {
-    title: clip(share.title || meta.title || "Davetiye", 90),
-    description: clip(share.description || DEFAULT_DESC, 200),
+    en,
+    title: clip(share.title || meta.title || (en ? "Invitation" : "Davetiye"), 90),
+    description: clip(share.description || (en ? DEFAULT_DESC_EN : DEFAULT_DESC), 200),
     image: cover,
     imageW: cover ? share.w || 1200 : 0,
     imageH: cover ? share.h || 630 : 0,
@@ -85,14 +90,15 @@ async function settleImage(info, origin) {
       if (r.ok && n > 0 && n <= SMALL_MAX) return Object.assign(info, { image: u, imageType: t });
     } catch (e) { /* zaman aşımı ya da ağ hatası: sıradaki */ }
   }
-  return Object.assign(info, { image: origin + DEFAULT_IMG.path, imageW: DEFAULT_IMG.w, imageH: DEFAULT_IMG.h, imageType: DEFAULT_IMG.type });
+  const d = info.en ? DEFAULT_IMG_EN : DEFAULT_IMG;
+  return Object.assign(info, { image: origin + d.path, imageW: d.w, imageH: d.h, imageType: d.type });
 }
 
 function injectMeta(html, info, pageUrl) {
   const tags = [
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="Studio SEOZ">`,
-    `<meta property="og:locale" content="tr_TR">`,
+    `<meta property="og:locale" content="${info.en ? "en_US" : "tr_TR"}">`,
     `<meta property="og:title" content="${esc(info.title)}">`,
     `<meta property="og:description" content="${esc(info.description)}">`,
     `<meta property="og:url" content="${esc(pageUrl)}">`,
@@ -107,6 +113,8 @@ function injectMeta(html, info, pageUrl) {
   ].filter(Boolean).join("\n");
   let out = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(info.title)}</title>`);
   out = out.replace(/<meta charset="UTF-8">/i, m => m + "\n" + tags);
+  // Davetiye yüklenmeden önceki mesajlar ("Davetiye yükleniyor..." vb.) da İngilizce olsun: bkz. js/view-app.js
+  if (info.en) out = out.replace(/<html lang="tr">/i, '<html lang="en" data-invite-lang="en">');
   return out;
 }
 

@@ -10,6 +10,9 @@
    ========================================================================= */
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
   const DEFAULTS = {
@@ -68,6 +71,9 @@
   function dayIndex(name) {
     const n = lower(name);
     const keys = ["pazartesi", "salı", "çarşamba", "perşembe", "cuma", "cumartesi", "pazar"];
+    const EN_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];   // İngilizce davetiyede gün adları
+    const en = EN_DAYS.findIndex(k => n === k || (n.length >= 3 && k.startsWith(n.replace(/\.$/, ""))));
+    if (en >= 0) return en;
     const ABBR = { pzt: 0, pts: 0, sal: 1, çar: 2, car: 2, çrş: 2, per: 3, prş: 3, cum: 4, cmt: 5, cts: 5, paz: 6, pzr: 6 };
     let i = keys.findIndex(k => n === k);
     if (i < 0 && ABBR[n.replace(/\.$/, "")] != null) return ABBR[n.replace(/\.$/, "")];
@@ -91,16 +97,16 @@
     if (week.every(w => w == null)) return null;
     const known = d => week[(d + 7) % 7] || [];
     // dünden taşan aralık (gece yarısını geçen)
-    for (const [a, b] of known(now.day - 1)) if (b > 1440 && now.min < b - 1440) return { open: true, text: `Şu an açık · ${fmt(b)}'da kapanır` };
+    for (const [a, b] of known(now.day - 1)) if (b > 1440 && now.min < b - 1440) return { open: true, text: L("Şu an açık · {t}'da kapanır", { t: fmt(b) }) };
     for (const [a, b] of known(now.day)) {
-      if (now.min >= a && now.min < b) return { open: true, text: b >= 1440 && a === 0 && b === 1440 ? "Şu an açık · 24 saat" : `Şu an açık · ${fmt(b)}'da kapanır` };
+      if (now.min >= a && now.min < b) return { open: true, text: b >= 1440 && a === 0 && b === 1440 ? L("Şu an açık · 24 saat") : L("Şu an açık · {t}'da kapanır", { t: fmt(b) }) };
     }
-    for (const [a] of known(now.day).slice().sort((x, y) => x[0] - y[0])) if (a > now.min) return { open: false, text: `Şu an kapalı · Bugün ${fmt(a)}'da açılır` };
+    for (const [a] of known(now.day).slice().sort((x, y) => x[0] - y[0])) if (a > now.min) return { open: false, text: L("Şu an kapalı · Bugün {t}'da açılır", { t: fmt(a) }) };
     for (let k = 1; k <= 7; k++) {
       const list = known(now.day + k).slice().sort((x, y) => x[0] - y[0]);
-      if (list.length) return { open: false, text: `Şu an kapalı · ${k === 1 ? "Yarın" : DAYS[(now.day + k) % 7]} ${fmt(list[0][0])}'da açılır` };
+      if (list.length) return { open: false, text: L("Şu an kapalı · {d} {t}'da açılır", { d: k === 1 ? L("Yarın") : D(DAYS[(now.day + k) % 7]), t: fmt(list[0][0]) }) };
     }
-    return { open: false, text: "Şu an kapalı" };
+    return { open: false, text: L("Şu an kapalı") };
   }
   function compact(rows) {
     const out = [];

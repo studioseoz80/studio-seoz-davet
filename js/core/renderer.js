@@ -146,9 +146,19 @@
         // "hangi belge / hangi katman" bilgisine ihtiyaç duyan modüller
         // için eklendi. Konum/Müzik/Geri Sayım/RSVP bu parametreyi
         // KULLANMAZ — geriye dönük uyumlu, isteğe bağlı bir ekstra argüman.
-        host.appendChild(moduleDef.render(layer.settings, mode, { docId: docId, layerId: layer.id, motion: motion !== undefined ? motion : CURRENT_MOTION }));
+        // DAVETİYE DİLİ: İngilizce davetiyede kayıttaki Türkçe VARSAYILAN metinler (ör. "Katılım Formu")
+        // İngilizcesiyle gösterilir; kayıt değişmez (kopya). Türkçede ayarlar birebir aynı nesnedir.
+        const I = global.SeozInviteI18n;
+        let settings = layer.settings;
+        if (I && I.lang() === "en") {
+          // yalnızca metin varsayılanları tamamlanır (soru listesi gibi üretilen değerlere dokunulmaz)
+          const base = {}, defs = moduleDef.defaultSettings || {};
+          Object.keys(defs).forEach(k => { const v = defs[k]; if (typeof v === "string") base[k] = v; });
+          settings = I.localize(Object.assign(base, layer.settings));
+        }
+        host.appendChild(moduleDef.render(settings, mode, { docId: docId, layerId: layer.id, motion: motion !== undefined ? motion : CURRENT_MOTION }));
       } else {
-        host.textContent = "Bilinmeyen modül: " + layer.moduleId;
+        host.textContent = global.SeozInviteI18n ? global.SeozInviteI18n.L("Bilinmeyen modül: {id}", { id: layer.moduleId }) : "Bilinmeyen modül: " + layer.moduleId;
       }
       wrap.appendChild(host);
     }
@@ -273,6 +283,8 @@
 
   function renderDocument(doc, canvasEl, mode, breakpoint) {
     CURRENT_MOTION = doc.motion || null;
+    // Davetiye dili (meta.lang): yoksa Türkçe — eski davetiyeler birebir aynı
+    if (global.SeozInviteI18n) global.SeozInviteI18n.setLang(doc.meta && doc.meta.lang);
     // breakpoint verilmezse (eski çağrılar/güvenlik için) "mobile" varsayılır
     // — bu, FAZ 8 öncesi davranışın birebir aynısıdır.
     const bp = breakpoint === "desktop" ? "desktop" : "mobile";

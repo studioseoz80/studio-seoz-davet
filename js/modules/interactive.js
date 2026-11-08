@@ -14,6 +14,9 @@
    ========================================================================= */
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const IXL = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const IXD = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const KINDS = [
     ["kazi-kazan", "Kazı-kazan"], ["zarf", "Zarfı aç"], ["balon", "Balon patlat"], ["hediye", "Hediye kutusu aç"], ["konfeti", "Konfeti düğmesi"],
@@ -104,7 +107,7 @@
     if (s.resultType === "gorsel" && pic) { const im = el("img", "ix-result-img"); im.alt = ""; setImg(im, pic); box.appendChild(im); }
     else if (s.resultType === "baglanti") {
       if (s.message) box.appendChild(el("div", "ix-result-t", null, esc(s.message).replace(/\n/g, "<br>")));
-      const a = el("a", "ix-link", { background: s.color }, esc(s.linkText || "Aç"));
+      const a = el("a", "ix-link", { background: s.color }, esc(IXD(s.linkText) || IXL("Aç")));
       const url = safeUrl(s.linkUrl); if (url) { a.href = url; a.target = "_blank"; a.rel = "noopener"; } else a.setAttribute("aria-disabled", "true");
       box.appendChild(a);
     } else if (s.resultType !== "efekt" && s.resultType !== "anim" && s.message) box.appendChild(el("div", "ix-result-t", null, esc(s.message).replace(/\n/g, "<br>")));
@@ -125,7 +128,7 @@
     "kazi-kazan"(root, s, live) {
       root.appendChild(resultEl(s));
       const cv = el("canvas", "ix-scratch"); root.appendChild(cv);
-      const lbl = el("div", "ix-scratch-lbl", null, "✦ Kazıyın ✦"); root.appendChild(lbl);
+      const lbl = el("div", "ix-scratch-lbl", null, esc(IXL("✦ Kazıyın ✦"))); root.appendChild(lbl);
       const paint = () => {
         const W = root.offsetWidth || 300, H = root.offsetHeight || 200, dpr = Math.min(2, global.devicePixelRatio || 1);
         cv.width = W * dpr; cv.height = H * dpr;
@@ -188,7 +191,7 @@
       if (live) root.addEventListener("click", () => { if (root.classList.contains("is-done")) return; box.classList.add("is-open"); setTimeout(() => reveal(root, s), 700); });
     },
     konfeti(root, s, live) {
-      const b = el("button", "ix-btn", { background: s.color }, `<span>🎉</span> ${esc(s.title || "Kutlayalım!")}`); b.type = "button";
+      const b = el("button", "ix-btn", { background: s.color }, `<span>🎉</span> ${esc(IXD(s.title) || IXL("Kutlayalım!"))}`); b.type = "button";
       root.appendChild(b);
       const res = resultEl(s); res.classList.add("ix-after"); root.appendChild(res);
       if (live) b.addEventListener("click", e => { e.stopPropagation(); b.classList.remove("is-hit"); void b.offsetWidth; b.classList.add("is-hit"); root.classList.add("is-done"); burst(root, s.effect === "yok" ? "konfeti" : s.effect); });
@@ -205,7 +208,7 @@
       const imgs = refs(s);
       root.appendChild(resultEl(s));
       const sky = el("div", "ix-sky"); root.appendChild(sky);
-      const b = el("button", "ix-btn ix-btn-soft", { background: s.color }, "🏮 Dileğimi bırak"); b.type = "button"; root.appendChild(b);
+      const b = el("button", "ix-btn ix-btn-soft", { background: s.color }, esc(IXL("🏮 Dileğimi bırak"))); b.type = "button"; root.appendChild(b);
       if (live) b.addEventListener("click", e => {
         e.stopPropagation();
         const l = el("span", "ix-lantern"); l.style.left = (35 + Math.random() * 30) + "%";
@@ -280,7 +283,7 @@
     const C = Object.assign({}, CUT_DEFAULTS, s.cut || {}), imgs = refs(s);
     const at = clampN(C.at, 5, 95, 50), T = clampN(C.dur, 0.3, 8, 1.6) / clampN(C.speed, 0.25, 4, 1) * 1000;
     root.classList.add("ix-k2on"); root.dataset.ixTrigger = C.trigger === "kaydir" ? "kaydir" : "dokun";
-    if (C.trigger === "kaydir") root.__ixHint = "Kurdeleyi kesmek için parmağınızla kaydırın";
+    if (C.trigger === "kaydir") root.__ixHint = IXL("Kurdeleyi kesmek için parmağınızla kaydırın");
     const back = partOf(s, "back"), under = el("div", "ix-under");
     const bref = back ? back.ref : imgs[0];
     if (bref) { const im = el("img", "ix-under-img"); im.alt = ""; setImg(im, bref); under.appendChild(im); }
@@ -552,7 +555,7 @@
       const CP = partOf(s, "coin"); coin = el("div", "ix2-coin"); coin.appendChild(pic(CP ? CP.ref : COIN_SVG));
       if (CP && CP.nw > 0 && CP.nh > 0) coin.style.aspectRatio = `${CP.nw} / ${CP.nh}`; area.appendChild(coin);
     }
-    root.__ixHint = M.trigger === "dokun" ? "Kazımak için dokunun" : HINT["kazi-kazan"];
+    root.__ixHint = IXL(M.trigger === "dokun" ? "Kazımak için dokunun" : HINT["kazi-kazan"]);
     let ctx = null, orig = null, idx = null, done = false, len = 0;
     const need = clampN(M.open, 10, 95, 45) / 100;
     loadImg(C.ref).then(info => {
@@ -656,7 +659,7 @@
       flap.appendChild(fin); st.appendChild(flap);
     }
     const seal = SE ? piece("ix2-seal", SE, "seal", 5) : null; if (seal) st.appendChild(seal);
-    if (M.trigger === "kaydir") root.__ixHint = "Zarfı açmak için yukarı kaydırın";
+    if (M.trigger === "kaydir") root.__ixHint = IXL("Zarfı açmak için yukarı kaydırın");
     if (!live) return;
     let done = false;
     function sealOff() {
@@ -704,7 +707,7 @@
     st.appendChild(resultEl(s));
     const imgsP = ["balloon", "balloon2", "balloon3"].map(k => partOf(s, k)).filter(Boolean);
     const n = Math.max(1, Math.min(9, Number(s.count) || 5)), items = Array.isArray(M.items) ? M.items : [], sway = clampN(M.sway, 0, 3, 1), need = M.need === "bir" ? 1 : n;
-    if (M.need === "bir") root.__ixHint = "Bir balon patlatın";
+    if (M.need === "bir") root.__ixHint = IXL("Bir balon patlatın");
     let popped = 0;
     const list = [];
     for (let i = 0; i < n; i++) {
@@ -765,7 +768,7 @@
     const lid = LD ? piece("ix2-lid", LD, "lid", 2) : null; if (lid) grp.appendChild(lid);
     const bow = BW ? piece("ix2-bow", BW, "bow", 3) : null; if (bow) grp.appendChild(bow);
     const rs = el("div", "ix2-gift-res"); rs.appendChild(resultEl(s)); st.appendChild(rs);
-    if (M.trigger === "kaydir") root.__ixHint = "Kapağı açmak için yukarı kaydırın";
+    if (M.trigger === "kaydir") root.__ixHint = IXL("Kapağı açmak için yukarı kaydırın");
     if (!live) return;
     const geo = () => { const H = root.offsetHeight || 220, W = root.offsetWidth || 300, bh = box.offsetHeight, top = BX.y / 100 * H - bh / 2; return { W, H, bw: box.offsetWidth, bh, top, bot: top + bh, cx: BX.x / 100 * W }; };
     let idle = null, done = false;
@@ -806,7 +809,7 @@
   /* ----------------------------- Konfeti: düğme basılır, kendi konfeti parçalarınız fışkırır ----------------------------- */
   function konfeti2(root, s, live) {
     const M = motionOf(s, "konfeti"), T = msOf(M), st = stage2(root, s), BP = partOf(s, "button");
-    const btn = el("button", "ix2-p ix2-cbtn"); btn.type = "button"; btn.dataset.ixp = "button"; placePart(btn, BP); btn.setAttribute("aria-label", s.title || "Kutlayalım!");
+    const btn = el("button", "ix2-p ix2-cbtn"); btn.type = "button"; btn.dataset.ixp = "button"; placePart(btn, BP); btn.setAttribute("aria-label", IXD(s.title) || IXL("Kutlayalım!"));
     const inn = el("div", "ix2-in"); inn.appendChild(pic(BP.ref)); btn.appendChild(inn); st.appendChild(btn);
     const res = resultEl(s); res.classList.add("ix-after"); st.appendChild(res);
     if (!live) return;
@@ -838,7 +841,7 @@
     ct.appendChild(resultEl(s)); mk.appendChild(ct); bk.appendChild(mk);
     card.appendChild(fr); card.appendChild(bk); wrap.appendChild(card); st.appendChild(wrap);
     loadImg(FP.ref).then(i => maskBy(mk, i));
-    if (M.trigger === "kaydir") root.__ixHint = "Çevirmek için kaydırın";
+    if (M.trigger === "kaydir") root.__ixHint = IXL("Çevirmek için kaydırın");
     if (!live) return;
     let ang = 0, busy = false, first = true;
     function flip(sg) {
@@ -869,8 +872,8 @@
     }
     let lan = make(LP, "lantern"); st.appendChild(lan); idle(lan);
     let btn = null;
-    if (M.trigger === "dugme") { btn = el("button", "ix-btn ix-btn-soft ix2-dl-btn", { background: s.color }, esc(M.btnText || "🏮 Dileğimi bırak")); btn.type = "button"; root.appendChild(btn); }
-    else { root.__ixKey = true; root.__ixHint = M.trigger === "kaydir" ? "Feneri bırakmak için yukarı kaydırın" : "Feneri bırakmak için dokunun"; }
+    if (M.trigger === "dugme") { btn = el("button", "ix-btn ix-btn-soft ix2-dl-btn", { background: s.color }, esc(IXD(M.btnText) || IXL("🏮 Dileğimi bırak"))); btn.type = "button"; root.appendChild(btn); }
+    else { root.__ixKey = true; root.__ixHint = IXL(M.trigger === "kaydir" ? "Feneri bırakmak için yukarı kaydırın" : "Feneri bırakmak için dokunun"); }
     if (!live) return;
     let first = true, busy = false;
     function fly(w, delay) {
@@ -931,8 +934,8 @@
       return f;
     });
     const res = resultEl(s); res.classList.add("ix2-mum-res"); st.appendChild(res);
-    if (M.trigger === "kaydir") root.__ixHint = "Mumları üflemek için parmağınızı kaydırın";
-    else if (M.trigger === "dokun") root.__ixHint = "Mumları söndürmek için dokunun";
+    if (M.trigger === "kaydir") root.__ixHint = IXL("Mumları üflemek için parmağınızı kaydırın");
+    else if (M.trigger === "dokun") root.__ixHint = IXL("Mumları söndürmek için dokunun");
     if (!live) return;
     let done = false, leanA = [];
     const ring = M.trigger === "basili" ? el("div", "ix2-ring", null, "<i></i>") : null; if (ring) st.appendChild(ring);
@@ -1012,7 +1015,7 @@
     const knocker = KP ? piece("ix2-knocker", KP, "knocker", 5) : null; if (knocker) grp.appendChild(knocker);
     if (FP) st.appendChild(piece("ix2-dframe", FP, "frame", 6));
     const N = Math.round(clampN(M.knocks, 1, 6, 3)), dots = el("div", "ix-knocks", null, "<i></i>".repeat(N)); root.appendChild(dots);
-    if (N !== 3) root.__ixHint = `Kapıyı ${N} kez çalın`;
+    if (N !== 3) root.__ixHint = IXL("Kapıyı {n} kez çalın", { n: N });
     root.__ixKey = true;
     if (!live) return;
     let n = 0, opened = false;
@@ -1079,11 +1082,11 @@
       if (kind !== "kurdele" && BUILD2[kind] && hasMain(s, kind)) BUILD2[kind](root, s, live);
       else BUILD[kind](root, s, live);
     } catch (e) { console.error("[Studio SEOZ] Etkileşim hatası:", e); }
-    const hint = el("div", "ix-hint", null, esc(s.title || root.__ixHint || HINT[kind]));
+    const hint = el("div", "ix-hint", null, esc(IXD(s.title) || root.__ixHint || IXL(HINT[kind])));
     if (kind !== "konfeti") root.appendChild(hint);
     // klavye: Enter / Boşluk ile aynı sonuç (kazı-kazan ve mum için kısayol)
     if (live && (["konfeti", "dilek", "balon"].indexOf(kind) < 0 || root.__ixKey)) {
-      root.tabIndex = 0; root.setAttribute("role", "button"); root.setAttribute("aria-label", s.title || HINT[kind]);
+      root.tabIndex = 0; root.setAttribute("role", "button"); root.setAttribute("aria-label", IXD(s.title) || IXL(HINT[kind]));
       root.addEventListener("keydown", e => {
         if (e.key !== "Enter" && e.key !== " ") return;
         e.preventDefault();

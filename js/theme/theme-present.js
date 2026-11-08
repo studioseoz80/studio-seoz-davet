@@ -18,6 +18,9 @@
    ========================================================================= */
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const FRAMES = [["", "Yok (bugünkü görünüm)"], ["bilet", "Bilet"], ["kartpostal", "Kartpostal"], ["polaroid", "Polaroid"], ["cam", "Cam panel"],
     ["parsomen", "Parşömen"], ["tabela", "Ahşap tabela"], ["altin", "Altın çerçeve"], ["isikli", "Işıklı tabela"]];
@@ -83,12 +86,12 @@
   /* ----------------------------- açılış etkileşimleri ----------------------------- */
   function moduleLabel(layer) {
     const m = layer.type === "module" && global.SeozModuleRegistry ? SeozModuleRegistry.getModule(layer.moduleId) : null;
-    return m ? m.label : "";
+    return m ? D(m.label) : "";   // misafir kapağında modül adı davetiye dilinde
   }
   const ICON = { location: "⌖", music: "♪", countdown: "⏳", gallery: "▦", "attendance-form": "✉", rsvp: "✉", gift: "🎁", calendar: "📅", appointment: "🗓", services: "✦", "price-list": "₺", "before-after": "◐", poll: "?", feedback: "✎", "social-media": "@", qrcode: "▣", celebration: "✶", "guest-upload": "⇪" };
   function coverHTML(layer, p, hint) {
     return `<span class="tp-cv-orn">✦</span><span class="tp-cv-ic">${esc(ICON[layer.moduleId] || "✦")}</span>
-      <strong class="tp-cv-t">${esc(p.title || moduleLabel(layer) || "Sürpriz")}</strong><small class="tp-cv-h">${esc(hint)}</small>`;
+      <strong class="tp-cv-t">${esc(D(p.title) || moduleLabel(layer) || L("Sürpriz"))}</strong><small class="tp-cv-h">${esc(hint ? L(hint) : hint)}</small>`;
   }
   function applyOpen(wrap, layer, host, p, mode, before) {
     if (mode !== "view") {
@@ -99,9 +102,9 @@
     if (p.open === "cevir") {
       wrap.classList.add("tp-o-cevir");
       const flipper = el("div", "tp-flipper"), front = el("button", "tp-face tp-front", null, coverHTML(layer, p, "Çevirmek için dokunun")), back = el("div", "tp-face tp-back");
-      front.type = "button"; front.setAttribute("aria-label", (p.title || moduleLabel(layer) || "Kart") + " — çevir");
+      front.type = "button"; front.setAttribute("aria-label", L("{t} — çevir", { t: D(p.title) || moduleLabel(layer) || L("Kart") }));
       wrap.insertBefore(flipper, host); back.appendChild(host); flipper.appendChild(front); flipper.appendChild(back);
-      const again = el("button", "tp-flip-back", null, "↺"); again.type = "button"; again.setAttribute("aria-label", "Kartı geri çevir"); back.appendChild(again);
+      const again = el("button", "tp-flip-back", null, "↺"); again.type = "button"; again.setAttribute("aria-label", L("Kartı geri çevir")); back.appendChild(again);
       front.addEventListener("click", e => { e.stopPropagation(); flipper.classList.add("is-flipped"); });
       again.addEventListener("click", e => { e.stopPropagation(); flipper.classList.remove("is-flipped"); });
     } else if (p.open === "kapak") {
@@ -116,8 +119,8 @@
       cover.addEventListener("click", open);
     } else if (p.open === "zarf") {
       wrap.classList.add("tp-o-zarf");
-      const env = el("button", "tp-env", null, `<span class="tp-env-body"></span><span class="tp-env-flap"></span><span class="tp-env-seal">✦</span><strong class="tp-env-t">${esc(p.title || moduleLabel(layer) || "Size bir not var")}</strong><small class="tp-env-h">Açmak için dokunun</small>`);
-      env.type = "button"; env.setAttribute("aria-label", (p.title || "Zarf") + " — aç");
+      const env = el("button", "tp-env", null, `<span class="tp-env-body"></span><span class="tp-env-flap"></span><span class="tp-env-seal">✦</span><strong class="tp-env-t">${esc(D(p.title) || moduleLabel(layer) || L("Size bir not var"))}</strong><small class="tp-env-h">${esc(L("Açmak için dokunun"))}</small>`);
+      env.type = "button"; env.setAttribute("aria-label", L("{t} — aç", { t: D(p.title) || L("Zarf") }));
       wrap.insertBefore(env, before);
       env.addEventListener("click", e => { e.stopPropagation(); env.classList.add("is-open"); setTimeout(() => { env.style.pointerEvents = "none"; }, 50); });
     }
@@ -134,9 +137,9 @@
       const html = kind === "plak"
         ? `<span class="tp-vinyl"><span class="tp-vinyl-lbl">♪</span></span><span class="tp-arm"></span>`
         : kind === "kaset"
-          ? `<span class="tp-cas"><span class="tp-cas-lbl">${esc((layer.present && layer.present.title) || "Bizim şarkımız")}</span><span class="tp-reel"></span><span class="tp-reel tp-reel-r"></span><span class="tp-cas-win"></span></span>`
+          ? `<span class="tp-cas"><span class="tp-cas-lbl">${esc(D(layer.present && layer.present.title) || L("Bizim şarkımız"))}</span><span class="tp-reel"></span><span class="tp-reel tp-reel-r"></span><span class="tp-cas-win"></span></span>`
           : `<span class="tp-wave">${Array.from({ length: 24 }, (_, i) => `<i style="--i:${i}"></i>`).join("")}</span>`;
-      const shell = el("button", "tp-shell tp-music tp-" + kind, null, html + `<span class="tp-sr">Müziği aç/kapat</span>`);
+      const shell = el("button", "tp-shell tp-music tp-" + kind, null, html + `<span class="tp-sr">${esc(L("Müziği aç/kapat"))}</span>`);
       shell.type = "button";
       if (!btn || !audio) shell.classList.add("is-empty");
       shell.addEventListener("click", e => { e.stopPropagation(); if (btn) btn.click(); });
@@ -162,14 +165,14 @@
       const shell = el("div", "tp-shell tp-cd tp-" + kind);
       shell.style.setProperty("--tp-fg", s.textColor || "#2A2420");
       shell.style.fontFamily = `"${s.fontFamily || "Cormorant Garamond"}", serif`;
-      const title = s.title ? `<div class="tp-cd-title">${esc(s.title)}</div>` : "";
+      const title = s.title ? `<div class="tp-cd-title">${esc(D(s.title))}</div>` : "";
       if (kind === "cevirmeli") {
-        shell.innerHTML = title + `<div class="tp-flipclock">${[["g", "Gün"], ["h", "Saat"], ["m", "Dk"], ["s", "Sn"]].map(([k, l]) => `<div class="tp-fc" data-k="${k}"><span class="tp-fc-card"><b>00</b></span><small>${l}</small></div>`).join("")}</div>`;
+        shell.innerHTML = title + `<div class="tp-flipclock">${[["g", "Gün"], ["h", "Saat"], ["m", "Dk"], ["s", "Sn"]].map(([k, l]) => `<div class="tp-fc" data-k="${k}"><span class="tp-fc-card"><b>00</b></span><small>${esc(L(l))}</small></div>`).join("")}</div>`;
       } else if (kind === "kumsaati") {
         shell.innerHTML = title + `<div class="tp-hg-row"><span class="tp-hg"><i class="tp-hg-top"></i><i class="tp-hg-bot"></i><i class="tp-hg-stream"></i></span>
-          <div class="tp-hg-n"><b data-k="g">0</b><span>gün</span><small><b data-k="h">00</b>:<b data-k="m">00</b>:<b data-k="s">00</b></small></div></div>`;
+          <div class="tp-hg-n"><b data-k="g">0</b><span>${esc(L("gün"))}</span><small><b data-k="h">00</b>:<b data-k="m">00</b>:<b data-k="s">00</b></small></div></div>`;
       } else {
-        shell.innerHTML = `<div class="tp-cal"><div class="tp-cal-top">${esc(s.title || "Geri sayım")}</div><div class="tp-cal-page"><b data-k="g">0</b><span>gün kaldı</span></div><div class="tp-cal-next"></div></div>`;
+        shell.innerHTML = `<div class="tp-cal"><div class="tp-cal-top">${esc(D(s.title) || L("Geri sayım"))}</div><div class="tp-cal-page"><b data-k="g">0</b><span>${esc(L("gün kaldı"))}</span></div><div class="tp-cal-next"></div></div>`;
       }
       let lastG = null;
       function tick() {
@@ -199,9 +202,9 @@
       const refs = imagesOf(layer);
       hide(host);
       const shell = el("div", "tp-shell tp-gal tp-" + kind);
-      if (!refs.length) { shell.innerHTML = `<p class="tp-empty">Galeriye fotoğraf ekleyin</p>`; return shell; }
+      if (!refs.length) { shell.innerHTML = `<p class="tp-empty">${esc(L("Galeriye fotoğraf ekleyin"))}</p>`; return shell; }
       if (kind === "polaroid-yigin") {
-        const stack = el("button", "tp-pstack"); stack.type = "button"; stack.setAttribute("aria-label", "Sonraki fotoğraf");
+        const stack = el("button", "tp-pstack"); stack.type = "button"; stack.setAttribute("aria-label", L("Sonraki fotoğraf"));
         refs.slice(0, 12).forEach((r, i) => {
           const card = el("span", "tp-pol", { zIndex: String(100 - i) });
           card.style.setProperty("--r", `${((i * 37) % 17) - 8}deg`);
@@ -214,7 +217,7 @@
           setTimeout(() => { top.classList.remove("is-out"); top.style.zIndex = String(Number(cards[cards.length - 1].style.zIndex) - 1); }, 420);
         });
         shell.appendChild(stack);
-        shell.appendChild(el("small", "tp-gal-h", null, "Dokununca sıradaki fotoğraf"));
+        shell.appendChild(el("small", "tp-gal-h", null, esc(L("Dokununca sıradaki fotoğraf"))));
       } else if (kind === "film") {
         const strip = el("div", "tp-film-strip"), track = el("div", "tp-film-track");
         const list = refs.concat(refs.length < 6 ? refs : []);
@@ -234,7 +237,7 @@
       if (layer.moduleId !== "location") return null;
       const shell = el("div", "tp-shell tp-loc tp-" + kind);
       if (kind === "harita") shell.innerHTML = `<span class="tp-map"><i class="tp-map-pin"></i></span><span class="tp-stamp"></span>`;
-      else shell.innerHTML = `<span class="tp-compass"><i class="tp-needle"></i><b>K</b></span>`;
+      else shell.innerHTML = `<span class="tp-compass"><i class="tp-needle"></i><b>${esc(L("K"))}</b></span>`;
       return shell;     // modülün kendi içeriği (mekân adı + Konumu Gör düğmesi) yanında görünür kalır
     };
   }

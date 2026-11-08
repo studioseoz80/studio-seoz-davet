@@ -22,6 +22,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   let activeOverlay = null;
   let activeTimeouts = [];
@@ -136,7 +139,7 @@
 
     const hint = document.createElement("div");
     hint.className = "seoz-entry-hint";
-    hint.textContent = "Açmak için dokunun";
+    hint.textContent = L("Açmak için dokunun");
     overlay.appendChild(hint);
 
     const hasCard = !!entry.cardSrc;
@@ -293,7 +296,7 @@
 
     const hint = document.createElement("div");
     hint.className = "seoz-entry-hint";
-    hint.textContent = "Açmak için dokunun";
+    hint.textContent = L("Açmak için dokunun");
     overlay.appendChild(hint);
 
     let phase = "envelope";
@@ -384,7 +387,7 @@
     const skip = document.createElement("button");
     skip.type = "button";
     skip.className = "seoz-entry-skip";
-    skip.textContent = "Geç";
+    skip.textContent = L("Geç");
     skip.addEventListener("click", () => { removeOverlay(); onFinish(); });
     overlay.appendChild(skip);
 

@@ -22,6 +22,8 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const W = 1200, H = 630;
   const DEFAULT_DESC = "Davetlisiniz! Davetiyeyi açmak için dokunun.";
+  // İngilizce davetiyede (meta.lang "en") paylaşım kartının hazır açıklaması — functions/[slug].js ile aynı metin
+  const DEFAULT_DESC_EN = "You're invited! Tap to open your invitation.";
   const DEFAULT_COVER = "assets/og/davetiye-paylasim.jpg";   // kapak yoksa sunucunun da kullandığı hazır kapak
   // telefon / tablet: sistemin paylaşım menüsü; bilgisayar: bağlantıyı kopyala
   const touchShare = () => !!(navigator.share && global.matchMedia && global.matchMedia("(pointer: coarse)").matches);
@@ -83,7 +85,8 @@
   function show(opts) {
     const old = document.querySelector(".sp-root"); if (old) old.remove();
     const doc = opts.doc, share = (doc.meta && doc.meta.share) || {};
-    const title = share.title || (doc.meta && doc.meta.title) || "Davetiye", desc = share.description || DEFAULT_DESC;
+    const defDesc = doc.meta && doc.meta.lang === "en" ? DEFAULT_DESC_EN : DEFAULT_DESC;
+    const title = share.title || (doc.meta && doc.meta.title) || "Davetiye", desc = share.description || defDesc;
     const root = document.createElement("div");
     root.className = "sp-root"; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "Davetiye yayında");
     const domain = String(opts.shortUrl).replace(/^https?:\/\//, "").split("/")[0];
@@ -178,7 +181,7 @@
       }).catch(err => { b.disabled = false; alert("Yeni albüm linki üretilemedi: " + (err && err.message || "")); });
     });
     if ($("[data-sp-copy-panel]")) $("[data-sp-copy-panel]").addEventListener("click", e => copy(opts.panelUrl, e.currentTarget));
-    const sync = () => { $("[data-sp-t]").textContent = $("[data-sp-title]").value || title; $("[data-sp-d]").textContent = $("[data-sp-desc]").value || DEFAULT_DESC; $("[data-sp-wa]").href = waLink(opts.shortUrl); counts(); };
+    const sync = () => { $("[data-sp-t]").textContent = $("[data-sp-title]").value || title; $("[data-sp-d]").textContent = $("[data-sp-desc]").value || defDesc; $("[data-sp-wa]").href = waLink(opts.shortUrl); counts(); };
     // Kartta tamamı görünsün diye önerilen uzunluklar: başlık ≤ 60, açıklama ≤ 110 karakter
     function counts() {
       const c = (el, n, max) => { const k = $(el).value.length; $(n).textContent = k + " / " + max + (k > max ? " — kartta kısalabilir" : ""); $(n).classList.toggle("sp-over", k > max); };

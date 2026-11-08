@@ -29,6 +29,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const TL = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const TD = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const MODELS = {}, MODEL_ORDER = [];
   const CONCEPTS = {}, CONCEPT_ORDER = [];
@@ -1111,7 +1114,7 @@
     overlay.dataset.scModel = cfg.model; overlay.dataset.scScenario = cfg.scenario; overlay.dataset.scPhase = "loading";
     // seçilen arka plan rengi; seçilmemişse hiçbir şey değişmez. Arka plan görseli (katman) bu rengin üstünde kalır.
     if (cfg.bgColor) { overlay.style.backgroundColor = cfg.bgColor; overlay.dataset.scBg = cfg.bgColor; }
-    overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-label", "Davetiye açılışı");
+    overlay.setAttribute("role", "dialog"); overlay.setAttribute("aria-label", TL("Davetiye açılışı"));
     const backdrop = h("div", "sc-backdrop");
     const view = h("div", "sc-view");
     const cam = h("div", "sc-cam");
@@ -1155,11 +1158,11 @@
     let hint = null;
     if (!opts.freeze) {
       const ui = h("div", "sc-ui");
-      hint = h("div", "sc-hint", null, [cfg.hintText || DEFAULTS.hintText]);
+      hint = h("div", "sc-hint", null, [TD(cfg.hintText || DEFAULTS.hintText)]);
       hint.style.display = "none";
-      const skip = h("button", "sc-skip", null, ["Geç ›"]);
+      const skip = h("button", "sc-skip", null, [TL("Geç ›")]);
       skip.type = "button";
-      skip.setAttribute("aria-label", "Açılışı geç");
+      skip.setAttribute("aria-label", TL("Açılışı geç"));
       ui.appendChild(hint); ui.appendChild(skip);
       overlay.appendChild(ui);
       skip.addEventListener("click", (e) => { e.stopPropagation(); Sound.unlock(); finish(true); });
@@ -1203,7 +1206,7 @@
     let loader = null;
     const lt = setTimeout(() => {
       if (st.ctx || st.dead) return;
-      loader = h("div", "sc-loading", null, [h("div", "sc-spin"), h("div", "sc-loading-t", null, ["Hazırlanıyor…"])]);
+      loader = h("div", "sc-loading", null, [h("div", "sc-spin"), h("div", "sc-loading-t", null, [TL("Hazırlanıyor…")])]);
       overlay.appendChild(loader);
     }, 250);
     st.timers.push(lt);
@@ -1270,7 +1273,7 @@
         if (!ctx.hasCard) { finish(false); return; }
         setPhase("card");
         const dur = entry.cardDisplayDuration;
-        if (dur === "tap") { hint.textContent = "Devam etmek için dokunun"; hint.style.display = ""; hint.classList.add("sc-hint-bottom"); return; }
+        if (dur === "tap") { hint.textContent = TL("Devam etmek için dokunun"); hint.style.display = ""; hint.classList.add("sc-hint-bottom"); return; }
         const sec = Number(dur); const ms = (isFinite(sec) && sec > 0 ? sec : 10) * 1000;
         st.timers.push(setTimeout(() => finish(false), opts.cardHoldMs != null ? opts.cardHoldMs : ms));
       }

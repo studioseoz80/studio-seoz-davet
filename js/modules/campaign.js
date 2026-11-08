@@ -10,6 +10,9 @@
    ========================================================================= */
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     moduleActive: true,
@@ -111,12 +114,13 @@
       const code = el("button", { marginTop: "12px", display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderRadius: "10px", border: `1.5px dashed ${s.accentColor}`,
         background: "rgba(255,255,255,.7)", color: s.textColor, font: `700 15px "${s.fontFamily}", sans-serif`, letterSpacing: ".12em", cursor: "pointer" });
       code.type = "button";
-      code.innerHTML = `<span></span><small style="font-size:10px;letter-spacing:0;opacity:.65;font-weight:600">Kopyala</small>`;
+      code.innerHTML = `<span></span><small style="font-size:10px;letter-spacing:0;opacity:.65;font-weight:600"></small>`;
+      code.lastChild.textContent = L("Kopyala");
       code.firstChild.textContent = s.cpCode;
-      code.setAttribute("aria-label", "Kupon kodunu kopyala: " + s.cpCode);
+      code.setAttribute("aria-label", L("Kupon kodunu kopyala: {c}", { c: s.cpCode }));
       code.addEventListener("click", (e) => {
         e.stopPropagation();
-        const done = () => { code.lastChild.textContent = "Kopyalandı ✓"; setTimeout(() => { code.lastChild.textContent = "Kopyala"; }, 1800); };
+        const done = () => { code.lastChild.textContent = L("Kopyalandı ✓"); setTimeout(() => { code.lastChild.textContent = L("Kopyala"); }, 1800); };
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s.cpCode).then(done, done); else done();
       });
       body.appendChild(code);
@@ -125,13 +129,13 @@
       const cd = el("div", { marginTop: strip ? "2px" : "12px", fontSize: strip ? "12px" : "13px", fontWeight: "700", color: s.accentColor });
       const tick = () => {
         const r = left(end);
-        cd.textContent = r.done ? "Kampanya sona erdi" : `Bitişe ${r.g ? r.g + " gün " : ""}${String(r.h).padStart(2, "0")}:${String(r.m).padStart(2, "0")}:${String(r.s).padStart(2, "0")}`;
+        cd.textContent = r.done ? L("Kampanya sona erdi") : L("Bitişe {g}{t}", { g: r.g ? L("{n} gün ", { n: r.g }) : "", t: `${String(r.h).padStart(2, "0")}:${String(r.m).padStart(2, "0")}:${String(r.s).padStart(2, "0")}` });
         if (r.done) { wrap.style.opacity = ".7"; }
       };
       tick();
       cd.dataset.intervalId = String(setInterval(tick, 1000));
       body.appendChild(cd);
-    } else if (end && left(end).done) body.appendChild(el("div", { marginTop: "10px", fontSize: "13px", fontWeight: "700", color: s.accentColor }, "Kampanya sona erdi"));
+    } else if (end && left(end).done) body.appendChild(el("div", { marginTop: "10px", fontSize: "13px", fontWeight: "700", color: s.accentColor }, L("Kampanya sona erdi")));
 
     const href = s.cpCta === "whatsapp" ? waLink(s) : s.cpCta === "link" ? safeUrl(s.cpLink) : "";
     if (s.cpCta !== "none") {

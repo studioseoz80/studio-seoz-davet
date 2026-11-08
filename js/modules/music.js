@@ -9,6 +9,8 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
 
   const DEFAULTS = {
     audioSrc: "",
@@ -58,7 +60,7 @@
     const s = Object.assign({}, DEFAULTS, settings);
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.setAttribute("aria-label", "Müziği aç/kapat");
+    btn.setAttribute("aria-label", L("Müziği aç/kapat"));
     // Görsel olarak yuvarlak arka plan/buton YOK (şeffaf) — ancak mobilde
     // rahat basılabilsin diye TIKLANABİLİR ALAN katmanın tüm kutusunu
     // kaplamaya devam eder (bu, sürükle-bırak ile ayarlanan katman

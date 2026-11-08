@@ -113,6 +113,11 @@ input, select, textarea{ font: inherit; }
   border-bottom: 1px solid transparent; padding: 4px 2px; max-width: 260px;
 }
 .editor-topbar .doc-title-input:focus{ border-bottom-color: var(--gold); outline: none; }
+.editor-topbar .doc-lang-select{
+  background: transparent; color: rgba(250,248,243,.85); border: 1px solid rgba(250,248,243,.3);
+  border-radius: 20px; padding: 5px 10px; font-size: .76rem; cursor: pointer;
+}
+.editor-topbar .doc-lang-select option{ color: #1E2A22; }
 .editor-topbar .spacer{ flex: 1; }
 .editor-topbar .save-status{ font-size: .74rem; color: rgba(250,248,243,.6); white-space: nowrap; }
 .editor-topbar .bp-toggle{ display: flex; border: 1px solid rgba(250,248,243,.3); border-radius: 20px; overflow: hidden; }

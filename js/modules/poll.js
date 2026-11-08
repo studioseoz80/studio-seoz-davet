@@ -36,6 +36,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   function uid(prefix) {
     return prefix + "_" + Math.random().toString(36).slice(2, 9);
@@ -327,7 +330,7 @@
       const multi = qType(q) === "multi";
       if (method === "seoz" || q.required === false || multi) {   // yeni ayarlar kullanılmadıkça eski görünüm aynen
         const tag = document.createElement("span");
-        tag.textContent = multi ? (qRequired(q) ? "(birden çok seçilebilir) *" : "(birden çok seçilebilir, isteğe bağlı)") : (qRequired(q) ? "*" : "(isteğe bağlı)");
+        tag.textContent = multi ? L(qRequired(q) ? "(birden çok seçilebilir) *" : "(birden çok seçilebilir, isteğe bağlı)") : (qRequired(q) ? "*" : L("(isteğe bağlı)"));
         Object.assign(tag.style, { fontWeight: "400", fontSize: (fs - 3) + "px", opacity: ".7", alignSelf: "center" });
         if (qRequired(q) && !multi) { tag.style.color = accent; tag.style.opacity = "1"; tag.style.fontWeight = "700"; }
         qText.appendChild(tag);
@@ -348,7 +351,7 @@
         const optBtn = document.createElement("button");
         optBtn.type = "button";
         optBtn.className = "seoz-poll-opt";
-        optBtn.textContent = opt.text || "";
+        optBtn.textContent = D(opt.text) || "";   // varsayılan Evet/Hayır davetiye dilinde
         optBtn.setAttribute("aria-pressed", "false");
         Object.assign(optBtn.style, {
           display: "flex",
@@ -419,7 +422,7 @@
     (Array.isArray(s.commentFields) ? s.commentFields : []).forEach(cf => {
       const cWrap = sectionBlock(true);
       const cTitle = document.createElement("label");
-      cTitle.textContent = cf.title || "Görüş, Fikir ve Önerileriniz";
+      cTitle.textContent = D(cf.title) || L("Görüş, Fikir ve Önerileriniz");
       Object.assign(cTitle.style, { fontSize: fs + "px", fontWeight: "600" });
       cWrap.appendChild(cTitle);
 
@@ -427,7 +430,7 @@
       ta.rows = 3;
       ta.maxLength = 1000;
       ta.setAttribute("data-poll-comment-id", cf.id || "");
-      ta.placeholder = cf.placeholder || "Eklemek istediğiniz görüş, fikir veya önerinizi buraya yazabilirsiniz.";
+      ta.placeholder = D(cf.placeholder) || L("Eklemek istediğiniz görüş, fikir veya önerinizi buraya yazabilirsiniz.");
       styleField(ta);
       ta.style.resize = "vertical";
       ta.style.minHeight = "88px";
@@ -442,7 +445,7 @@
       const nameWrap = sectionBlock(commentInputs.length === 0);
       nameWrap.style.gap = "6px";
       const nameLabel = document.createElement("label");
-      nameLabel.textContent = (s.nameLabel || "Ad Soyad") + (s.collectName === "optional" ? " (isteğe bağlı)" : "");
+      nameLabel.textContent = (D(s.nameLabel) || L("Ad Soyad")) + (s.collectName === "optional" ? L(" (isteğe bağlı)") : "");
       Object.assign(nameLabel.style, { fontSize: (fs - 1) + "px", fontWeight: "600" });
       nameInput = document.createElement("input");
       nameInput.type = "text";
@@ -459,7 +462,7 @@
 
     const submitBtn = document.createElement("button");
     submitBtn.type = "button";
-    submitBtn.textContent = s.submitButtonText || "Gönder";
+    submitBtn.textContent = s.submitButtonText || L("Gönder");
     Object.assign(submitBtn.style, {
       width: "100%",
       maxWidth: "280px",
@@ -496,13 +499,13 @@
       if (submitted) return;
 
       if (s.collectName === "required" && nameInput && !nameInput.value.trim()) {
-        showStatus("Lütfen adınızı girin.", true);
+        showStatus(L("Lütfen adınızı girin."), true);
         return;
       }
       const empty = q => !answers[q.id] || (Array.isArray(answers[q.id]) && !answers[q.id].length);
       const unanswered = questions.filter(q => qRequired(q) && empty(q));
       if (unanswered.length > 0) {
-        showStatus(questions.some(q => !qRequired(q)) ? "Lütfen zorunlu (*) soruları yanıtlayın." : "Lütfen tüm soruları yanıtlayın.", true);
+        showStatus(L(questions.some(q => !qRequired(q)) ? "Lütfen zorunlu (*) soruları yanıtlayın." : "Lütfen tüm soruları yanıtlayın."), true);
         return;
       }
 
@@ -513,11 +516,11 @@
       // göndermezse tekrar deneyebilsin.
       if (method === "whatsapp") {
         if (!String(s.pollWhatsappNumber || "").replace(/[^0-9]/g, "")) {
-          showStatus("Bu anket için WhatsApp numarası tanımlanmamış.", true);
+          showStatus(L("Bu anket için WhatsApp numarası tanımlanmamış."), true);
           return;
         }
         openWhatsApp(s.pollWhatsappNumber, buildWhatsAppMessage(s, questions, answers, commentValues, participantName));
-        showStatus("WhatsApp açıldı. Yanıtınızı iletmek için WhatsApp'ta Gönder'e dokunun.", false);
+        showStatus(L("WhatsApp açıldı. Yanıtınızı iletmek için WhatsApp'ta Gönder'e dokunun."), false);
         return;
       }
 
@@ -525,7 +528,7 @@
       if (method === "seoz") {
         const slug = global.SeozCloudStore && global.SeozCloudStore.currentSlug ? global.SeozCloudStore.currentSlug() : "";
         if (!slug || !global.SeozEventStore || !global.SeozEventStore.pollSubmit) {
-          showStatus(mode === "edit" || !slug ? "Bu bir önizleme: yanıtlar yayınlanan davetiyede kaydedilir." : "Anket şu anda kullanılamıyor.", !slug ? false : true);
+          showStatus(L(mode === "edit" || !slug ? "Bu bir önizleme: yanıtlar yayınlanan davetiyede kaydedilir." : "Anket şu anda kullanılamıyor."), !slug ? false : true);
           return;
         }
         submitBtn.disabled = true; submitBtn.style.opacity = ".6"; showStatus("Gönderiliyor...", false);
@@ -534,14 +537,14 @@
         global.SeozEventStore.pollSubmit(slug, ctx && ctx.layerId, { answers, comments, name: participantName })
           .then(r => {
             submitBtn.disabled = false; submitBtn.style.opacity = "1";
-            showStatus(r && r.updated ? "Yanıtınız güncellendi. Teşekkür ederiz." : "Yanıtınız kaydedildi. Teşekkür ederiz.", false);
-            submitBtn.textContent = "Yanıtımı güncelle";
+            showStatus(L(r && r.updated ? "Yanıtınız güncellendi. Teşekkür ederiz." : "Yanıtınız kaydedildi. Teşekkür ederiz."), false);
+            submitBtn.textContent = L("Yanıtımı güncelle");
           })
           .catch(err => {
             submitBtn.disabled = false; submitBtn.style.opacity = "1";
             const c = String((err && (err.code || err.message)) || "");
-            showStatus(/closed/.test(c) ? "Bu anket yanıtlara kapatıldı." : /required/.test(c) ? "Lütfen zorunlu soruları yanıtlayın." : /full/.test(c) ? "Anket yanıt sınırına ulaştı." :
-              c === "network" ? "Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin." : "Yanıt gönderilemedi. Lütfen biraz sonra tekrar deneyin.", true);
+            showStatus(L(/closed/.test(c) ? "Bu anket yanıtlara kapatıldı." : /required/.test(c) ? "Lütfen zorunlu soruları yanıtlayın." : /full/.test(c) ? "Anket yanıt sınırına ulaştı." :
+              c === "network" ? "Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin." : "Yanıt gönderilemedi. Lütfen biraz sonra tekrar deneyin."), true);
           });
         return;
       }
@@ -549,7 +552,7 @@
       submitted = true;
       submitBtn.disabled = true;
       submitBtn.style.opacity = ".6";
-      showStatus("Gönderiliyor...", false);
+      showStatus(L("Gönderiliyor..."), false);
 
       const summary = buildSummary(questions, answers, commentValues);
       const job = method === "google-form"
@@ -558,7 +561,7 @@
 
       job.then(() => {
         lockForm();
-        showStatus("Yanıtınız alınmıştır. Teşekkür ederiz.", false);
+        showStatus(L("Yanıtınız alınmıştır. Teşekkür ederiz."), false);
       });
     });
 
@@ -569,8 +572,8 @@
     if (mode !== "edit" && method === "seoz") {
       const slug = global.SeozCloudStore && global.SeozCloudStore.currentSlug ? global.SeozCloudStore.currentSlug() : "";
       if (slug && global.SeozEventStore && global.SeozEventStore.pollHasVoted && global.SeozEventStore.pollHasVoted(slug, ctx && ctx.layerId)) {
-        submitBtn.textContent = "Yanıtımı güncelle";
-        showStatus("Bu ankete daha önce katıldınız; yeniden gönderirseniz yanıtınız güncellenir.", false);
+        submitBtn.textContent = L("Yanıtımı güncelle");
+        showStatus(L("Bu ankete daha önce katıldınız; yeniden gönderirseniz yanıtınız güncellenir."), false);
         // önceki yanıt formda işaretli gelir (yalnızca bu tarayıcının gizli anahtarıyla okunur)
         if (global.SeozEventStore.pollGetOwn) global.SeozEventStore.pollGetOwn(slug, ctx && ctx.layerId).then(own => {
           if (!own) return;

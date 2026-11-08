@@ -24,6 +24,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     effectType: "confetti",
@@ -239,7 +242,7 @@
   function buildTriggerButton(s) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = s.buttonText || "Kutlamayı Başlat";
+    btn.textContent = s.buttonText || L("Kutlamayı Başlat");
     Object.assign(btn.style, {
       width: s.buttonWidth + "px",
       height: s.buttonHeight + "px",

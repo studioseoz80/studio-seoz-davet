@@ -23,6 +23,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     moduleActive: true,
@@ -157,7 +160,7 @@
     if (url || mode === "edit") {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = s.apptButtonText || DEFAULTS.apptButtonText;
+      btn.textContent = s.apptButtonText || D(DEFAULTS.apptButtonText);
       Object.assign(btn.style, {
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: s.buttonWidth + "px", maxWidth: "100%", height: s.buttonHeight + "px",
@@ -167,7 +170,7 @@
       });
       if (!url) {
         btn.disabled = true;
-        btn.title = "Randevu bağlantısı / WhatsApp numarası girilmemiş";
+        btn.title = L("Randevu bağlantısı / WhatsApp numarası girilmemiş");
       }
       btn.addEventListener("click", () => {
         // GÜVENLİK: yalnızca BU modülün kendi appt* alanları kullanılır.

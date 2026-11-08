@@ -15,6 +15,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     rsvpMode: "kapali",
@@ -143,18 +146,18 @@
     }
 
     if (s.rsvpMode === "whatsapp-tek") {
-      const btn = styledButton(s, s.buttonText || "Katılım Bildir");
+      const btn = styledButton(s, s.buttonText || L("Katılım Bildir"));
       setDisabledIfEmpty(btn, !!s.whatsappNumber);
       btn.addEventListener("click", () => {
         if (!s.whatsappNumber) return;
-        const url = buildWhatsAppUrl(s.whatsappNumber, "Merhaba, davetinize katılıyorum.");
+        const url = buildWhatsAppUrl(s.whatsappNumber, L("Merhaba, davetinize katılıyorum."));
         window.open(url, "_blank", "noopener");
       });
       wrap.appendChild(btn);
     }
 
     if (s.rsvpMode === "google-form") {
-      const btn = styledButton(s, s.buttonText || "Katılım Bildir");
+      const btn = styledButton(s, s.buttonText || L("Katılım Bildir"));
       setDisabledIfEmpty(btn, !!s.googleFormUrl);
       btn.addEventListener("click", () => {
         if (!s.googleFormUrl) return;
@@ -172,14 +175,14 @@
 
       const hasNumber = !!s.whatsappNumber;
 
-      const acceptBtn = styledButton(s, s.acceptButtonText || "Katılıyorum");
+      const acceptBtn = styledButton(s, s.acceptButtonText || L("Katılıyorum"));
       setDisabledIfEmpty(acceptBtn, hasNumber);
       acceptBtn.addEventListener("click", () => {
         if (!s.whatsappNumber) return;
         window.open(buildWhatsAppUrl(s.whatsappNumber, s.acceptMessage), "_blank", "noopener");
       });
 
-      const declineBtn = styledButton(s, s.declineButtonText || "Katılamıyorum");
+      const declineBtn = styledButton(s, s.declineButtonText || L("Katılamıyorum"));
       declineBtn.style.background = "transparent";
       declineBtn.style.border = `1px solid ${s.bgColor}`;
       declineBtn.style.color = s.bgColor;

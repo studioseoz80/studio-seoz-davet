@@ -16,6 +16,9 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const DEFAULTS = {
     title: "",
@@ -89,7 +92,7 @@
       const matrixResult = global.SeozQREncoder.generateMatrix(s.qrUrl);
       if (!matrixResult) {
         const errorEl = document.createElement("div");
-        errorEl.textContent = "Bağlantı çok uzun — QR koda dönüştürülemedi.";
+        errorEl.textContent = L("Bağlantı çok uzun — QR koda dönüştürülemedi.");
         Object.assign(errorEl.style, { fontSize: "11px", color: "#b3452c", textAlign: "center" });
         qrHost.appendChild(errorEl);
       } else {

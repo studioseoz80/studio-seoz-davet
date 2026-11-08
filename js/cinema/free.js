@@ -22,6 +22,9 @@
    ========================================================================= */
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
   const C = global.SeozCinema;
   if (!C) return;
   const { h } = C.util;
@@ -1053,7 +1056,7 @@
   function showTapHint(ctx, on, kind, dir) {
     const hint = ctx.overlay.querySelector(".sc-hint");
     if (!hint) return;
-    if (on) { hint.textContent = (GATE_HINT[kind] || GATE_HINT.tap) + (kind === "pull" || kind === "swipe" ? (DIR_ARROW[dir] || "") : ""); hint.style.display = ""; }
+    if (on) { hint.textContent = L(GATE_HINT[kind] || GATE_HINT.tap) + (kind === "pull" || kind === "swipe" ? (DIR_ARROW[dir] || "") : ""); hint.style.display = ""; }
     else hint.style.display = "none";
   }
 
@@ -1095,7 +1098,7 @@
     const def = "Açmak için dokunun";
     if (hint && firstKind !== "tap" && (!ctx.cfg.hintText || ctx.cfg.hintText === def)) {
       const first = (ctx.cfg.actions || []).find(isGate);
-      hint.textContent = GATE_HINT[firstKind] + (firstKind === "pull" || firstKind === "swipe" ? (DIR_ARROW[first && first.gdir] || "") : "");
+      hint.textContent = L(GATE_HINT[firstKind]) + (firstKind === "pull" || firstKind === "swipe" ? (DIR_ARROW[first && first.gdir] || "") : "");
     }
   }
   function nudgeHint(ctx) {

@@ -89,7 +89,7 @@
       numberEls[key] = num;
 
       const lbl = document.createElement("div");
-      lbl.textContent = label;
+      lbl.textContent = global.SeozInviteI18n ? global.SeozInviteI18n.L(label) : label;   // davetiye dili (Gün → Days)
       lbl.style.fontFamily = "'Manrope', sans-serif";
       lbl.style.fontSize = "10px";
       lbl.style.color = s.textColor;

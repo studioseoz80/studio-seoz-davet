@@ -41,6 +41,9 @@
   "use strict";
 
   function uid(prefix) { return prefix + "_" + Math.random().toString(36).slice(2, 9); }
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
+  const D = (t) => (global.SeozInviteI18n ? global.SeozInviteI18n.D(t) : t);
 
   const QUESTION_TYPES = [
     { value: "short", label: "Kısa cevap" },
@@ -299,34 +302,34 @@
     rejected: "Yanıt gönderilemedi.",
     payload_too_large: "Yanıt çok uzun. Lütfen kısaltıp tekrar deneyin.",
     not_configured: "Katılım formu şu anda kullanılamıyor."
-  };
+  };   // gösterilirken L() ile çevrilir
 
   /* Yerel (tarayıcı) kontrolü — sunucu da aynı kuralları ayrıca uygular. */
   function validateLocal(st, s, questions) {
     const errs = {};
-    if (isBlank(st.name)) errs.__name = "Bu alan zorunludur.";
+    if (isBlank(st.name)) errs.__name = L("Bu alan zorunludur.");
     questions.forEach(q => {
       if (!isVisible(q, st, questions)) return;
       const v = st.values[q.id];
-      if (isBlank(v)) { if (q.required) errs[q.id] = "Bu alan zorunludur."; return; }
+      if (isBlank(v)) { if (q.required) errs[q.id] = L("Bu alan zorunludur."); return; }
       if (q.type === "number") {
         const n = Number(v);
-        if (!isFinite(n)) { errs[q.id] = "Geçerli bir sayı girin."; return; }
+        if (!isFinite(n)) { errs[q.id] = L("Geçerli bir sayı girin."); return; }
         if (q.role === "count") {
           const max = buildServerForm(s).maxPartySize;
-          if (n < 1 || n > max || Math.floor(n) !== n) errs[q.id] = `1 ile ${max} arasında bir sayı girin.`;
+          if (n < 1 || n > max || Math.floor(n) !== n) errs[q.id] = L("1 ile {max} arasında bir sayı girin.", { max });
         } else {
-          if (q.min !== "" && q.min != null && n < Number(q.min)) errs[q.id] = `En az ${q.min} olmalı.`;
-          if (q.max !== "" && q.max != null && n > Number(q.max)) errs[q.id] = `En fazla ${q.max} olabilir.`;
+          if (q.min !== "" && q.min != null && n < Number(q.min)) errs[q.id] = L("En az {n} olmalı.", { n: q.min });
+          if (q.max !== "" && q.max != null && n > Number(q.max)) errs[q.id] = L("En fazla {n} olabilir.", { n: q.max });
         }
       }
     });
     const form = buildServerForm(s);
     const ps = partySize(st, s, questions);
     if (form.askCompanionNames && form.companionNamesRequired) {
-      for (let i = 1; i < ps; i++) if (isBlank(st.companions[i - 1])) errs["__comp" + i] = "Bu alan zorunludur.";
+      for (let i = 1; i < ps; i++) if (isBlank(st.companions[i - 1])) errs["__comp" + i] = L("Bu alan zorunludur.");
     }
-    if (form.consentText && !st.consent) errs.__consent = "Devam etmek için onay vermeniz gerekiyor.";
+    if (form.consentText && !st.consent) errs.__consent = L("Devam etmek için onay vermeniz gerekiyor.");
     return errs;
   }
 
@@ -334,10 +337,10 @@
     const m = String(code || "").match(/^(required|invalid|range|too_long):(.+)$/);
     if (!m) return null;
     const target = m[2];
-    const msg = m[1] === "required" ? "Bu alan zorunludur." : m[1] === "range" ? "Bu değer izin verilen aralıkta değil." :
-                m[1] === "too_long" ? "Bu yanıt çok uzun." : "Bu yanıt geçerli değil.";
+    const msg = L(m[1] === "required" ? "Bu alan zorunludur." : m[1] === "range" ? "Bu değer izin verilen aralıkta değil." :
+                m[1] === "too_long" ? "Bu yanıt çok uzun." : "Bu yanıt geçerli değil.");
     if (target === "name") return { key: "__name", msg };
-    if (target === "consent") return { key: "__consent", msg: "Devam etmek için onay vermeniz gerekiyor." };
+    if (target === "consent") return { key: "__consent", msg: L("Devam etmek için onay vermeniz gerekiyor.") };
     const cm = target.match(/^companion:(\d+)$/);
     if (cm) return { key: "__comp" + cm[1], msg };
     return { key: target, msg };
@@ -383,7 +386,7 @@
   }
 
   function renderQuestion(q, st, s, questions, repaint, refreshCompanions) {
-    const { f, ctrl } = fieldWrap(st, q.id, q.label, q.required, q.help);
+    const { f, ctrl } = fieldWrap(st, q.id, D(q.label), q.required, D(q.help));
     // Kişi sayısı sorusu boşsa 1 ile başlar (çoğu kişi tek gelir; "+" ile artırılır).
     if (q.role === "count" && q.type === "number" && isBlank(st.values[q.id])) st.values[q.id] = 1;
     const val = st.values[q.id];
@@ -399,7 +402,7 @@
 
     } else if (q.type === "yesno") {
       const row = el("div", "seoz-af-pills");
-      [[true, q.yesLabel || "Evet"], [false, q.noLabel || "Hayır"]].forEach(([v, text]) => {
+      [[true, D(q.yesLabel) || L("Evet")], [false, D(q.noLabel) || L("Hayır")]].forEach(([v, text]) => {
         const b = el("button", "seoz-af-pill", text);
         b.type = "button";
         b.setAttribute("aria-pressed", String(val === v));
@@ -414,7 +417,7 @@
     } else if (q.type === "choice") {
       const grid = el("div", "seoz-af-choices");
       q.options.forEach(o => {
-        const b = el("button", "seoz-af-choice", o.label);
+        const b = el("button", "seoz-af-choice", D(o.label));
         b.type = "button";
         b.setAttribute("aria-pressed", String(val === o.id));
         b.addEventListener("click", () => {
@@ -445,17 +448,17 @@
           } else if (inp.checked) set(o.id);
         });
         lab.appendChild(inp);
-        lab.appendChild(el("span", null, o.label));
+        lab.appendChild(el("span", null, D(o.label)));
         ctrl.appendChild(lab);
       });
 
     } else if (q.type === "select") {
       const sel = el("select");
-      const ph = el("option", null, "Seçiniz");
+      const ph = el("option", null, L("Seçiniz"));
       ph.value = "";
       sel.appendChild(ph);
       q.options.forEach(o => {
-        const op = el("option", null, o.label);
+        const op = el("option", null, D(o.label));
         op.value = o.id;
         if (val === o.id) op.selected = true;
         sel.appendChild(op);
@@ -477,8 +480,8 @@
       inp.addEventListener("input", update);
       if (q.role === "count") {
         const step = el("div", "seoz-af-stepper");
-        const minus = el("button", null, "−"); minus.type = "button"; minus.setAttribute("aria-label", "Azalt");
-        const plus = el("button", null, "+"); plus.type = "button"; plus.setAttribute("aria-label", "Artır");
+        const minus = el("button", null, "−"); minus.type = "button"; minus.setAttribute("aria-label", L("Azalt"));
+        const plus = el("button", null, "+"); plus.type = "button"; plus.setAttribute("aria-label", L("Artır"));
         const max = buildServerForm(s).maxPartySize;
         minus.addEventListener("click", () => { inp.value = String(Math.max(1, (parseInt(inp.value, 10) || 1) - 1)); update(); });
         plus.addEventListener("click", () => { inp.value = String(Math.min(max, (parseInt(inp.value, 10) || 0) + 1)); update(); });
@@ -496,14 +499,14 @@
     const card = el("div", "seoz-af-card");
     root.appendChild(card);
 
-    if (String(s.formTitle || "").trim()) card.appendChild(el("h3", "seoz-af-title", s.formTitle));
-    if (String(s.formDescription || "").trim()) card.appendChild(el("p", "seoz-af-desc", s.formDescription));
+    if (String(s.formTitle || "").trim()) card.appendChild(el("h3", "seoz-af-title", D(s.formTitle)));
+    if (String(s.formDescription || "").trim()) card.appendChild(el("p", "seoz-af-desc", D(s.formDescription)));
 
     const slug = mode === "edit" ? "" : currentSlug();
     const live = mode !== "edit" && !!slug && global.SeozEventStore && global.SeozEventStore.isConfigured();
 
     if (st.closed) {
-      card.appendChild(el("p", "seoz-af-desc", s.closedMessage || DEFAULTS.closedMessage));
+      card.appendChild(el("p", "seoz-af-desc", D(s.closedMessage || DEFAULTS.closedMessage)));
       return;
     }
 
@@ -511,15 +514,15 @@
     if (st.phase === "done") {
       const d = el("div", "seoz-af-done");
       d.appendChild(el("div", "seoz-af-check", "✓"));
-      d.appendChild(el("p", null, st.wasUpdate ? (s.updatedMessage || DEFAULTS.updatedMessage) : (s.successMessage || DEFAULTS.successMessage)));
+      d.appendChild(el("p", null, D(st.wasUpdate ? (s.updatedMessage || DEFAULTS.updatedMessage) : (s.successMessage || DEFAULTS.successMessage))));
       if (mode === "edit") d.appendChild(el("p", "seoz-af-note", "Editör önizlemesi — yanıt kaydedilmedi."));
       if (st.closeModal) {
-        const closeBtn = el("button", "seoz-af-submit seoz-af-done-close", "Kapat");
+        const closeBtn = el("button", "seoz-af-submit seoz-af-done-close", L("Kapat"));
         closeBtn.type = "button";
         closeBtn.addEventListener("click", () => st.closeModal());
         d.appendChild(closeBtn);
       }
-      const again = el("button", "seoz-af-link", s.editAgainText || DEFAULTS.editAgainText);
+      const again = el("button", "seoz-af-link", D(s.editAgainText || DEFAULTS.editAgainText));
       again.type = "button";
       again.addEventListener("click", () => { st.phase = "form"; st.status = ""; paint(root, s, mode, ctx, st); });
       d.appendChild(again);
@@ -529,17 +532,18 @@
 
     if (st.own && st.own.updated_at) {
       const when = new Date(st.own.updated_at);
-      const txt = isNaN(when) ? "" : " (" + when.toLocaleDateString("tr-TR", { day: "numeric", month: "long" }) + ")";
-      card.appendChild(el("p", "seoz-af-note", "Daha önce yanıt verdiniz" + txt + ". Değişiklik yapıp güncelleyebilirsiniz."));
+      const loc = global.SeozInviteI18n ? global.SeozInviteI18n.locale() : "tr-TR";
+      const txt = isNaN(when) ? "" : " (" + when.toLocaleDateString(loc, { day: "numeric", month: "long" }) + ")";
+      card.appendChild(el("p", "seoz-af-note", L("Daha önce yanıt verdiniz{when}. Değişiklik yapıp güncelleyebilirsiniz.", { when: txt })));
     }
     if (mode !== "edit" && !live) {
-      card.appendChild(el("p", "seoz-af-note", "Bu form yalnızca yayınlanmış davetiye bağlantısında yanıt alır."));
+      card.appendChild(el("p", "seoz-af-note", L("Bu form yalnızca yayınlanmış davetiye bağlantısında yanıt alır.")));
     }
 
     const repaint = () => paint(root, s, mode, ctx, st);
 
     /* Ad soyad (her formda var; etiketi editörden değişir) */
-    const nameW = fieldWrap(st, "__name", form.nameLabel, true, "");
+    const nameW = fieldWrap(st, "__name", D(form.nameLabel), true, "");
     const nameInp = el("input");
     nameInp.type = "text"; nameInp.maxLength = 120; nameInp.autocomplete = "name";
     nameInp.value = st.name || "";
@@ -556,8 +560,8 @@
       const wrap = el("div", "seoz-af-field seoz-af-comp");
       for (let i = 1; i < ps; i++) {
         const key = "__comp" + i;
-        const label = String(s.companionLabel || DEFAULTS.companionLabel).replace("{n}", String(i + 1));
-        const w = fieldWrap(st, key, label, form.companionNamesRequired, form.companionNamesRequired ? "" : "İsteğe bağlı");
+        const label = String(D(s.companionLabel || DEFAULTS.companionLabel)).replace("{n}", String(i + 1));
+        const w = fieldWrap(st, key, label, form.companionNamesRequired, form.companionNamesRequired ? "" : L("İsteğe bağlı"));
         const inp = el("input");
         inp.type = "text"; inp.maxLength = 120;
         inp.value = st.companions[i - 1] || "";
@@ -582,7 +586,7 @@
       const cb = el("input"); cb.type = "checkbox"; cb.checked = !!st.consent;
       cb.addEventListener("change", () => { st.consent = cb.checked; clearErr(st, "__consent", cw.f); });
       lab.appendChild(cb);
-      lab.appendChild(el("span", null, form.consentText));
+      lab.appendChild(el("span", null, D(form.consentText)));
       cw.ctrl.appendChild(lab);
       card.appendChild(cw.f);
     }
@@ -592,7 +596,7 @@
     hp.type = "text"; hp.tabIndex = -1; hp.autocomplete = "off"; hp.setAttribute("aria-hidden", "true"); hp.name = "website";
     card.appendChild(hp);
 
-    const btn = el("button", "seoz-af-submit", st.own ? (s.updateButtonText || DEFAULTS.updateButtonText) : (s.submitButtonText || DEFAULTS.submitButtonText));
+    const btn = el("button", "seoz-af-submit", D(st.own ? (s.updateButtonText || DEFAULTS.updateButtonText) : (s.submitButtonText || DEFAULTS.submitButtonText)));
     btn.type = "button";
     btn.disabled = st.busy;
     card.appendChild(btn);
@@ -603,14 +607,14 @@
       if (st.busy) return;
       st.errors = validateLocal(st, s, questions);
       if (Object.keys(st.errors).length) {
-        st.status = "Lütfen işaretli alanları kontrol edin."; st.statusErr = true;
+        st.status = L("Lütfen işaretli alanları kontrol edin."); st.statusErr = true;
         repaint();
         const first = root.querySelector(".seoz-af-err");
         if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
       if (mode === "edit") { st.wasUpdate = !!st.own; st.phase = "done"; st.status = ""; repaint(); return; }
-      if (!live) { st.status = "Bu form yalnızca yayınlanmış davetiye bağlantısında yanıt alır."; st.statusErr = true; repaint(); return; }
+      if (!live) { st.status = L("Bu form yalnızca yayınlanmış davetiye bağlantısında yanıt alır."); st.statusErr = true; repaint(); return; }
 
       const ps = partySize(st, s, questions);
       const answers = {};
@@ -622,7 +626,7 @@
         consent: !!st.consent,
         hp: hp.value
       };
-      st.busy = true; st.status = "Gönderiliyor..."; st.statusErr = false;
+      st.busy = true; st.status = L("Gönderiliyor..."); st.statusErr = false;
       btn.disabled = true; status.textContent = st.status; status.className = "seoz-af-status";
       global.SeozEventStore.submitResponse(slug, ctx && ctx.layerId, payload)
         .then(r => {
@@ -638,8 +642,8 @@
           const code = (err && (err.code || err.message)) || "";
           if (code === "form_closed") { st.closed = true; repaint(); return; }
           const fe = serverErrorToField(code);
-          if (fe) { st.errors[fe.key] = fe.msg; st.status = "Lütfen işaretli alanları kontrol edin."; }
-          else st.status = MESSAGES[code] || "Yanıt gönderilemedi. Lütfen tekrar deneyin.";
+          if (fe) { st.errors[fe.key] = fe.msg; st.status = L("Lütfen işaretli alanları kontrol edin."); }
+          else st.status = L(MESSAGES[code] || "Yanıt gönderilemedi. Lütfen tekrar deneyin.");
           st.statusErr = true;
           repaint();
         });
@@ -685,12 +689,12 @@
     const sheet = el("div", "seoz-af-sheet");
     sheet.setAttribute("role", "dialog");
     sheet.setAttribute("aria-modal", "true");
-    sheet.setAttribute("aria-label", String(s.formTitle || "").trim() || String(s.launcherText || DEFAULTS.launcherText));
+    sheet.setAttribute("aria-label", D(String(s.formTitle || "").trim() || String(s.launcherText || DEFAULTS.launcherText)));
     sheet.tabIndex = -1;
     const head = el("div", "seoz-af-sheet-head");
     const x = el("button", "seoz-af-x", "✕");
     x.type = "button";
-    x.setAttribute("aria-label", "Kapat");
+    x.setAttribute("aria-label", L("Kapat"));
     head.appendChild(x);
     const body = el("div", "seoz-af-sheet-body");
     const inner = el("div", "seoz-af");
@@ -760,7 +764,7 @@
     const key = (mode === "edit" ? "edit:" : "view:") + ((ctx && ctx.docId) || "") + ":" + ((ctx && ctx.layerId) || "");
     const st = stateFor(key);
 
-    const btn = el("button", "seoz-af-launch", String(s.launcherText || "").trim() || DEFAULTS.launcherText);
+    const btn = el("button", "seoz-af-launch", D(String(s.launcherText || "").trim() || DEFAULTS.launcherText));
     btn.type = "button";
     btn.setAttribute("aria-haspopup", "dialog");
     const note = el("div", "seoz-af-launch-note");
@@ -770,7 +774,7 @@
     st.refreshLauncher = () => {
       if (!note.isConnected && !root.isConnected) return;
       if (mode === "edit") { note.textContent = "Editör: formu önizlemek için butona çift tıklayın."; return; }
-      note.textContent = st.closed ? (s.closedMessage || DEFAULTS.closedMessage) : st.own ? "✓ Yanıtınız alındı · değiştirmek için tekrar dokunun" : "";
+      note.textContent = st.closed ? D(s.closedMessage || DEFAULTS.closedMessage) : st.own ? L("✓ Yanıtınız alındı · değiştirmek için tekrar dokunun") : "";
       note.hidden = !note.textContent;
     };
     st.refreshLauncher();

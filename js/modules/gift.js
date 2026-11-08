@@ -16,6 +16,8 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
 
   const DEFAULTS = {
     giftMode: "kapali",
@@ -237,7 +239,7 @@
       if (!url) {
         b.style.opacity = ".5";
         b.style.cursor = "not-allowed";
-        b.title = "Hediye linki girilmemiş";
+        b.title = L("Hediye linki girilmemiş");
       }
       b.addEventListener("click", () => {
         if (!url) return;
@@ -269,7 +271,7 @@
         card.appendChild(bn);
       }
       const ibanEl = document.createElement("div");
-      ibanEl.textContent = s.iban ? formatIban(s.iban) : "IBAN girilmemiş";
+      ibanEl.textContent = s.iban ? formatIban(s.iban) : L("IBAN girilmemiş");
       Object.assign(ibanEl.style, {
         fontFamily: "'IBM Plex Sans', 'Manrope', sans-serif",
         fontSize: (fs - 1) + "px", letterSpacing: ".04em",
@@ -283,7 +285,7 @@
       copyBtn.addEventListener("click", () => {
         const value = compactIban(s.iban);
         if (!value) return;
-        copyText(value).then(ok => showToast(ok ? "IBAN kopyalandı" : "Kopyalanamadı — IBAN'ı basılı tutarak seçebilirsiniz"));
+        copyText(value).then(ok => showToast(L(ok ? "IBAN kopyalandı" : "Kopyalanamadı — IBAN'ı basılı tutarak seçebilirsiniz")));
       });
       card.appendChild(copyBtn);
       wrap.appendChild(card);

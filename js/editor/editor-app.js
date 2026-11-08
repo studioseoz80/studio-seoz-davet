@@ -55,6 +55,10 @@
         <div class="editor-topbar">
           <button class="back-btn btn-icon" data-back title="Kütüphaneye dön">←</button>
           <input type="text" class="doc-title-input" data-title-input value="${escapeAttr(doc.meta.title)}">
+          <select class="doc-lang-select" data-doc-lang title="Misafirin göreceği davetiye yazılarının dili: butonlar, katılım formu, geri sayım, mesajlar. Editör Türkçe kalır.">
+            <option value="tr"${doc.meta.lang === "en" ? "" : " selected"}>Davetiye dili: Türkçe</option>
+            <option value="en"${doc.meta.lang === "en" ? " selected" : ""}>Davetiye dili: İngilizce</option>
+          </select>
           <div class="spacer"></div>
           <span class="save-status" data-save-status>Kaydedildi</span>
           <div class="bp-toggle">
@@ -662,6 +666,13 @@
     appRoot.querySelector("[data-title-input]").addEventListener("input", (e) => {
       doc.meta.title = e.target.value || "Adsız Davetiye";
       scheduleAutosave();
+    });
+    // Davetiye dili (TR/EN): yalnızca misafirin gördüğü sistem yazıları değişir; editör Türkçe kalır.
+    // Türkçe seçilince alan silinir — dil alanı olmayan davetiye eskisi gibi Türkçe sayılır.
+    appRoot.querySelector("[data-doc-lang]").addEventListener("change", (e) => {
+      if (e.target.value === "en") doc.meta.lang = "en"; else delete doc.meta.lang;
+      scheduleAutosave();
+      fullCanvasRender();
     });
 
     /* ---------------- MADDE 4: GERİ AL / İLERİ AL / SİL — buton + klavye ---------------- */

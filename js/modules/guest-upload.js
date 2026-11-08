@@ -26,6 +26,8 @@
 
 (function (global) {
   "use strict";
+  // Davetiye dili (TR/EN): misafirin gördüğü metinler. Türkçede metin aynen döner. Bkz. core/invite-i18n.js
+  const L = (t, v) => (global.SeozInviteI18n ? global.SeozInviteI18n.L(t, v) : String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
 
   const DEFAULTS = {
     title: "Anılarınızı Paylaşın",
@@ -189,7 +191,7 @@
     const drive = isDrive(s);
     const btn = document.createElement("button");
     btn.type = "button";
-    const originalText = s.buttonText || "Anı Yükle";
+    const originalText = s.buttonText || L("Anı Yükle");
     btn.textContent = originalText;
     const hasLink = drive ? !!s.uploadUrl : true;   // görünüm eskisiyle aynı: Drive'da adres hiç yoksa soluk
     Object.assign(btn.style, {
@@ -218,20 +220,20 @@
       const up = f => (drive ? uploadDrive(f, s.uploadUrl.trim()) : uploadSeoz(f, slug));
       let chain = Promise.resolve();
       files.forEach((f, i) => {
-        chain = chain.then(() => { setBusy(files.length > 1 ? `Yükleniyor ${i + 1}/${files.length}…` : "Yükleniyor…", true); toast(files.length > 1 ? `Yükleniyor: ${i + 1}/${files.length}` : "Yükleniyor…"); })
+        chain = chain.then(() => { setBusy(files.length > 1 ? L("Yükleniyor {i}/{n}…", { i: i + 1, n: files.length }) : L("Yükleniyor…"), true); toast(files.length > 1 ? L("Yükleniyor: {i}/{n}", { i: i + 1, n: files.length }) : L("Yükleniyor…")); })
           .then(() => up(f)).then(() => { ok++; }, e => { errs.push({ f, e }); if (e && e.detail) console.warn("[Studio SEOZ] Anı Yükle:", e.code, e.detail); })
           .then(() => { done++; });
       });
       chain.then(() => {
         uploading = false;
         if (!errs.length) {
-          setBusy("Yüklendi ✓", false);
-          toast(`Teşekkürler! ${ok} ${ok === 1 ? "dosya" : "dosya"} yüklendi ✓`, "ok");
+          setBusy(L("Yüklendi ✓"), false);
+          toast(L("Teşekkürler! {n} dosya yüklendi ✓", { n: ok }), "ok");
         } else {
           const e0 = errs[0].e || {}, code = e0.code || "server";
-          const why = code === "too_large" ? `${MSG.too_large} (en çok ${drive ? MAX_MB.drive : MAX_MB.seoz} MB): ${errs.map(x => x.f.name).slice(0, 2).join(", ")}` : (MSG[code] || MSG.server);
-          setBusy(ok ? "Kısmen yüklendi" : "Yüklenemedi", false);
-          toast(ok ? `${ok} dosya yüklendi, ${errs.length} dosya yüklenemedi. ${why}` : why, "err");
+          const why = code === "too_large" ? L("{msg} (en çok {mb} MB): {names}", { msg: L(MSG.too_large), mb: drive ? MAX_MB.drive : MAX_MB.seoz, names: errs.map(x => x.f.name).slice(0, 2).join(", ") }) : L(MSG[code] || MSG.server);
+          setBusy(L(ok ? "Kısmen yüklendi" : "Yüklenemedi"), false);
+          toast(ok ? L("{ok} dosya yüklendi, {bad} dosya yüklenemedi. {why}", { ok, bad: errs.length, why }) : why, "err");
         }
         setTimeout(() => { if (!uploading) setBusy(originalText, false); }, 3000);
       });
@@ -242,10 +244,10 @@
       // GÜVENLİK: yalnızca BU modülün kendi uploadUrl değeri kullanılır; başka modüllerin bağlantılarına asla geçilmez.
       if (drive) {
         if (!s.uploadUrl) return;
-        if (!DRIVE_RE.test(String(s.uploadUrl).trim())) { e.preventDefault(); toast(MSG.not_configured, "err"); return; }
+        if (!DRIVE_RE.test(String(s.uploadUrl).trim())) { e.preventDefault(); toast(L(MSG.not_configured), "err"); return; }
       } else {
-        if (!base() || !key()) { toast(MSG.not_configured, "err"); return; }
-        if (!currentSlug()) { toast(MSG.preview); return; }
+        if (!base() || !key()) { toast(L(MSG.not_configured), "err"); return; }
+        if (!currentSlug()) { toast(L(MSG.preview)); return; }
       }
       fileInput.click();   // doğrudan dokunuşla aynı çağrı yığınında (iOS/Android)
     });
