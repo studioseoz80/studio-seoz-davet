@@ -243,8 +243,12 @@
       }
       b.addEventListener("click", () => {
         if (!url) return;
-        const win = global.open(url, "_blank", "noopener");
-        if (!win) global.location.href = url;
+        // DÜZELTME: window.open(url, "_blank", "noopener") tarayıcılarda HER ZAMAN null döner;
+        // eski "null ise bu sayfayı yönlendir" yedeği davetiyeyi de hediye sayfasına götürüyordu.
+        // Artık bağlantı yalnızca yeni sekmede açılır, davetiye olduğu yerde kalır.
+        const doc = global.document, a = doc.createElement("a");
+        a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.display = "none";
+        doc.body.appendChild(a); a.click(); a.remove();
       });
       wrap.appendChild(b);
     }
