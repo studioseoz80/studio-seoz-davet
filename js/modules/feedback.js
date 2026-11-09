@@ -167,8 +167,12 @@
   }
 
   function openUrl(url) {
-    const win = global.open(url, "_blank");
-    if (!win) global.location.href = url;
+    // DÜZELTME: eskiden window.open boş dönünce (açılır pencere engeli, uygulama içi tarayıcı)
+    // davetiyenin KENDİSİ WhatsApp'a yönlendiriliyordu. Artık bağlantı yalnızca yeni sekmede
+    // açılır; davetiye olduğu yerde kalır (Hediye Listesi ile aynı yöntem).
+    const doc = global.document, a = doc.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.display = "none";
+    doc.body.appendChild(a); a.click(); a.remove();
   }
 
   // Davetiye içinde topla: Studio SEOZ Supabase'ine kayıt (bkz.
@@ -413,7 +417,7 @@
         const lines = [];
         if (s.title) lines.push(`*${s.title}*`, "");
         lines.push(data.message);
-        if (data.name) lines.push("", `Ad Soyad: ${data.name}`);
+        if (data.name) lines.push("", L("Ad Soyad: {n}", { n: data.name }));
         if (data.contact) lines.push(L("İletişim: {c}", { c: data.contact }));
         openUrl(`https://wa.me/${digits(s.fbWhatsappNumber)}?text=${encodeURIComponent(lines.join("\n"))}`);
         // Form kilitlenmez: WhatsApp'ta göndermeden kapatılırsa tekrar denenebilir.

@@ -209,15 +209,19 @@
       lines.push(`${questions.length > 1 ? (i + 1) + ". " : ""}${q.text}`, `→ ${answerText(q, answers[q.id]) || "—"}`);
     });
     commentValues.forEach(c => { if (c.value) lines.push("", `${c.title}:`, c.value); });
-    if (participantName) lines.push("", `Ad Soyad: ${participantName}`);
+    if (participantName) lines.push("", L("Ad Soyad: {n}", { n: participantName }));
     return lines.join("\n");
   }
 
   function openWhatsApp(number, message) {
     const clean = String(number || "").replace(/[^0-9]/g, "");
     const url = `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
-    const win = global.open(url, "_blank");
-    if (!win) global.location.href = url; // açılır pencere engellenirse
+    // DÜZELTME: eskiden window.open boş dönünce (açılır pencere engeli, uygulama içi tarayıcı)
+    // davetiyenin KENDİSİ WhatsApp'a yönlendiriliyordu. Artık bağlantı yalnızca yeni sekmede
+    // açılır; davetiye olduğu yerde kalır (Hediye Listesi ile aynı yöntem).
+    const doc = global.document, a = doc.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.display = "none";
+    doc.body.appendChild(a); a.click(); a.remove();
   }
 
   function render(settings, mode, ctx) {

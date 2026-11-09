@@ -198,6 +198,7 @@
     "Görüş, Fikir ve Önerileriniz": "Comments & Suggestions",
     "Eklemek istediğiniz görüş, fikir veya önerinizi buraya yazabilirsiniz.": "Feel free to share any comments, ideas or suggestions here.",
     "Ad Soyad": "Full Name",
+    "Ad Soyad: {n}": "Full Name: {n}",
     "Lütfen adınızı girin.": "Please enter your name.",
     "Lütfen zorunlu (*) soruları yanıtlayın.": "Please answer the required (*) questions.",
     "Lütfen tüm soruları yanıtlayın.": "Please answer all the questions.",
