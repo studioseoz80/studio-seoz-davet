@@ -125,10 +125,81 @@
 
   /* ---------------- ANI ALBÜMÜ (Anı Yükle · Studio SEOZ depolaması) ---------------- */
   const ALBUM_KEY_PREFIX = "seoz_album_panel_v1_";   // + slug (yalnızca editör tarayıcısı)
-  async function ownerMemorySync(slug) {
-    const r = await rpc("memory_owner_sync", { p_slug: slug }, true);
+  /* eventDate: "YYYY-AA-GG" (davetiyedeki Geri Sayım / Takvime Ekle tarihi) — albümün saklama bilgisi için.
+     Supabase'de ani-albumu-yonetim.sql henüz kurulmamışsa eski çağrıya düşer (yayın aynen çalışır). */
+  async function ownerMemorySync(slug, eventDate) {
+    let r;
+    try { r = await rpc("memory_owner_sync", eventDate ? { p_slug: slug, p_event_date: eventDate } : { p_slug: slug }, true); }
+    catch (e) {
+      if (!eventDate || !/PGRST202|Could not find|p_event_date/i.test(String(e && (e.code || e.message)))) throw e;
+      r = await rpc("memory_owner_sync", { p_slug: slug }, true);
+    }
     if (r && r.panel_token) safeSet(ALBUM_KEY_PREFIX + slug, r.panel_token);
     return r;
+  }
+  const ownerAlbumInfo = slug => rpc("memory_owner_album_info", { p_slug: slug }, true);
+  const ownerAlbumSettings = (slug, eventDate, retentionDays) =>
+    rpc("memory_owner_album_settings", { p_slug: slug, p_event_date: eventDate || null, p_retention_days: retentionDays || null }, true);
+
+  /* "Albüm Verilerini Sil" (yalnızca Studio SEOZ): 1) "ani-yukleme/<slug>/" klasöründeki bütün dosyalar
+     Storage'dan silinir, 2) klasörün boş olduğu doğrulanır, 3) albüm kayıtları temizlenir.
+     YALNIZCA "ani-yukleme" bucket'ı ve YALNIZCA bu davetiyenin klasörü; başka hiçbir dosyaya dokunmaz.
+     Bir adım başarısız olursa durur (kayıtlar silinmez → tekrar denenebilir). onStep(metin) ilerleme. */
+  const ALBUM_BUCKET = "ani-yukleme";
+  async function ownerStorage(path, body, method) {
+    const token = global.SeozCloudStore.getAccessToken ? await global.SeozCloudStore.getAccessToken().catch(() => null) : null;
+    if (!token) { const e = new Error("auth_required"); e.code = "AUTH_REQUIRED"; throw e; }
+    let res;
+    try {
+      res = await fetch(`${baseUrl()}/storage/v1/${path}`, { method: method || "POST",
+        headers: { apikey: anonKey(), Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    } catch (netErr) { const e = new Error("network"); e.code = "network"; throw e; }
+    const t = await res.text();
+    if (!res.ok) { const e = new Error(errorCode(t) || ("HTTP " + res.status)); e.code = "storage"; throw e; }
+    return t ? JSON.parse(t) : null;
+  }
+  async function listAlbumFiles(slug) {
+    const out = [];
+    for (let offset = 0; offset < 50000; offset += 1000) {
+      const page = await ownerStorage(`object/list/${ALBUM_BUCKET}`, { prefix: slug, limit: 1000, offset, sortBy: { column: "name", order: "asc" } });
+      (page || []).forEach(o => { if (o && o.name && o.id !== null) out.push(slug + "/" + o.name); });
+      if (!page || page.length < 1000) break;
+    }
+    return out;
+  }
+  const SAFE_SLUG = /^[a-z0-9](?:[a-z0-9-]{1,118}[a-z0-9])$/;
+  async function ownerAlbumPurge(slug, onStep) {
+    if (!SAFE_SLUG.test(String(slug || ""))) throw new Error("invalid_slug");
+    const step = t => { if (onStep) onStep(t); };
+    step("Dosyalar listeleniyor…");
+    const files = await listAlbumFiles(slug);
+    if (files.some(p => p.split("/")[0] !== slug || p.split("/").length !== 2)) throw new Error("unexpected_path");
+    let deleted = 0;
+    for (let i = 0; i < files.length; i += 100) {
+      const part = files.slice(i, i + 100);
+      step(`Dosyalar siliniyor… ${Math.min(i + part.length, files.length)}/${files.length}`);
+      const r = await ownerStorage(`object/${ALBUM_BUCKET}`, { prefixes: part }, "DELETE");
+      deleted += Array.isArray(r) ? r.length : 0;
+    }
+    step("Kontrol ediliyor…");
+    const left = await listAlbumFiles(slug);
+    if (left.length) { const e = new Error(`${left.length} dosya depodan silinemedi`); e.code = "storage_not_empty"; e.deleted = deleted; throw e; }
+    step("Albüm kayıtları temizleniyor…");
+    const r = await rpc("memory_owner_purge", { p_slug: slug }, true);
+    return { deletedFiles: deleted, removedRecords: r && r.removed_records };
+  }
+
+  /* TESLİMAT PAKETİ: mevcut üç bağlantıyı tek sayfada toplar (paket.html#i=davetiye&a=albüm&r=panel).
+     Yeni anahtar üretmez; albüm/panel anahtarları bu tarayıcıda kayıtlı olanlardır. "#" sonrası sunucuya gitmez. */
+  function packageUrl(slug, opts) {
+    if (!slug) return "";
+    opts = opts || {};
+    let b; try { b = new URL(global.SeozCloudStore.customerUrl(slug)); } catch (e) { b = new URL("view.html", global.location.href); }
+    const q = ["i=" + encodeURIComponent(slug)];
+    const a = opts.album && safeGet(ALBUM_KEY_PREFIX + slug), r = opts.panel && getStoredPanelToken(slug);
+    if (a) q.push("a=" + a);
+    if (r) q.push("r=" + r);
+    const u = new URL("paket.html", b); u.hash = q.join("&"); return u.href;
   }
   async function ownerMemoryRotate(slug) {
     const r = await rpc("memory_owner_rotate_token", { p_slug: slug }, true);
@@ -190,6 +261,10 @@
     ownerPollViewLink,
     ownerMemorySync,
     ownerMemoryRotate,
+    ownerAlbumInfo,
+    ownerAlbumSettings,
+    ownerAlbumPurge,
+    packageUrl,
     albumUrl,
     isConfigured,
     submitResponse,

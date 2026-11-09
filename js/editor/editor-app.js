@@ -965,8 +965,13 @@
             const memLayers = (doc.layers || []).filter(l => l.type === "module" && l.moduleId === "guest-upload" && l.settings && l.settings.method === "seoz");
             if (!memLayers.length || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerMemorySync) return result;
             btn.textContent = "Anı albümü hazırlanıyor...";
-            return SeozEventStore.ownerMemorySync(result.slug)
-              .then(() => { result.albumUrl = SeozEventStore.albumUrl(result.slug); result.albumMissing = !result.albumUrl; return result; })
+            // Etkinlik tarihi (Anı Albümü saklama bilgisi): Geri Sayım ya da Takvime Ekle tarihi
+            const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+            const dated = (doc.layers || []).filter(l => l.type === "module" && l.settings && ((l.moduleId === "countdown" && isDate(l.settings.targetDate)) || (l.moduleId === "calendar" && isDate(l.settings.date))))
+              .sort((x, y) => (x.moduleId === "calendar" ? 0 : 1) - (y.moduleId === "calendar" ? 0 : 1));
+            const eventDate = dated.length ? (dated[0].moduleId === "calendar" ? dated[0].settings.date : dated[0].settings.targetDate) : null;
+            return SeozEventStore.ownerMemorySync(result.slug, eventDate)
+              .then(info => { result.albumUrl = SeozEventStore.albumUrl(result.slug); result.albumMissing = !result.albumUrl; result.albumInfo = info && "retention_days" in info ? info : null; return result; })   // saklama bilgisi yalnızca Supabase'de ani-albumu-yonetim.sql kuruluysa
               .catch(err => {
                 console.error("[Studio SEOZ] Anı albümü senkronu başarısız:", err);
                 const code = (err && (err.code || err.message)) || "";
@@ -1011,7 +1016,11 @@
             };
             SeozSharePanel.show({
               doc, shortUrl: shortLink, longUrl: result.url, panelUrl: panelLink, panelMissing,
-              albumUrl: result.albumUrl, albumMissing: result.albumMissing,
+              albumUrl: result.albumUrl, albumMissing: result.albumMissing, albumInfo: result.albumInfo, slug: result.slug,
+              // TESLİMAT PAKETİ: davetiye + (varsa) anı albümü + (varsa) katılım paneli tek sayfada
+              makePackageUrl: SeozEventStore.packageUrl ? () => SeozEventStore.packageUrl(result.slug, { album: !!(result.albumUrl || result.albumMissing), panel: !!panelLink }) : null,
+              onAlbumSettings: (eventDate, days) => SeozEventStore.ownerAlbumSettings(result.slug, eventDate, days),
+              onAlbumPurge: onStep => SeozEventStore.ownerAlbumPurge(result.slug, onStep),
               polls: result.polls || [],
               onPollRotate: layerId => SeozEventStore.ownerPollRotate(result.slug, layerId).then(() => SeozEventStore.pollPanelUrl(result.slug, layerId)),
               onPollView: layerId => SeozEventStore.ownerPollViewLink(result.slug, layerId),

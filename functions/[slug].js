@@ -26,7 +26,7 @@
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,78})[a-z0-9]$/;
 // Site dosyalarıyla çakışan adlar (Cloudflare .html uzantısız adresleri de sunar)
-const RESERVED = new Set(["view", "index", "panel", "album", "anket", "anket-panel", "anket-sonuc", "css", "js", "assets", "functions"]);
+const RESERVED = new Set(["view", "index", "panel", "album", "paket", "anket", "anket-panel", "anket-sonuc", "css", "js", "assets", "functions"]);
 const DEFAULT_DESC = "Davetlisiniz! Davetiyeyi açmak için dokunun.";
 const DEFAULT_IMG = { path: "/assets/og/davetiye-paylasim.jpg", w: 1200, h: 630, type: "image/jpeg" };
 // İngilizce davetiye (meta.lang "en"): hazır açıklama, hazır kapak ve sayfa dili İngilizce
