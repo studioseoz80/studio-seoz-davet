@@ -112,7 +112,25 @@
       SeozLayoutEngine.applyScale(canvasEl, scaleWrapEl, doc.canvas.baseWidth);
     }
 
+    // MÜZİK: açılış ekranına (zarf / sinematik açılış) yapılan İLK dokunuşta, aynı dokunuşla
+    // müzik başlatılmaya çalışılır (iPhone/Android sesi yalnızca dokunuş anında açar).
+    // Tarayıcı izin vermezse sessizce geçilir; misafir nota düğmesiyle başlatır. Bir kez çalışır;
+    // misafir müziği kapattıysa tekrar açmaz. Açılış ekranı yoksa eskisi gibi yalnızca düğmeyle.
+    const M = window.SeozMusic;
+    let stopMusicHook = () => {};
+    if (M && SeozEntryScene.hasUsableEntry(doc.entry) && M.prepare(doc)) {
+      const EVENTS = ["touchend", "pointerup", "click", "keydown"];
+      const onGesture = (e) => {
+        if (e.type === "keydown" && (e.key === "Escape" || e.key === "Tab")) return;
+        stopMusicHook();
+        M.startFromGesture(doc);
+      };
+      stopMusicHook = () => EVENTS.forEach(ev => window.removeEventListener(ev, onGesture, true));
+      EVENTS.forEach(ev => window.addEventListener(ev, onGesture, true));
+    }
+
     SeozEntryScene.initEntryScene(doc, () => {
+      stopMusicHook();   // açılış bitti: sonraki dokunuşlar müziği kendiliğinden başlatmaz
       renderAndScale();
       // DÜZELTME (telefonda yazı yazılamıyordu): Telefon klavyesi açılınca
       // yalnızca ekran YÜKSEKLİĞİ değişir; sayfa yeniden çizilirse yazı kutusu
