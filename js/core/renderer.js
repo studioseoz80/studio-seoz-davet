@@ -153,7 +153,8 @@
         if (I && I.lang() === "en") {
           // yalnızca metin varsayılanları tamamlanır (soru listesi gibi üretilen değerlere dokunulmaz)
           const base = {}, defs = moduleDef.defaultSettings || {};
-          Object.keys(defs).forEach(k => { const v = defs[k]; if (typeof v === "string") base[k] = v; });
+          // "timezone" eklenmez: saat dilimi seçilmemiş ESKİ geri sayımlar eskisi gibi çalışsın (bkz. countdown.js)
+          Object.keys(defs).forEach(k => { const v = defs[k]; if (typeof v === "string" && k !== "timezone") base[k] = v; });
           settings = I.localize(Object.assign(base, layer.settings));
         }
         host.appendChild(moduleDef.render(settings, mode, { docId: docId, layerId: layer.id, motion: motion !== undefined ? motion : CURRENT_MOTION }));

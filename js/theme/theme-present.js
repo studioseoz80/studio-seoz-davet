@@ -151,7 +151,8 @@
     };
   }
   function remaining(s) {
-    const t = new Date((s.targetDate || "2030-01-01") + "T" + (s.targetTime || "00:00") + ":00").getTime();
+    // Saat dilimi seçildiyse etkinliğin diliminde, yoksa eskisi gibi (bkz. modules/countdown.js)
+    const t = global.SeozCountdown ? global.SeozCountdown.targetMs(s) : new Date((s.targetDate || "2030-01-01") + "T" + (s.targetTime || "00:00") + ":00").getTime();
     let d = Math.max(0, t - Date.now());
     const g = Math.floor(d / 86400000); d -= g * 86400000; const h = Math.floor(d / 3600000); d -= h * 3600000;
     const m = Math.floor(d / 60000); d -= m * 60000; return { g, h, m, s: Math.floor(d / 1000), total: Math.max(0, t - Date.now()) };

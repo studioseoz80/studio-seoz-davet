@@ -23,9 +23,29 @@
     metallic: "none"
   };
 
+  /* SAAT DİLİMİ: geri sayım, ziyaretçinin ülkesine göre değil ETKİNLİĞİN saat dilimine göre
+     hesaplanır. Yaz/kış saati, tarayıcının IANA saat dilimi bilgisiyle otomatik bulunur
+     (sabit UTC farkı yok). Yeni eklenen Geri Sayım'da varsayılan Türkiye'dir.
+     ESKİ davetiyelerde bu alan yoktur: onlar eskisi gibi ziyaretçinin yerel saatine göre sayar
+     (kayıt ve davranış değişmez). */
+  const TIMEZONES = [
+    { value: "Europe/Istanbul", label: "🇹🇷 Türkiye – Europe/Istanbul" },
+    { value: "America/New_York", label: "🇺🇸 Amerika / New York (Doğu) – America/New_York" },
+    { value: "America/Chicago", label: "🇺🇸 Amerika / Chicago (Orta) – America/Chicago" },
+    { value: "America/Los_Angeles", label: "🇺🇸 Amerika / Los Angeles (Batı) – America/Los_Angeles" },
+    { value: "Europe/Berlin", label: "🇩🇪 Almanya – Europe/Berlin" },
+    { value: "Europe/Amsterdam", label: "🇳🇱 Hollanda – Europe/Amsterdam" },
+    { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" }
+  ];
+  const NEW_LAYER_TIMEZONE = "Europe/Istanbul";
+
   const SETTINGS_SCHEMA = [
     { key: "targetDate", type: "date", label: "Tarih" },
     { key: "targetTime", type: "time", label: "Saat" },
+    { key: "timezone", type: "select", label: "Saat Dilimi", options: TIMEZONES, showIf: s => !!s.timezone, reRenderPanel: true },
+    // Eski davetiye (alan yok): mevcut davranış seçenek olarak görünür; bir dilim seçilince yukarıdaki liste gelir.
+    { key: "timezone", type: "select", label: "Saat Dilimi", showIf: s => !s.timezone, reRenderPanel: true,
+      options: [{ value: "", label: "Ziyaretçinin kendi saati (eski davetiye — değiştirilmedi)" }].concat(TIMEZONES) },
     { key: "title", type: "text", label: "Başlık" },
     { key: "fontFamily", type: "font-select", label: "Font" },
     { key: "titleSize", type: "number", label: "Başlık Boyutu", unit: "px" },
@@ -40,6 +60,32 @@
   ];
 
   const UNITS = [["gun", "Gün"], ["saat", "Saat"], ["dakika", "Dk"], ["saniye", "Sn"]];
+
+  /* Verilen saat diliminin, verilen UTC anındaki farkı (dakika) — Intl/IANA (yaz-kış saati dahil). */
+  function tzOffsetMinutes(utcMs, timeZone) {
+    const fmt = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const p = {};
+    fmt.formatToParts(new Date(utcMs)).forEach(x => { p[x.type] = x.value; });
+    return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - utcMs) / 60000);
+  }
+  /* Geri sayımın hedef anı (UTC ms). timezone varsa: girilen tarih/saat O DİLİMDE duvar saati kabul
+     edilir → herkes için aynı an. Yoksa (eski davetiye): eskisi gibi ziyaretçinin yerel saati. */
+  function targetMs(s) {
+    const dateStr = s.targetDate || "2030-01-01";
+    const timeStr = s.targetTime || "00:00";
+    const local = new Date(dateStr + "T" + timeStr + ":00").getTime();
+    if (!s.timezone) return local;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr), t = /^(\d{1,2}):(\d{2})/.exec(timeStr);
+    if (!m || !t) return local;
+    try {
+      const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +t[1], +t[2], 0);
+      const off = tzOffsetMinutes(wall, s.timezone);
+      let utc = wall - off * 60000;
+      const off2 = tzOffsetMinutes(utc, s.timezone);       // yaz/kış saati geçiş günü için ikinci geçiş
+      if (off2 !== off) utc = wall - off2 * 60000;
+      return utc;
+    } catch (e) { return local; }                          // tanınmayan dilim: eski davranış
+  }
 
   function render(settings, mode) {
     const s = Object.assign({}, DEFAULTS, settings);
@@ -101,10 +147,7 @@
     wrap.appendChild(row);
 
     function tick() {
-      const dateStr = s.targetDate || "2030-01-01";
-      const timeStr = s.targetTime || "00:00";
-      const target = new Date(dateStr + "T" + timeStr + ":00");
-      let diff = Math.max(0, target.getTime() - Date.now());
+      let diff = Math.max(0, targetMs(s) - Date.now());
       const day = Math.floor(diff / 86400000); diff -= day * 86400000;
       const hour = Math.floor(diff / 3600000); diff -= hour * 3600000;
       const min = Math.floor(diff / 60000); diff -= min * 60000;
@@ -125,10 +168,12 @@
   global.SeozModuleRegistry.registerModule({
     id: "countdown",
     label: "Geri Sayım",
-    defaultSettings: DEFAULTS,
+    // Yeni eklenen Geri Sayım: Türkiye saat dilimiyle kaydedilir (eski kayıtlara dokunulmaz).
+    defaultSettings: Object.assign({}, DEFAULTS, { timezone: NEW_LAYER_TIMEZONE }),
     defaultLayerSize: { w: 300, h: 130 },
     settingsSchema: SETTINGS_SCHEMA,
     render: render,
     validate: (s) => (!s.targetDate ? "Geri Sayım: tarih seçilmemiş." : null)
   });
+  global.SeozCountdown = { targetMs, TIMEZONES };   // tema sunumları (theme-present.js) aynı hesabı kullanır
 })(window);
