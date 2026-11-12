@@ -417,6 +417,13 @@
     const progress = typeof onProgress === "function" ? onProgress : () => {};
 
     const slug = await ensureSlug(snapshot);
+    // MÜHÜRLÜ KART: gizli mesajlar önce sunucudaki korumalı tabloya yazılır ve yayın kopyasından çıkarılır.
+    // Yazılamazsa burada hata fırlar → medya yüklenmez, davetiye KAYDEDİLMEZ (güvensiz yönteme dönülmez).
+    const hasSealed = (snapshot.layers || []).some(l => l && l.moduleId === "interactive" && l.settings && l.settings.kind === "muhurlu-kart");
+    if (hasSealed) {
+      if (!global.SeozEventStore || !global.SeozEventStore.prepareSealedForPublish) throw new Error("Mühürlü Kart: güvenli mesaj modülü yüklenemedi. Davetiye yayınlanmadı.");
+      snapshot = await global.SeozEventStore.prepareSealedForPublish(snapshot, slug, progress);
+    }
 
     const refs = Array.from(collectRefs(snapshot, new Set()));
     const map = new Map();

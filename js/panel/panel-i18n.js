@@ -78,6 +78,7 @@
     wishRetention: { tr: "Dilekleri etkinlikten sonraki 30 gün içinde Excel veya PDF olarak indirin. Bu sürenin sonunda kayıtlar silinecektir.", en: "Please download the wishes as Excel or PDF within 30 days after your event. After this period, the records will be deleted." },
     wishRetentionDate: { tr: "Son indirme tarihi: {d}", en: "Download by: {d}" },
     wishNone: { tr: "Henüz dilek bırakılmadı.", en: "No wishes yet." },
+    wishRemoved: { tr: "Dilek Ağacı davetiyeden kaldırıldı; misafirler artık görmüyor. Kayıtlı dilekler siz silene kadar burada: indirebilir veya silebilirsiniz.", en: "The Wish Tree was removed from the invitation; guests no longer see it. Saved wishes stay here until you delete them: you can download or delete them." },
     wishCount: { tr: v => `${v.n} dilek · ${v.h} gizli`, en: v => `${v.n} ${pl(v.n, "wish", "wishes")} · ${v.h} hidden` },
     wishHidden: { tr: "Gizli", en: "Hidden" },
     wishInitialsOk: { tr: "Baş harfler görünür: {i}", en: "Initials shown: {i}" },

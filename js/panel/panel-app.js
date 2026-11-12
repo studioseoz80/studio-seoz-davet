@@ -109,8 +109,12 @@
   function form() { return (state.data && state.data.event.form) || {}; }
   function questions() { return Array.isArray(form().questions) ? form().questions : []; }
   function hasAttendanceQ() { return questions().some(q => q.active !== false && q.role === "attendance"); }
-  /* ETKİLEŞİMLER: davetiyede Dilek Ağacı açıksa görünür; kapalıysa sekme hiç çıkmaz. */
-  function hasWishes() { return !!(state.wishes && Array.isArray(state.wishes.trees) && state.wishes.trees.length); }
+  /* ETKİLEŞİMLER: davetiyede Dilek Ağacı varsa görünür. Ağaç davetiyeden kaldırılsa da kayıtlı dilekler
+     silinene kadar görünür (organizatör indirebilsin / silebilsin). Hiç ağaç ve dilek yoksa sekme çıkmaz. */
+  function hasWishes() {
+    const w = state.wishes;
+    return !!(w && ((Array.isArray(w.trees) && w.trees.length) || (Array.isArray(w.items) && w.items.length)));
+  }
   // Yalnızca Dilek Ağacı olan davetiye (Katılım Formu yok): panel doğrudan Etkileşimler'i gösterir.
   function wishOnly() { return hasWishes() && !questions().length && !(state.data.responses || []).length; }
   /* Kayıttaki kart adları (müşteri değiştirmediyse Türkçe varsayılan) → ekranda seçilen dilde. */
@@ -490,6 +494,7 @@
     const trees = state.wishes.trees || [];
     body.innerHTML = `<div class="pn-wish-head">
         <div class="pn-alert pn-wish-ret" data-wish-ret>${esc(t("wishRetention"))}${dl ? ` <b>${esc(t("wishRetentionDate", { d: dl }))}</b>` : ""}</div>
+        ${!trees.length ? `<p class="pn-muted pn-wish-vis" data-wish-removed>${esc(t("wishRemoved"))}</p>` : ""}
         ${trees.map(tr => `<p class="pn-muted pn-wish-vis">${esc(t("wishTitle"))} · ${esc(t(tr.visibility === "acik" ? "wishVisPublic" : "wishVisLocked"))}</p>`).join("")}
       </div>
       ${!all.length ? `<div class="pn-empty">${esc(t("wishNone"))}</div>` : !list.length ? `<div class="pn-empty">${esc(t("noMatch"))}</div>` : `

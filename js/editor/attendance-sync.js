@@ -40,6 +40,12 @@
     const def = global.SeozModuleRegistry.getModule("attendance-form");
     const layer = layers[0];
     const result = await global.SeozEventStore.ownerSyncEvent(slug, doc.id, layer.id, def.buildServerForm(layer.settings));
+    // Bu davetiye daha önce yalnızca Dilek Ağacı ile (kapalı kayıtla) yayınlandıysa: form artık var → yanıtlara aç.
+    // Başka hiçbir durumda bir şey değişmez; Dilek Ağacı kurulmamışsa sessizce geçilir.
+    if (global.SeozEventStore.ownerWishFormAdded) {
+      try { const w = await global.SeozEventStore.ownerWishFormAdded(slug); if (w && w.reopened && result) result.is_open = true; }
+      catch (e) { /* dilek-agaci.sql yok ya da eski sürüm: Katılım Formu eskisi gibi */ }
+    }
     return { synced: true, multiple: layers.length > 1, result };
   }
 

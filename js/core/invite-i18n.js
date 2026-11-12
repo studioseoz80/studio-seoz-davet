@@ -266,6 +266,10 @@
     "Mühürlü": "Sealed",
     "{t} tarihinde açılır": "Opens {t}",
     "Yakında açılacak": "Opening soon",
+    "Mesaj yayınlanan davetiyede açılır.": "The message opens on the published invitation.",
+    "Mesaj şu anda alınamadı.": "The message couldn't be loaded right now.",
+    "Kısa sürede çok fazla dilek gönderdiniz; lütfen biraz sonra tekrar deneyin.": "You've sent several wishes in a short time; please try again in a little while.",
+    "Bu cihazdan bu ağaca bırakılabilecek dilek sayısına ulaşıldı.": "This device has reached the wish limit for this tree.",
     /* ---- etkileşim: Dilek Ağacı ---- */
     "Dilek Bırak": "Leave a Wish",
     "{n} dilek": v => `${v.n} ${pl(v.n, "wish", "wishes")}`,

@@ -1005,9 +1005,14 @@
           // DİLEK AĞACI: yalnızca bilgi (dilek sayısı) — Yayına Hazırla penceresinde elle silme için.
           .then(result => {
             const trees = typeof SeozAttendanceSync !== "undefined" && SeozAttendanceSync.wishLayers ? SeozAttendanceSync.wishLayers(doc) : [];
-            if (!trees.length || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerWishCount) return result;
-            return SeozEventStore.ownerWishCount(result.slug).then(info => { result.wishInfo = info || { count: 0 }; return result; })
-              .catch(err => { console.warn("[Studio SEOZ] Dilek sayısı alınamadı:", err); return result; });
+            const seenKey = "seoz_wish_seen_v1_" + result.slug;
+            let seen = false; try { if (trees.length) localStorage.setItem(seenKey, "1"); seen = localStorage.getItem(seenKey) === "1"; } catch (e) { seen = !!trees.length; }
+            if (!seen || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerWishCount) return result;   // hiç Dilek Ağacı olmamış davetiye: istek yok
+            // Ağaç davetiyeden kaldırılmış olsa da kayıtlı dilek varsa bölüm görünür (elle silme için)
+            return SeozEventStore.ownerWishCount(result.slug).then(info => {
+              if (trees.length || (info && Number(info.count) > 0)) result.wishInfo = info || { count: 0 };
+              return result;
+            }).catch(err => { if (trees.length) console.warn("[Studio SEOZ] Dilek sayısı alınamadı:", err); return result; });
           })
           .then(result => {
             const shortLink = result.shortUrl || result.url;
@@ -1068,6 +1073,10 @@
                 "Bağlantı düzelince \"Yayına Hazırla\"ya tekrar basın.\n\n" +
                 "(Ayrıntı: " + (err.message || "") + ")"
               );
+              return;
+            }
+            if (err && err.sealed && err.code !== "AUTH_REQUIRED") {   // MÜHÜRLÜ KART: güvenli kayıt yapılamadı → yayın durduruldu
+              alert("Davetiye YAYINLANMADI.\n\n" + err.message + "\n\nGizli mesajlar herkese açık davetiyeye eklenmedi. Müşteri linki varsa eski hâliyle duruyor; taslağınız güvende.");
               return;
             }
             alert(

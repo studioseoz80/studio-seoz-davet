@@ -318,7 +318,11 @@
       throw new Error("Paketleme kütüphanesi (JSZip) yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.");
     }
 
-    const docCopy = JSON.parse(JSON.stringify(doc));
+    // MÜHÜRLÜ KART: gizli mesajlar pakete (sayfa koduna) KONMAZ; paket kartı mühürlü gösterir.
+    const docCopy = global.SeozEventStore && global.SeozEventStore.stripSealed ? global.SeozEventStore.stripSealed(doc) : JSON.parse(JSON.stringify(doc));
+    if (!global.SeozEventStore || !global.SeozEventStore.stripSealed) (docCopy.layers || []).forEach(l => {
+      if (l && l.moduleId === "interactive" && l.settings && l.settings.kind === "muhurlu-kart") { l.settings.sealedSecure = true; l.settings.cards = (l.settings.cards || []).map(c => ({ titleTr: (c && c.titleTr) || "", titleEn: (c && c.titleEn) || "" })); }
+    });
 
     const refs = new Set();
     collectIdbRefs(docCopy, refs);

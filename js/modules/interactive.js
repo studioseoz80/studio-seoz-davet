@@ -1124,7 +1124,8 @@
     const tr = String(c[which + "Tr"] || "").trim(), en = String(c[which + "En"] || "").trim();
     return IX_LANG() === "en" ? (en || tr) : (tr || en);
   }
-  const sealCards = s => (Array.isArray(s.cards) ? s.cards : []).filter(c => c && (c.titleTr || c.titleEn || c.msgTr || c.msgEn));
+  // Yayınlanan davetiyede (sealedSecure) kartlar zaten süzülmüş ve mesajsızdır: sıra (index) sunucudakiyle aynı kalsın diye süzülmez.
+  const sealCards = s => (Array.isArray(s.cards) ? s.cards : []).filter(c => c && (s.sealedSecure || c.titleTr || c.titleEn || c.msgTr || c.msgEn));
   function sealUnlockMs(s) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s.unlockDate || ""))) return null;
     const o = { targetDate: s.unlockDate, targetTime: /^\d{1,2}:\d{2}/.test(String(s.unlockTime || "")) ? s.unlockTime : "00:00", timezone: s.unlockTimezone || "Europe/Istanbul" };
@@ -1180,17 +1181,17 @@
     let saved = null;
     try { saved = JSON.parse(lsGet(key) || "null"); } catch (e) { saved = null; }
     const valid = saved && Number.isInteger(saved.i) && cards[saved.i] && saved.f === fp(cards[saved.i]);
-    if (valid) { showPicked(cards[saved.i], false); return; }
+    if (valid) { showPicked(cards[saved.i], saved.i, false); return; }
     fan.addEventListener("click", e => {
       const b = e.target.closest(".ix-seal-back"); if (!b || root.classList.contains("is-done")) return;
       const i = rnd(cards.length);
       lsSet(key, JSON.stringify({ i, f: fp(cards[i]), at: Date.now() }));
       b.classList.add("is-chosen");
       root.classList.add("is-picking");
-      setTimeout(() => showPicked(cards[i], true), reduced() ? 0 : 520);
+      setTimeout(() => showPicked(cards[i], i, true), reduced() ? 0 : 520);
     });
 
-    function showPicked(card, animate) {
+    function showPicked(card, index, animate) {
       root.classList.add("is-done", "is-picked");
       const pick = el("div", "ix-seal-pick" + (animate ? " is-new" : ""));
       const face = el("div", "ix-seal-card ix-seal-front");
@@ -1200,32 +1201,69 @@
       const sealBox = el("div", "ix-seal-lock");
       body.appendChild(sealBox);
       face.appendChild(body); pick.appendChild(face); root.appendChild(pick);
-      const at = sealUnlockMs(s);
-      let timer = null;
-      const msgHTML = () => esc(cardTxt(card, "msg")).replace(/\n/g, "<br>");
-      function paint(justOpened) {
-        const now = Date.now();
-        if (at != null && now >= at) {
-          if (timer) { clearInterval(timer); timer = null; }
-          sealBox.className = "ix-seal-msg" + (justOpened ? " is-opening" : "");
-          sealBox.innerHTML = msgHTML();
-          if (justOpened) burst(root, s.effect || "simli");
-          return;
-        }
+
+      // GÜVENLİ MOD (yayınlanan davetiye): mesaj sayfada YOK; sunucu kendi saatiyle açılma anını kontrol eder.
+      // Yerel önizleme (editörün kendi tarayıcısı, bağlantısız): mesajlar ayarlarda, cihaz saatiyle.
+      const secure = !!s.sealedSecure, ES = global.SeozEventStore;
+      let at = sealUnlockMs(s), offset = 0, timer = null, retry = null, note = "";
+      const now = () => Date.now() + offset;                     // güvenli modda sunucu saati
+      const txt = m => esc(m || "").replace(/\n/g, "<br>");
+      function showMsg(html, justOpened) {
+        if (timer) { clearInterval(timer); timer = null; }
+        sealBox.className = "ix-seal-msg" + (justOpened ? " is-opening" : "");
+        sealBox.innerHTML = html;
+        if (justOpened) burst(root, s.effect || "simli");
+      }
+      function paintSealed() {
         sealBox.className = "ix-seal-lock";
         sealBox.innerHTML = `<span class="ix-seal-wax" aria-hidden="true"></span>
           <span class="ix-seal-lbl">${esc(IXL("Mühürlü"))}</span>
           ${at != null ? `<span class="ix-seal-when">${esc(IXL("{t} tarihinde açılır", { t: sealWhen(s, at) }))}</span>
-          <span class="ix-seal-left">${esc(sealLeft(at - now))}</span>` : `<span class="ix-seal-when">${esc(IXL("Yakında açılacak"))}</span>`}`;
+          <span class="ix-seal-left">${esc(sealLeft(Math.max(0, at - now())))}</span>` : `<span class="ix-seal-when">${esc(IXL("Yakında açılacak"))}</span>`}
+          ${note ? `<span class="ix-seal-when ix-seal-note">${esc(note)}</span>` : ""}`;
       }
-      paint(false);
-      if (at != null && Date.now() < at) {
+      function tick(onZero) {
+        if (timer) clearInterval(timer);
         timer = setInterval(() => {
-          if (!root.isConnected) { clearInterval(timer); return; }
-          if (Date.now() >= at) paint(true);
-          else { const l = sealBox.querySelector(".ix-seal-left"); if (l) l.textContent = sealLeft(at - Date.now()); }
+          if (!root.isConnected) { clearInterval(timer); clearTimeout(retry); return; }
+          if (at != null && now() >= at) { clearInterval(timer); timer = null; onZero(); }
+          else { const l = sealBox.querySelector(".ix-seal-left"); if (l && at != null) l.textContent = sealLeft(at - now()); }
         }, 1000);
       }
+      if (!secure) {
+        const local = () => (at != null && now() >= at ? showMsg(txt(cardTxt(card, "msg")), false) : (paintSealed(), tick(() => showMsg(txt(cardTxt(card, "msg")), true))));
+        local();
+        return;
+      }
+      const slug = ixSlug(), layerId = (ctx && ctx.layerId) || "";
+      paintSealed();
+      if (!slug || !ES || !ES.sealedCardGet) {   // ör. çevrimdışı paket: mesaj yalnızca yayınlanan davetiyede açılır
+        note = IXL("Mesaj yayınlanan davetiyede açılır."); paintSealed(); tick(() => paintSealed());
+        return;
+      }
+      function ask(justOpened) {
+        clearTimeout(retry);
+        ES.sealedCardGet(slug, layerId, index).then(r => {
+          if (!root.isConnected) return;
+          if (!r || !r.found) { note = IXL("Mesaj şu anda alınamadı."); paintSealed(); retry = setTimeout(() => ask(justOpened), 30000); return; }
+          if (r.now) offset = Date.parse(r.now) - Date.now();
+          if (r.unlock_at) at = Date.parse(r.unlock_at);
+          note = "";
+          if (r.open) {
+            const m = IX_LANG() === "en" ? (r.msg_en || r.msg_tr) : (r.msg_tr || r.msg_en);
+            showMsg(txt(m), justOpened);
+            return;
+          }
+          paintSealed();
+          // sunucu saatine göre sıfıra inince yeniden sor (telefon saati önemsiz)
+          tick(() => ask(true));
+        }).catch(() => {
+          if (!root.isConnected) return;
+          note = IXL("Bağlantı kurulamadı. Lütfen tekrar deneyin."); paintSealed();
+          retry = setTimeout(() => ask(justOpened), 15000);
+        });
+      }
+      ask(false);
     }
   }
 
@@ -1245,7 +1283,9 @@
     const a = k * 2.39996323 + lap * 0.9, r = 0.22 + 0.78 * Math.sqrt((k + 0.5) / ring);   // ilk dilekler merkeze yığılmasın
     return { x: Math.max(6, Math.min(94, 50 + 41 * r * Math.cos(a) + lap * 2.2)), y: Math.max(6, Math.min(70, 37 + 30 * r * Math.sin(a) + lap * 1.6)) };
   }
-  const WISH_ERR = {
+  const WISH_ERR = {   // (cihaz kodları önce: "device_slow_down" içinde "slow_down" da geçer)
+    device_slow_down: "Kısa sürede çok fazla dilek gönderdiniz; lütfen biraz sonra tekrar deneyin.",
+    device_limit: "Bu cihazdan bu ağaca bırakılabilecek dilek sayısına ulaşıldı.",
     name_required: "Lütfen adınızı yazın.", wish_required: "Lütfen dileğinizi yazın.", name_too_long: "Ad en fazla 60 karakter olabilir.",
     wish_too_long: "Dilek en fazla 400 karakter olabilir.", limit_reached: "Bu ağaç doldu; yeni dilek eklenemiyor.",
     slow_down: "Çok fazla dilek gönderildi; lütfen biraz sonra tekrar deneyin.", tree_not_found: "Dilek ağacı şu anda kullanılamıyor."

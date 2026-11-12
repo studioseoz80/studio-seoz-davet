@@ -3,13 +3,16 @@
 -- -----------------------------------------------------------------------------
 -- Ne kurar (YALNIZCA EKLEME):
 --   • wish_entries : misafirlerin bıraktığı dilekler (davetiye + katman başına)
+--   • wish_panel_events : Katılım Formu olmadan (yalnızca Dilek Ağacı için) açılan etkinlik kayıtlarının listesi
 --   • Misafir   : wish_tree_get (ağaçtaki simgeler; "Herkese Açık" ise dilek metinleri),
---                 wish_tree_add (ad + dilek gönder)
+--                 wish_tree_add (ad + dilek gönder; genel + cihaz başına gönderim sınırı)
 --   • Organizatör (mevcut Katılım Paneli linki, panel.html#k=...):
 --                 wish_panel_get (tüm dilekler, gizlenenler dahil), wish_panel_set_hidden, wish_panel_delete
 --   • Studio SEOZ (giriş yapmış sahip):
---                 wish_owner_ensure_panel (davetiyede Katılım Formu yoksa panel linki için etkinlik kaydı açar;
---                                          VARSA HİÇBİR ŞEYİ DEĞİŞTİRMEZ)
+--                 wish_owner_ensure_panel (davetiyede Katılım Formu yoksa panel linki için KAPALI etkinlik kaydı açar;
+--                                          kayıt VARSA HİÇBİR ŞEYİ DEĞİŞTİRMEZ)
+--                 wish_owner_form_added (o davetiyeye sonradan Katılım Formu eklenince, yalnızca bu yolla açılmış
+--                                          kapalı kaydı yanıtlara açar; başka hiçbir etkinliğe dokunmaz)
 --                 wish_owner_purge (bir davetiyenin dileklerini ELLE siler — yalnızca Studio SEOZ çağırır)
 --
 -- Ne YAPMAZ:
@@ -17,6 +20,11 @@
 --     hiçbir mevcut kaydı değiştirmez/silmez. rsvp_events'e yalnızca HİÇ kaydı olmayan davetiye için
 --     yeni satır ekleyebilir (wish_owner_ensure_panel).
 --   • Otomatik silme, cron, pg_cron, pg_net, Edge Function KURMAZ.
+--
+-- Kişisel veri:
+--   • IP adresi, cihaz bilgisi TUTULMAZ. Cihaz başına sınır için misafirin tarayıcısında üretilen rastgele bir
+--     anahtarın (davetiye + ağaç ile birlikte) SHA-256 özeti saklanır: kişiyi tanımlamaz, farklı davetiyeler
+--     arasında eşleştirilemez. Baş harfler yalnızca misafir izin verirse kaydedilir.
 --
 -- Güvenlik:
 --   • RLS AÇIK; anon/authenticated tabloya doğrudan erişemez. Her şey security definer fonksiyonlarla.
@@ -51,9 +59,20 @@ create table if not exists public.wish_entries (
   is_hidden        boolean not null default false,
   created_at       timestamptz not null default now()
 );
+-- Cihaz başına gönderim sınırı için (yukarıdaki "Kişisel veri" notu): rastgele cihaz anahtarının özeti
+alter table public.wish_entries add column if not exists sender_hash text check (sender_hash is null or char_length(sender_hash) = 64);
 create index if not exists wish_entries_tree_idx on public.wish_entries (invitation_slug, layer_id, slot);
+create index if not exists wish_entries_sender_idx on public.wish_entries (invitation_slug, layer_id, sender_hash, created_at);
 alter table public.wish_entries enable row level security;
 revoke all on public.wish_entries from public, anon, authenticated;
+
+-- Yalnızca Dilek Ağacı için (Katılım Formu olmadan) açılan, KAPALI tutulan etkinlik kayıtları.
+create table if not exists public.wish_panel_events (
+  invitation_slug  text primary key check (char_length(invitation_slug) between 3 and 120),
+  created_at       timestamptz not null default now()
+);
+alter table public.wish_panel_events enable row level security;
+revoke all on public.wish_panel_events from public, anon, authenticated;
 
 -- 2) Yardımcılar ---------------------------------------------------------------
 -- Yayındaki davetiyede bu katman gerçekten bir Dilek Ağacı mı? Ayarlarını döndürür (yoksa null).
@@ -116,12 +135,16 @@ begin
             order by slot limit 1500) w), '[]'::jsonb));
 end $$;
 
+-- (Bu dosyanın ilk taslağındaki, cihaz anahtarı olmayan sürüm — yalnızca bu özelliğin kendi fonksiyonu)
+drop function if exists public.wish_tree_add(text, text, text, text, boolean, text);
+
 create or replace function public.wish_tree_add(p_slug text, p_layer_id text, p_name text, p_wish text,
-                                                p_show_initials boolean default false, p_hp text default null)
+                                                p_show_initials boolean default false, p_hp text default null, p_device text default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare s jsonb; v_name text; v_wish text; v_ini text; v_parts text[]; v_slot integer; v_id uuid; n integer;
+declare s jsonb; v_name text; v_wish text; v_ini text := null; v_parts text[]; v_slot integer; v_id uuid; n integer; v_dev text;
 begin
   if coalesce(p_hp, '') <> '' then raise exception 'rejected'; end if;               -- bot tuzağı
+  if p_device is null or char_length(p_device) not between 20 and 100 then raise exception 'rejected'; end if;
   if p_slug is null or p_layer_id is null or char_length(p_slug) > 120 or char_length(p_layer_id) > 120 then raise exception 'tree_not_found'; end if;
   s := seoz_private.wish_tree_settings(p_slug, p_layer_id);
   if s is null then raise exception 'tree_not_found'; end if;
@@ -139,19 +162,28 @@ begin
     where invitation_slug = p_slug and layer_id = p_layer_id and created_at > now() - interval '1 minute';
   if n >= 30 then raise exception 'slow_down'; end if;
 
-  v_parts := regexp_split_to_array(v_name, ' ');
-  v_ini := upper(left(v_parts[1], 1) || coalesce(left(v_parts[array_length(v_parts, 1)], 1), ''));
-  if array_length(v_parts, 1) = 1 then v_ini := upper(left(v_parts[1], 1)); end if;
+  -- Cihaz başına sınır (kişisel veri yok: rastgele cihaz anahtarının davetiye+ağaca özel özeti)
+  v_dev := seoz_private.hash_token(p_slug || ':' || p_layer_id || ':' || p_device);
+  select count(*) into n from public.wish_entries
+    where invitation_slug = p_slug and layer_id = p_layer_id and sender_hash = v_dev and created_at > now() - interval '10 minutes';
+  if n >= 3 then raise exception 'device_slow_down'; end if;
+  select count(*) into n from public.wish_entries where invitation_slug = p_slug and layer_id = p_layer_id and sender_hash = v_dev;
+  if n >= 10 then raise exception 'device_limit'; end if;
+
+  -- Baş harfler YALNIZCA misafir izin verdiyse hesaplanır ve kaydedilir
+  if coalesce(p_show_initials, false) then
+    v_parts := regexp_split_to_array(v_name, ' ');
+    v_ini := upper(left(v_parts[1], 1) || case when array_length(v_parts, 1) > 1 then left(v_parts[array_length(v_parts, 1)], 1) else '' end);
+  end if;
 
   perform pg_advisory_xact_lock(hashtext('wish:' || p_slug || ':' || p_layer_id));
   select coalesce(max(slot), -1) + 1 into v_slot from public.wish_entries where invitation_slug = p_slug and layer_id = p_layer_id;
 
-  insert into public.wish_entries (invitation_slug, layer_id, guest_name, wish_text, show_initials, initials, slot)
-  values (p_slug, p_layer_id, v_name, v_wish, coalesce(p_show_initials, false), v_ini, v_slot)
+  insert into public.wish_entries (invitation_slug, layer_id, guest_name, wish_text, show_initials, initials, slot, sender_hash)
+  values (p_slug, p_layer_id, v_name, v_wish, coalesce(p_show_initials, false), v_ini, v_slot, v_dev)
   returning id into v_id;
 
-  return jsonb_build_object('ok', true, 'id', v_id, 'slot', v_slot,
-                            'initials', case when coalesce(p_show_initials, false) then v_ini else null end);
+  return jsonb_build_object('ok', true, 'id', v_id, 'slot', v_slot, 'initials', v_ini);
 end $$;
 
 -- 4) Organizatör (Katılım Paneli anahtarı) -------------------------------------
@@ -193,7 +225,7 @@ begin
 end $$;
 
 -- 5) Studio SEOZ (sahip) -------------------------------------------------------
--- Davetiyede Katılım Formu YOKSA dilekler için panel linki: boş sorulu etkinlik kaydı açar.
+-- Davetiyede Katılım Formu YOKSA dilekler için panel linki: boş sorulu ve KAPALI (yanıt almayan) etkinlik kaydı açar.
 -- Kayıt zaten VARSA hiçbir şeyi değiştirmez (soruları, yanıtları, açık/kapalı durumunu korur).
 create or replace function public.wish_owner_ensure_panel(p_slug text, p_doc_id text default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
@@ -204,14 +236,30 @@ begin
   select * into ev from public.rsvp_events where invitation_slug = p_slug;
   if not found then
     v_token := seoz_private.new_token();
-    insert into public.rsvp_events (invitation_slug, doc_id, form_schema, panel_token_hash, panel_token_rotated_at)
-    values (p_slug, left(p_doc_id, 120), '{"questions":[]}'::jsonb, seoz_private.hash_token(v_token), now())
+    insert into public.rsvp_events (invitation_slug, doc_id, form_schema, is_open, panel_token_hash, panel_token_rotated_at)
+    values (p_slug, left(p_doc_id, 120), '{"questions":[]}'::jsonb, false, seoz_private.hash_token(v_token), now())
     returning * into ev;
+    insert into public.wish_panel_events (invitation_slug) values (p_slug) on conflict do nothing;
   elsif ev.panel_token_hash is null then
     v_token := seoz_private.new_token();
     update public.rsvp_events set panel_token_hash = seoz_private.hash_token(v_token), panel_token_rotated_at = now() where id = ev.id;
   end if;
   return jsonb_build_object('event_id', ev.id, 'panel_token', v_token);
+end $$;
+
+-- Sonradan Katılım Formu eklendi: YALNIZCA wish_owner_ensure_panel'in kapalı açtığı kaydı yanıtlara açar
+-- (bir kez; işaret silinir). Organizatörün kendi kapattığı formlara ve diğer etkinliklere dokunmaz.
+create or replace function public.wish_owner_form_added(p_slug text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v boolean := false;
+begin
+  if not public.seoz_is_owner() then raise exception 'not_owner'; end if;
+  if exists (select 1 from public.wish_panel_events where invitation_slug = p_slug) then
+    update public.rsvp_events set is_open = true, updated_at = now() where invitation_slug = p_slug;
+    delete from public.wish_panel_events where invitation_slug = p_slug;
+    v := true;
+  end if;
+  return jsonb_build_object('ok', true, 'reopened', v);
 end $$;
 
 -- Bir davetiyenin bütün dileklerini siler (ELLE; yalnızca Studio SEOZ). Otomatik çalışan hiçbir şey yoktur.
@@ -237,7 +285,8 @@ end $$;
 
 -- 6) Yetkiler ------------------------------------------------------------------
 revoke all on function public.wish_tree_get(text, text)                                   from public, anon, authenticated;
-revoke all on function public.wish_tree_add(text, text, text, text, boolean, text)        from public, anon, authenticated;
+revoke all on function public.wish_tree_add(text, text, text, text, boolean, text, text)  from public, anon, authenticated;
+revoke all on function public.wish_owner_form_added(text)                                 from public, anon, authenticated;
 revoke all on function public.wish_panel_get(text, text)                                  from public, anon, authenticated;
 revoke all on function public.wish_panel_set_hidden(text, uuid, boolean, text)            from public, anon, authenticated;
 revoke all on function public.wish_panel_delete(text, uuid, text)                         from public, anon, authenticated;
@@ -245,7 +294,8 @@ revoke all on function public.wish_owner_ensure_panel(text, text)               
 revoke all on function public.wish_owner_purge(text)                                      from public, anon, authenticated;
 revoke all on function public.wish_owner_count(text)                                      from public, anon, authenticated;
 grant execute on function public.wish_tree_get(text, text)                                to anon, authenticated;
-grant execute on function public.wish_tree_add(text, text, text, text, boolean, text)     to anon, authenticated;
+grant execute on function public.wish_tree_add(text, text, text, text, boolean, text, text) to anon, authenticated;
+grant execute on function public.wish_owner_form_added(text)                              to authenticated;
 grant execute on function public.wish_panel_get(text, text)                               to anon, authenticated;
 grant execute on function public.wish_panel_set_hidden(text, uuid, boolean, text)         to anon, authenticated;
 grant execute on function public.wish_panel_delete(text, uuid, text)                      to anon, authenticated;

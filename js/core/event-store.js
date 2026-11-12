@@ -253,8 +253,21 @@
 
   /* ---------------- DİLEK AĞACI (Etkileşim · supabase/dilek-agaci.sql) ---------------- */
   const wishTreeGet = (slug, layerId) => rpc("wish_tree_get", { p_slug: slug, p_layer_id: layerId });
+  /* Cihaz başına gönderim sınırı için RASTGELE anahtar (kişisel veri değil; sunucuda yalnızca davetiyeye özel özeti tutulur). */
+  let memDevice = null;
+  function wishDevice() {
+    let k = safeGet("seoz_wish_device_v1");
+    if (!k || !/^[A-Za-z0-9_-]{20,100}$/.test(k)) {
+      const a = new Uint8Array(24);
+      try { global.crypto.getRandomValues(a); } catch (e) { for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256); }
+      k = Array.from(a, b => "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"[b % 64]).join("");
+      safeSet("seoz_wish_device_v1", k);
+      if (safeGet("seoz_wish_device_v1") !== k) k = memDevice || (memDevice = k);   // gizli sekme: bu oturumluk
+    }
+    return k;
+  }
   const wishTreeAdd = (slug, layerId, o) => rpc("wish_tree_add", { p_slug: slug, p_layer_id: layerId, p_name: o.name, p_wish: o.wish,
-    p_show_initials: !!o.showInitials, p_hp: o.hp || null });
+    p_show_initials: !!o.showInitials, p_hp: o.hp || null, p_device: wishDevice() });
   /* Davetiyede Katılım Formu yoksa dilekleri görmek için panel linki (varsa hiçbir şeyi değiştirmez). */
   async function ownerWishEnsurePanel(slug, docId) {
     const r = await rpc("wish_owner_ensure_panel", { p_slug: slug, p_doc_id: docId || null }, true);
@@ -262,9 +275,59 @@
     return r;
   }
   const ownerWishCount = slug => rpc("wish_owner_count", { p_slug: slug }, true);
+  /* Sonradan Katılım Formu eklenen "yalnızca Dilek Ağacı" kaydını yanıtlara açar (yalnızca o kayıt; diğerlerine dokunmaz). */
+  const ownerWishFormAdded = slug => rpc("wish_owner_form_added", { p_slug: slug }, true);
+
+  /* ---------------- MÜHÜRLÜ KART (supabase/muhurlu-kart.sql) ----------------
+     Gizli mesajlar herkese açık davetiye verisine GİRMEZ: "Yayına Hazırla" sırasında, davetiye kaydedilmeden
+     ÖNCE sunucudaki korumalı tabloya yazılır, yayınlanan kopyadan çıkarılır. Kayıt yapılamazsa yayın DURUR
+     (eski, güvensiz yönteme dönülmez). Misafir yalnızca seçtiği kartın mesajını, sunucu saatiyle açılınca alır. */
+  const sealedCardGet = (slug, layerId, index) => rpc("sealed_card_get", { p_slug: slug, p_layer_id: layerId, p_index: index });
+  function sealedLayers(doc) {
+    return (doc && Array.isArray(doc.layers) ? doc.layers : [])
+      .filter(l => l && l.type === "module" && l.moduleId === "interactive" && l.settings && l.settings.kind === "muhurlu-kart");
+  }
+  function sealedError(text, code) { const e = new Error(text); e.code = code || "sealed_failed"; e.sealed = true; return e; }
+  async function prepareSealedForPublish(snapshot, slug, onProgress) {
+    const layers = sealedLayers(snapshot);
+    if (!layers.length) return snapshot;
+    if (onProgress) onProgress("Mühürlü Kart mesajları güvenli olarak kaydediliyor...");
+    if (!isConfigured()) throw sealedError("Mühürlü Kart: Supabase bağlantısı ayarlı değil. Davetiye yayınlanmadı.");
+    const CD = global.SeozCountdown;
+    const payload = layers.map(l => {
+      const s = l.settings, cards = (Array.isArray(s.cards) ? s.cards : []).filter(c => c && (c.titleTr || c.titleEn || c.msgTr || c.msgEn));
+      const tz = s.unlockTimezone || "Europe/Istanbul", time = /^\d{1,2}:\d{2}/.test(String(s.unlockTime || "")) ? s.unlockTime : "00:00";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s.unlockDate || "")) || !CD || !CD.targetMs) throw sealedError("Mühürlü Kart: açılma tarihi hesaplanamadı. Davetiye yayınlanmadı.");
+      const at = CD.targetMs({ targetDate: s.unlockDate, targetTime: time, timezone: tz });
+      return { layer_id: l.id, unlock_at: new Date(at).toISOString(), cards: cards.map(c => ({ tr: String(c.msgTr || ""), en: String(c.msgEn || "") })) };
+    });
+    try { await rpc("sealed_owner_sync", { p_slug: slug, p_layers: payload }, true); }
+    catch (e) {
+      const code = String(e && (e.code || e.message) || "");
+      if (e && e.code === "AUTH_REQUIRED") throw sealedError("Mühürlü Kart: Studio SEOZ girişi gerekli (☁ Giriş Yap). Davetiye yayınlanmadı.", "AUTH_REQUIRED");
+      if (/sealed_owner_sync|PGRST202|Could not find/i.test(code)) throw sealedError("Mühürlü Kart'ın güvenli mesaj sistemi Supabase'de kurulu değil (supabase/muhurlu-kart.sql çalıştırılmalı). Gizli mesajların korunması için davetiye YAYINLANMADI.", "sealed_not_installed");
+      if (code === "network") throw sealedError("Mühürlü Kart mesajları kaydedilemedi: bağlantı kurulamadı. Davetiye yayınlanmadı; tekrar deneyin.", "network");
+      throw sealedError("Mühürlü Kart mesajları kaydedilemedi (" + code + "). Davetiye yayınlanmadı.");
+    }
+    return stripSealed(snapshot);
+  }
+  /* Yayınlanan / dışa aktarılan kopyadan gizli mesajları çıkarır (başlıklar kalır). Kayıt değişmez: kopya döner. */
+  function stripSealed(doc) {
+    const out = JSON.parse(JSON.stringify(doc));
+    sealedLayers(out).forEach(l => {
+      l.settings.sealedSecure = true;
+      l.settings.cards = (Array.isArray(l.settings.cards) ? l.settings.cards : []).filter(c => c && (c.titleTr || c.titleEn || c.msgTr || c.msgEn))
+        .map(c => ({ titleTr: String(c.titleTr || ""), titleEn: String(c.titleEn || "") }));
+    });
+    return out;
+  }
   const ownerWishPurge = slug => rpc("wish_owner_purge", { p_slug: slug }, true);
 
   global.SeozEventStore = {
+    sealedCardGet,
+    prepareSealedForPublish,
+    stripSealed,
+    ownerWishFormAdded,
     wishTreeGet,
     wishTreeAdd,
     ownerWishEnsurePanel,
