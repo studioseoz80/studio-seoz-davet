@@ -76,8 +76,8 @@
               </div>
             `).join("")}
           </div>
-          <button type="button" class="btn btn-outline" data-add-images="${key}" style="width:100%;margin-top:8px;">+ Fotoğraf Ekle</button>
-          <input type="file" accept="image/png,image/jpeg,image/webp" multiple data-add-images-input="${key}" class="hidden">
+          <button type="button" class="btn btn-outline" data-add-images="${key}" style="width:100%;margin-top:8px;">${field.single ? (images.length ? "Görseli Değiştir" : "+ Görsel Yükle") : "+ Fotoğraf Ekle"}</button>
+          <input type="file" accept="image/png,image/jpeg,image/webp" ${field.single ? "" : "multiple"} data-add-images-input="${key}" ${field.keepAlpha ? "data-keep-alpha" : ""} ${field.single ? "data-single" : ""} class="hidden">
         </div>`;
       }
       case "item-list":
@@ -318,9 +318,11 @@
       input.addEventListener("change", () => {
         const files = Array.from(input.files || []);
         if (!files.length) return;
-        Promise.all(files.map(file => SeozImageUtils.processImageFile(file)))
+        // keepAlpha (ör. Dilek Ağacı): WebP'nin saydamlığı korunur (PNG olarak saklanır). single: tek görsel (yenisi eskisinin yerine).
+        const opts = input.hasAttribute("data-keep-alpha") ? { keepAlpha: true } : undefined;
+        Promise.all((input.hasAttribute("data-single") ? files.slice(0, 1) : files).map(file => SeozImageUtils.processImageFile(file, opts)))
           .then(results => {
-            if (!Array.isArray(s[key])) s[key] = [];
+            if (!Array.isArray(s[key]) || input.hasAttribute("data-single")) s[key] = [];
             results.forEach(r => s[key].push({ ref: r.ref, naturalWidth: r.naturalWidth, naturalHeight: r.naturalHeight }));
             cb.onSettingsChange();
             render(containerEl, layer, cb);

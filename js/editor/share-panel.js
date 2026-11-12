@@ -169,6 +169,11 @@
             <p class="sp-note">Yalnızca bilgi: süre dolunca hiçbir şey kendiliğinden silinmez. Silme yalnızca aşağıdaki düğmeyle yapılır.</p></details>` : ""}
           ${opts.onAlbumPurge && !opts.albumInfo.purged_at ? `<div class="sp-danger"><button type="button" class="btn sp-del" data-sp-purge>Albüm Verilerini Sil</button>
             <p class="sp-note">Yalnızca Studio SEOZ görür. Bu albümün fotoğraf ve videoları depodan kalıcı olarak silinir; davetiye, diğer albümler ve katılım verileri etkilenmez.</p></div>` : ""}` : ""}</section>` : ""}
+        ${opts.wishInfo ? `<section class="sp-panel" data-sp-wish><h4>Dilek Ağacı</h4>
+          <p class="sp-note">Dilekler müşteri panelinin <b>Etkileşimler</b> bölümünde görünür; müşteri buradan gizleyebilir, silebilir, Excel/PDF indirebilir. Panelde "etkinlikten sonraki 30 gün içinde indirin" uyarısı gösterilir. Hiçbir şey kendiliğinden silinmez.</p>
+          <p class="sp-note" data-sp-wish-n>Kayıtlı dilek: <b>${Number(opts.wishInfo.count || 0)}</b></p>
+          ${opts.onWishPurge && Number(opts.wishInfo.count || 0) > 0 ? `<div class="sp-danger"><button type="button" class="btn sp-del" data-sp-wish-purge>Dilekleri Sil</button>
+            <p class="sp-note">Yalnızca Studio SEOZ görür. Bu davetiyenin bütün dilekleri kalıcı olarak silinir; davetiye ve katılım verileri etkilenmez.</p></div>` : ""}</section>` : ""}
         ${opts.panelMissing ? `<p class="sp-note sp-warn">Müşteri paneli linki bu tarayıcıda kayıtlı değil. Katılım Formu ayarlarındaki "Yeni panel linki üret" ile yeni bir link oluşturabilirsiniz.</p>` : ""}
         ${hasOwner ? "</div>" : ""}
         <details class="sp-long"><summary>Eski (uzun) bağlantı</summary><input readonly value="${esc(opts.longUrl)}"><p class="sp-note">Daha önce gönderilen bağlantılar aynen çalışmaya devam eder.</p></details>
@@ -282,6 +287,35 @@
           msg.className = "sp-note sp-warn";
           msg.textContent = "Silme tamamlanamadı: " + ((err && (err.code === "AUTH_REQUIRED" ? "Studio SEOZ girişi gerekli." : err.message)) || "bilinmeyen hata") + " Albüm kayıtları silinmedi; tekrar deneyebilirsiniz.";
           q("[data-sp-confirm-no]").disabled = false; q("[data-sp-confirm-no]").textContent = "Kapat";
+        });
+      });
+    });
+    // DİLEKLERİ SİL (elle, yalnızca Studio SEOZ): güçlü onay — SİL yazılmadan düğme açılmaz
+    if ($("[data-sp-wish-purge]")) $("[data-sp-wish-purge]").addEventListener("click", () => {
+      const m = document.createElement("div");
+      m.className = "sp-confirm"; m.setAttribute("role", "alertdialog"); m.setAttribute("aria-label", "Dilekleri sil");
+      m.innerHTML = `<div class="sp-confirm-box"><h4>Dilekleri Sil</h4>
+        <p class="sp-confirm-txt">Bu işlem geri alınamaz. Bu davetiyedeki bütün dilekler kalıcı olarak silinecek. Devam etmek istiyor musunuz?</p>
+        <p class="sp-note">Davetiye: <b>${esc((doc.meta && doc.meta.title) || opts.slug || "")}</b> · ${Number(opts.wishInfo.count || 0)} dilek</p>
+        <label class="sp-note"><span>Onaylamak için <b>SİL</b> yazın</span><input type="text" data-sp-confirm-in autocomplete="off"></label>
+        <div class="sp-row"><button type="button" class="btn btn-outline" data-sp-confirm-no>Vazgeç</button><button type="button" class="btn sp-del" data-sp-confirm-yes disabled>Evet, kalıcı olarak sil</button></div>
+        <p class="sp-note" data-sp-confirm-msg></p></div>`;
+      root.appendChild(m);
+      const q = x => m.querySelector(x), inp = q("[data-sp-confirm-in]"), yes = q("[data-sp-confirm-yes]"), msg = q("[data-sp-confirm-msg]");
+      inp.focus();
+      inp.addEventListener("input", () => { yes.disabled = inp.value.trim().toLocaleUpperCase("tr-TR") !== "SİL"; });
+      q("[data-sp-confirm-no]").addEventListener("click", () => m.remove());
+      yes.addEventListener("click", () => {
+        yes.disabled = true; inp.disabled = true;
+        Promise.resolve(opts.onWishPurge()).then(r => {
+          opts.wishInfo = Object.assign({}, opts.wishInfo, { count: 0 });
+          const box = root.querySelector("[data-sp-wish] .sp-danger"); if (box) box.innerHTML = `<p class="sp-note">✓ ${Number(r && r.removed || 0)} dilek silindi.</p>`;
+          $("[data-sp-wish-n]").innerHTML = "Kayıtlı dilek: <b>0</b>";
+          m.remove();
+        }).catch(err => {
+          msg.className = "sp-note sp-warn";
+          msg.textContent = "Silinemedi: " + ((err && (err.code === "AUTH_REQUIRED" ? "Studio SEOZ girişi gerekli." : err.message)) || "bilinmeyen hata");
+          q("[data-sp-confirm-no]").textContent = "Kapat";
         });
       });
     });

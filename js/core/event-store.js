@@ -251,7 +251,25 @@
     const u = new URL("anket-panel.html", b); u.hash = "k=" + token; return u.href;
   }
 
+  /* ---------------- DİLEK AĞACI (Etkileşim · supabase/dilek-agaci.sql) ---------------- */
+  const wishTreeGet = (slug, layerId) => rpc("wish_tree_get", { p_slug: slug, p_layer_id: layerId });
+  const wishTreeAdd = (slug, layerId, o) => rpc("wish_tree_add", { p_slug: slug, p_layer_id: layerId, p_name: o.name, p_wish: o.wish,
+    p_show_initials: !!o.showInitials, p_hp: o.hp || null });
+  /* Davetiyede Katılım Formu yoksa dilekleri görmek için panel linki (varsa hiçbir şeyi değiştirmez). */
+  async function ownerWishEnsurePanel(slug, docId) {
+    const r = await rpc("wish_owner_ensure_panel", { p_slug: slug, p_doc_id: docId || null }, true);
+    if (r && r.panel_token) safeSet(PANEL_KEY_PREFIX + slug, r.panel_token);
+    return r;
+  }
+  const ownerWishCount = slug => rpc("wish_owner_count", { p_slug: slug }, true);
+  const ownerWishPurge = slug => rpc("wish_owner_purge", { p_slug: slug }, true);
+
   global.SeozEventStore = {
+    wishTreeGet,
+    wishTreeAdd,
+    ownerWishEnsurePanel,
+    ownerWishCount,
+    ownerWishPurge,
     pollSubmit,
     pollHasVoted,
     pollGetOwn,

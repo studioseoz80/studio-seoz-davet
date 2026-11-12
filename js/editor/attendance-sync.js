@@ -17,10 +17,22 @@
       .filter(l => l.type === "module" && l.moduleId === "attendance-form");
   }
 
+  // DİLEK AĞACI: dilekler müşteri panelinin "Etkileşimler" bölümünde görünür.
+  function wishLayers(doc) {
+    return (doc && Array.isArray(doc.layers) ? doc.layers : [])
+      .filter(l => l.type === "module" && l.moduleId === "interactive" && l.settings && l.settings.kind === "dilek-agaci");
+  }
+
   /* Dönen değer: null (form yok) | { synced: true, multiple: bool, result } */
   async function afterPublish(doc, slug) {
     const layers = formLayers(doc);
-    if (!layers.length) return null;
+    if (!layers.length) {
+      // Katılım Formu yok ama Dilek Ağacı var: panel linki için etkinlik kaydı (varsa dokunulmaz).
+      if (!wishLayers(doc).length || !global.SeozEventStore || !global.SeozEventStore.ownerWishEnsurePanel) return null;
+      if (!slug) throw new Error("Yayın bağlantısı (slug) bulunamadı.");
+      const result = await global.SeozEventStore.ownerWishEnsurePanel(slug, doc.id);
+      return { synced: true, multiple: false, wishOnly: true, result };
+    }
     if (!slug) throw new Error("Yayın bağlantısı (slug) bulunamadı.");
     if (!global.SeozEventStore || !global.SeozEventStore.isConfigured()) {
       throw new Error("Supabase bağlantısı ayarlı değil.");
@@ -34,6 +46,7 @@
   function errorText(err) {
     const code = (err && (err.code || err.message)) || "";
     if (code === "AUTH_REQUIRED") return "Studio SEOZ girişi gerekli (☁ Giriş Yap).";
+    if (/wish_owner_ensure_panel/i.test(code)) return "Supabase'de Dilek Ağacı kurulmamış görünüyor (supabase/dilek-agaci.sql çalıştırılmalı).";
     if (/rsvp_owner_sync_event|Could not find the function|PGRST202/i.test(code)) {
       return "Supabase'de katılım sistemi kurulmamış görünüyor (supabase/katilim-faz-a.sql çalıştırılmalı).";
     }
@@ -41,5 +54,5 @@
     return code || "Bilinmeyen hata.";
   }
 
-  global.SeozAttendanceSync = { afterPublish, errorText, formLayers };
+  global.SeozAttendanceSync = { afterPublish, errorText, formLayers, wishLayers };
 })(window);

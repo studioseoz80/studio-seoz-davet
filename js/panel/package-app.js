@@ -96,7 +96,8 @@
     const site = global.location.origin;
     const links = { inv: `${site}/${p.slug}` };
     if (p.album && has("guest-upload")) links.album = `${site}/album.html#k=${p.album}${en ? "&lang=en" : ""}`;
-    if (p.panel && has("attendance-form")) links.panel = `${site}/panel.html#k=${p.panel}${en ? "&lang=en" : ""}`;
+    const hasWish = layers.some(l => l && l.type === "module" && l.moduleId === "interactive" && l.settings && l.settings.kind === "dilek-agaci");
+    if (p.panel && (has("attendance-form") || hasWish)) links.panel = `${site}/panel.html#k=${p.panel}${en ? "&lang=en" : ""}`;
     const al = links.album ? await albumInfo(p.album) : null;
     const title = (doc.meta && doc.meta.title) || "";
 

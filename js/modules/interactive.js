@@ -20,10 +20,15 @@
 
   const KINDS = [
     ["kazi-kazan", "Kazı-kazan"], ["zarf", "Zarfı aç"], ["balon", "Balon patlat"], ["hediye", "Hediye kutusu aç"], ["konfeti", "Konfeti düğmesi"],
-    ["foto-cevir", "Fotoğraf çevir"], ["dilek", "Dilek feneri bırak"], ["mum", "Mum söndür (basılı tut)"], ["kurdele", "Kurdele kes"], ["kapi-cal", "Kapı çal"]
+    ["foto-cevir", "Fotoğraf çevir"], ["dilek", "Dilek feneri bırak"], ["mum", "Mum söndür (basılı tut)"], ["kurdele", "Kurdele kes"], ["kapi-cal", "Kapı çal"],
+    ["muhurlu-kart", "Mühürlü Kart (kart seç, belirlenen saatte açılır)"], ["dilek-agaci", "Dilek Ağacı (misafirler dilek bırakır)"]
   ];
+  // Mühürlü Kart ve Dilek Ağacı: kendi ayarlarıyla çalışır (Etkileşim Stüdyosu ve eski "sonuç" alanları bunlarda gizli).
+  const NEW_KINDS = ["muhurlu-kart", "dilek-agaci"];
+  const isNew = s => NEW_KINDS.indexOf(s.kind) >= 0;
   const HINT = { "kazi-kazan": "Parmağınızla kazıyın", zarf: "Zarfı açmak için dokunun", balon: "Balonları patlatın", hediye: "Hediyeyi açmak için dokunun", konfeti: "Kutlamak için dokunun",
-    "foto-cevir": "Çevirmek için dokunun", dilek: "Dilek tutup feneri bırakın", mum: "Mumları söndürmek için basılı tutun", kurdele: "Kurdeleyi kesmek için dokunun", "kapi-cal": "Kapıyı üç kez çalın" };
+    "foto-cevir": "Çevirmek için dokunun", dilek: "Dilek tutup feneri bırakın", mum: "Mumları söndürmek için basılı tutun", kurdele: "Kurdeleyi kesmek için dokunun", "kapi-cal": "Kapıyı üç kez çalın",
+    "muhurlu-kart": "Bir kart seçin", "dilek-agaci": "" };
 
   const DEFAULTS = {
     kind: "kazi-kazan",
@@ -38,25 +43,65 @@
     color: "#B8925A",
     textColor: "#3A2E28",
     fontFamily: "Cormorant Garamond",
-    fontSize: 26
+    fontSize: 26,
+    // Mühürlü Kart
+    cards: [],
+    cardBg: "#1E2A44",
+    cardInk: "#F7F1E3",
+    cardFrame: "altin",
+    cardTextPos: "orta",
+    unlockDate: "",
+    unlockTime: "00:00",
+    unlockTimezone: "Europe/Istanbul",
+    // Dilek Ağacı
+    wishIcon: "yildiz",
+    wishVisibility: "kilitli"
   };
   // E1 + E2: kendi görselleriyle çalışan, Etkileşim Stüdyosu'ndan düzenlenen türler (on türün tamamı)
-  const STUDIO_KINDS = KINDS.map(k => k[0]);
+  const STUDIO_KINDS = KINDS.map(k => k[0]).filter(k => NEW_KINDS.indexOf(k) < 0);
+  // Saat dilimi seçenekleri (Geri Sayım ile aynı liste; hesap modules/countdown.js → SeozCountdown.targetMs)
+  const SEAL_TZ = [
+    { value: "Europe/Istanbul", label: "🇹🇷 Türkiye – Europe/Istanbul" },
+    { value: "America/New_York", label: "🇺🇸 Amerika / New York (Doğu) – America/New_York" },
+    { value: "America/Chicago", label: "🇺🇸 Amerika / Chicago (Orta) – America/Chicago" },
+    { value: "America/Los_Angeles", label: "🇺🇸 Amerika / Los Angeles (Batı) – America/Los_Angeles" },
+    { value: "Europe/Berlin", label: "🇩🇪 Almanya – Europe/Berlin" },
+    { value: "Europe/Amsterdam", label: "🇳🇱 Hollanda – Europe/Amsterdam" },
+    { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" }
+  ];
+  const isSeal = s => s.kind === "muhurlu-kart", isTree = s => s.kind === "dilek-agaci", isOld = s => !isNew(s);
   const SETTINGS_SCHEMA = [
     { key: "kind", type: "select", label: "Nesne", options: KINDS.map(([value, label]) => ({ value, label })), reRenderPanel: true },
     { key: "_studio", type: "action-button", label: "✨ Etkileşim Stüdyosu: kendi görselleriniz, hareket, sürpriz", action: "studio", showIf: s => STUDIO_KINDS.indexOf(s.kind) >= 0 },
-    { key: "title", type: "text", label: "Üstteki ipucu (boşsa hazır ipucu)" },
-    { key: "resultType", type: "select", label: "Sonuç", options: [{ value: "mesaj", label: "Mesaj" }, { value: "gorsel", label: "Görsel" }, { value: "baglanti", label: "Bağlantı düğmesi" }, { value: "efekt", label: "Yalnızca efekt" }, { value: "anim", label: "Yalnızca animasyon" }] },
-    { key: "message", type: "textarea", label: "Mesaj (sayfanın içinde durur — gerçek bir sır yazmayın)" },
-    { key: "images", type: "image-list", label: "Görseller: 1. ön/kapak (isteğe bağlı) · 2. sonuç görseli" },
-    { key: "linkUrl", type: "url", label: "Bağlantı adresi (sonuç “Bağlantı” ise)" },
-    { key: "linkText", type: "text", label: "Bağlantı düğmesi yazısı" },
-    { key: "effect", type: "select", label: "Efekt", options: [{ value: "konfeti", label: "Konfeti" }, { value: "kalp", label: "Kalpler" }, { value: "yildiz", label: "Yıldızlar" }, { value: "simli", label: "Simli parıltı" }, { value: "yok", label: "Yok" }] },
-    { key: "count", type: "number", label: "Balon sayısı", min: 1 },
-    { key: "color", type: "color", label: "Nesne rengi" },
-    { key: "textColor", type: "color", label: "Yazı rengi" },
+    { key: "title", type: "text", label: "Üstteki ipucu (boşsa hazır ipucu)", showIf: s => !isTree(s) },
+    // ---- Mühürlü Kart ----
+    { key: "cards", type: "item-list", label: "Kartlar (misafir rastgele birini çeker)", addLabel: "+ Kart Ekle", itemLabel: "Kart", showIf: isSeal,
+      itemFields: [{ key: "titleTr", type: "text", label: "Kart başlığı (TR)" }, { key: "msgTr", type: "textarea", label: "Gizli mesaj (TR)" },
+                   { key: "titleEn", type: "text", label: "Card title (EN)" }, { key: "msgEn", type: "textarea", label: "Secret message (EN)" }] },
+    { key: "cardBg", type: "color", label: "Kart arka plan rengi", showIf: isSeal },
+    { key: "cardInk", type: "color", label: "Kart yazı rengi", showIf: isSeal },
+    { key: "cardFrame", type: "select", label: "Kart çerçevesi", showIf: isSeal, options: [{ value: "altin", label: "Altın metalik" }, { value: "gumus", label: "Gümüş metalik" }, { value: "yok", label: "Çerçevesiz" }] },
+    { key: "cardTextPos", type: "select", label: "Kart yazısının konumu", showIf: isSeal, options: [{ value: "ust", label: "Üstte" }, { value: "orta", label: "Ortada" }, { value: "alt", label: "Altta" }] },
+    { key: "unlockDate", type: "date", label: "Gizli mesajların açılma tarihi", showIf: isSeal },
+    { key: "unlockTime", type: "time", label: "Açılma saati", showIf: isSeal },
+    { key: "unlockTimezone", type: "select", label: "Saat Dilimi", options: SEAL_TZ, showIf: isSeal },
+    // ---- Dilek Ağacı ----
+    { key: "images", type: "image-list", keepAlpha: true, single: true, label: "Ağaç / arka plan görseli (PNG veya WebP — ilk görsel kullanılır)", showIf: isTree },
+    { key: "wishIcon", type: "select", label: "Dilek simgesi", showIf: isTree, options: [{ value: "yildiz", label: "⭐ Yıldız" }, { value: "balon", label: "🎈 Balon" }, { value: "cicek", label: "🌸 Çiçek" }] },
+    { key: "wishVisibility", type: "select", label: "Dileklerin görünürlüğü", showIf: isTree, options: [{ value: "kilitli", label: "Kilitli — dilekleri yalnızca organizatör okur" }, { value: "acik", label: "Herkese Açık — misafirler simgeye dokunup okuyabilir" }] },
+    { key: "color", type: "color", label: "Simge ve düğme rengi", showIf: isTree },
+    { key: "resultType", type: "select", label: "Sonuç", showIf: isOld, options: [{ value: "mesaj", label: "Mesaj" }, { value: "gorsel", label: "Görsel" }, { value: "baglanti", label: "Bağlantı düğmesi" }, { value: "efekt", label: "Yalnızca efekt" }, { value: "anim", label: "Yalnızca animasyon" }] },
+    { key: "message", type: "textarea", label: "Mesaj (sayfanın içinde durur — gerçek bir sır yazmayın)", showIf: isOld },
+    { key: "images", type: "image-list", label: "Görseller: 1. ön/kapak (isteğe bağlı) · 2. sonuç görseli", showIf: isOld },
+    { key: "linkUrl", type: "url", label: "Bağlantı adresi (sonuç “Bağlantı” ise)", showIf: isOld },
+    { key: "linkText", type: "text", label: "Bağlantı düğmesi yazısı", showIf: isOld },
+    { key: "effect", type: "select", label: "Efekt", showIf: s => !isTree(s), options: [{ value: "konfeti", label: "Konfeti" }, { value: "kalp", label: "Kalpler" }, { value: "yildiz", label: "Yıldızlar" }, { value: "simli", label: "Simli parıltı" }, { value: "yok", label: "Yok" }] },
+    { key: "count", type: "number", label: "Balon sayısı", min: 1, showIf: isOld },
+    { key: "color", type: "color", label: "Nesne rengi", showIf: isOld },
+    { key: "textColor", type: "color", label: "Yazı rengi", showIf: s => !isSeal(s) },
     { key: "fontFamily", type: "font-select", label: "Mesaj fontu" },
-    { key: "fontSize", type: "number", label: "Mesaj boyutu", unit: "px", min: 10 }
+    { key: "fontSize", type: "number", label: "Mesaj boyutu", unit: "px", min: 10, showIf: isOld },
+    { key: "fontSize", type: "number", label: "Kart yazı boyutu", unit: "px", min: 10, showIf: isSeal }
   ];
 
   function el(tag, cls, css, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (css) Object.assign(e.style, css); if (html != null) e.innerHTML = html; return e; }
@@ -1067,9 +1112,277 @@
     }
   }
 
+  /* =========================================================================
+     MÜHÜRLÜ KART — kartlar yelpaze açılır, misafir birini seçer; başlık hemen,
+     gizli mesaj belirlenen anda (etkinliğin saat diliminde) açılır.
+     - Seçilen kart bu cihazda saklanır (localStorage): tekrar açınca aynı kart.
+     - Mesajlar sayfanın içinde durur (kazı-kazan gibi): gerçek bir sır için değil.
+     ========================================================================= */
+  const IX_LANG = () => (global.SeozInviteI18n ? global.SeozInviteI18n.lang() : "tr");
+  const IX_LOCALE = () => (IX_LANG() === "en" ? "en-US" : "tr-TR");
+  function cardTxt(c, which) {
+    const tr = String(c[which + "Tr"] || "").trim(), en = String(c[which + "En"] || "").trim();
+    return IX_LANG() === "en" ? (en || tr) : (tr || en);
+  }
+  const sealCards = s => (Array.isArray(s.cards) ? s.cards : []).filter(c => c && (c.titleTr || c.titleEn || c.msgTr || c.msgEn));
+  function sealUnlockMs(s) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s.unlockDate || ""))) return null;
+    const o = { targetDate: s.unlockDate, targetTime: /^\d{1,2}:\d{2}/.test(String(s.unlockTime || "")) ? s.unlockTime : "00:00", timezone: s.unlockTimezone || "Europe/Istanbul" };
+    return global.SeozCountdown && global.SeozCountdown.targetMs ? global.SeozCountdown.targetMs(o) : new Date(o.targetDate + "T" + o.targetTime + ":00").getTime();
+  }
+  function sealWhen(s, ms) {
+    try {
+      return new Intl.DateTimeFormat(IX_LOCALE(), { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
+        timeZone: s.unlockTimezone || "Europe/Istanbul", timeZoneName: "short" }).format(new Date(ms));
+    } catch (e) { return new Date(ms).toLocaleString(IX_LOCALE()); }
+  }
+  function ixSlug() { return global.SeozCloudStore && global.SeozCloudStore.currentSlug ? (global.SeozCloudStore.currentSlug() || "") : ""; }
+  function lsGet(k) { try { return global.localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { global.localStorage.setItem(k, v); } catch (e) { /* gizli sekme */ } }
+  const fp = c => String((c.titleTr || "") + "|" + (c.titleEn || "")).slice(0, 120);
+  function rnd(n) {
+    try { const a = new Uint32Array(1); global.crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); }
+  }
+  const pad2 = n => String(n).padStart(2, "0");
+  function sealLeft(ms) {
+    const t = Math.max(0, Math.floor(ms / 1000)), d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60;
+    return (d ? IXL("{n} gün ", { n: d }) : "") + pad2(h) + ":" + pad2(m) + ":" + pad2(sec);
+  }
+
+  function sealBuild(root, s, live, ctx) {
+    const cards = sealCards(s);
+    root.classList.add("ix-seal-frame-" + (["altin", "gumus", "yok"].indexOf(s.cardFrame) >= 0 ? s.cardFrame : "altin"));
+    root.classList.add("ix-seal-pos-" + (["ust", "orta", "alt"].indexOf(s.cardTextPos) >= 0 ? s.cardTextPos : "orta"));
+    root.style.setProperty("--seal-bg", s.cardBg || "#1E2A44");
+    root.style.setProperty("--seal-ink", s.cardInk || "#F7F1E3");
+    root.style.setProperty("--seal-font", `"${s.fontFamily || "Cormorant Garamond"}", serif`);
+    root.style.setProperty("--seal-size", Math.max(10, Number(s.fontSize) || 22) + "px");
+    const fan = el("div", "ix-seal-fan"); root.appendChild(fan);
+    const m = Math.min(7, Math.max(3, cards.length || 3));
+    for (let i = 0; i < m; i++) {
+      const b = el("button", "ix-seal-card ix-seal-back");
+      b.type = "button"; b.style.setProperty("--i", i); b.style.setProperty("--rot", (m === 1 ? 0 : (-26 + i * 52 / (m - 1))) + "deg");
+      b.setAttribute("aria-label", IXL("Kart {n}", { n: i + 1 }));
+      b.innerHTML = `<span class="ix-seal-face"><span class="ix-seal-mono">✦</span></span>`;
+      if (!live) b.tabIndex = -1;
+      fan.appendChild(b);
+    }
+    // açılış: üst üste duran kartlar yelpaze gibi açılır
+    const open = () => root.classList.add("is-fanned");
+    if (!live || reduced()) open(); else requestAnimationFrame(() => setTimeout(open, 120));
+    if (!cards.length) {
+      if (!live) root.appendChild(el("div", "ix-seal-empty", null, "Kart ekleyin"));
+      return;
+    }
+    if (!live) return;
+
+    const slug = ixSlug(), key = "seoz_sealed_v1_" + (slug || (ctx && ctx.docId) || "onizleme") + "_" + ((ctx && ctx.layerId) || "");
+    let saved = null;
+    try { saved = JSON.parse(lsGet(key) || "null"); } catch (e) { saved = null; }
+    const valid = saved && Number.isInteger(saved.i) && cards[saved.i] && saved.f === fp(cards[saved.i]);
+    if (valid) { showPicked(cards[saved.i], false); return; }
+    fan.addEventListener("click", e => {
+      const b = e.target.closest(".ix-seal-back"); if (!b || root.classList.contains("is-done")) return;
+      const i = rnd(cards.length);
+      lsSet(key, JSON.stringify({ i, f: fp(cards[i]), at: Date.now() }));
+      b.classList.add("is-chosen");
+      root.classList.add("is-picking");
+      setTimeout(() => showPicked(cards[i], true), reduced() ? 0 : 520);
+    });
+
+    function showPicked(card, animate) {
+      root.classList.add("is-done", "is-picked");
+      const pick = el("div", "ix-seal-pick" + (animate ? " is-new" : ""));
+      const face = el("div", "ix-seal-card ix-seal-front");
+      const body = el("div", "ix-seal-body");
+      body.appendChild(el("div", "ix-seal-kicker", null, esc(IXL("Kartınız"))));
+      body.appendChild(el("div", "ix-seal-title", null, esc(cardTxt(card, "title")).replace(/\n/g, "<br>")));
+      const sealBox = el("div", "ix-seal-lock");
+      body.appendChild(sealBox);
+      face.appendChild(body); pick.appendChild(face); root.appendChild(pick);
+      const at = sealUnlockMs(s);
+      let timer = null;
+      const msgHTML = () => esc(cardTxt(card, "msg")).replace(/\n/g, "<br>");
+      function paint(justOpened) {
+        const now = Date.now();
+        if (at != null && now >= at) {
+          if (timer) { clearInterval(timer); timer = null; }
+          sealBox.className = "ix-seal-msg" + (justOpened ? " is-opening" : "");
+          sealBox.innerHTML = msgHTML();
+          if (justOpened) burst(root, s.effect || "simli");
+          return;
+        }
+        sealBox.className = "ix-seal-lock";
+        sealBox.innerHTML = `<span class="ix-seal-wax" aria-hidden="true"></span>
+          <span class="ix-seal-lbl">${esc(IXL("Mühürlü"))}</span>
+          ${at != null ? `<span class="ix-seal-when">${esc(IXL("{t} tarihinde açılır", { t: sealWhen(s, at) }))}</span>
+          <span class="ix-seal-left">${esc(sealLeft(at - now))}</span>` : `<span class="ix-seal-when">${esc(IXL("Yakında açılacak"))}</span>`}`;
+      }
+      paint(false);
+      if (at != null && Date.now() < at) {
+        timer = setInterval(() => {
+          if (!root.isConnected) { clearInterval(timer); return; }
+          if (Date.now() >= at) paint(true);
+          else { const l = sealBox.querySelector(".ix-seal-left"); if (l) l.textContent = sealLeft(at - Date.now()); }
+        }, 1000);
+      }
+    }
+  }
+
+  /* =========================================================================
+     DİLEK AĞACI — misafir adını ve dileğini bırakır; dilek ağaca simge olarak
+     yerleşir. Simgeler Supabase'den (wish_tree_get) gelir ve herkes görür.
+     "Kilitli" ayarında dilek metinleri yalnızca organizatör panelinde okunur.
+     ========================================================================= */
+  const WISH_SVG = {
+    yildiz: c => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8l2.9 6.4 7 .7-5.3 4.7 1.6 6.9L12 16.9l-6.2 3.6 1.6-6.9L2.1 8.9l7-.7z" fill="${c}" stroke="rgba(255,255,255,.85)" stroke-width="1"/></svg>`,
+    balon: c => `<svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 22.5c4.6 0 8-4.4 8-10.2C20 6.6 16.4 2 12 2S4 6.6 4 12.3c0 5.8 3.4 10.2 8 10.2z" fill="${c}" stroke="rgba(255,255,255,.8)" stroke-width="1"/><path d="M10.6 22.4h2.8l-1.4 2.2z" fill="${c}"/><path d="M12 24.6c-1.2 1.6 1.2 2.6 0 4.4" fill="none" stroke="rgba(80,70,60,.55)" stroke-width=".8"/><ellipse cx="9" cy="8.5" rx="1.6" ry="2.6" fill="rgba(255,255,255,.45)"/></svg>`,
+    cicek: c => `<svg viewBox="0 0 24 24" aria-hidden="true">${[0, 72, 144, 216, 288].map(a => `<ellipse cx="12" cy="6.4" rx="3.6" ry="5" fill="${c}" stroke="rgba(255,255,255,.75)" stroke-width=".8" transform="rotate(${a} 12 12)"/>`).join("")}<circle cx="12" cy="12" r="3.4" fill="#F7D774" stroke="rgba(255,255,255,.8)" stroke-width=".8"/></svg>`
+  };
+  // Simgenin ağaçtaki yeri: sıra numarasından (slot) hesaplanır → herkes aynı yerleşimi görür.
+  function wishSpot(slot) {
+    const ring = 140, k = slot % ring, lap = Math.floor(slot / ring);
+    const a = k * 2.39996323 + lap * 0.9, r = 0.22 + 0.78 * Math.sqrt((k + 0.5) / ring);   // ilk dilekler merkeze yığılmasın
+    return { x: Math.max(6, Math.min(94, 50 + 41 * r * Math.cos(a) + lap * 2.2)), y: Math.max(6, Math.min(70, 37 + 30 * r * Math.sin(a) + lap * 1.6)) };
+  }
+  const WISH_ERR = {
+    name_required: "Lütfen adınızı yazın.", wish_required: "Lütfen dileğinizi yazın.", name_too_long: "Ad en fazla 60 karakter olabilir.",
+    wish_too_long: "Dilek en fazla 400 karakter olabilir.", limit_reached: "Bu ağaç doldu; yeni dilek eklenemiyor.",
+    slow_down: "Çok fazla dilek gönderildi; lütfen biraz sonra tekrar deneyin.", tree_not_found: "Dilek ağacı şu anda kullanılamıyor."
+  };
+
+  function treeBuild(root, s, live, ctx) {
+    const icon = WISH_SVG[s.wishIcon] ? s.wishIcon : "yildiz", color = s.color || "#E7B53C";
+    const isPublic = s.wishVisibility === "acik";
+    root.classList.add("ix-tree-" + icon);
+    root.style.setProperty("--tree-c", color);
+    root.style.setProperty("--tree-ink", s.textColor || "#3A2E28");
+    const stage = el("div", "ix-tree-stage"); root.appendChild(stage);
+    const ref = refs(s)[0];
+    if (ref) { const im = el("img", "ix-tree-bg"); im.alt = ""; im.draggable = false; setImg(im, ref); stage.appendChild(im); }
+    else stage.appendChild(el("div", "ix-tree-bg ix-tree-ph", null, live ? "" : "Ağaç / arka plan görseli yükleyin"));
+    const layer = el("div", "ix-tree-icons"); stage.appendChild(layer);
+    const bar = el("div", "ix-tree-bar");
+    const btn = el("button", "ix-tree-btn", { fontFamily: `"${s.fontFamily || "Manrope"}", sans-serif` }, esc(IXD(s.title) || IXL("Dilek Bırak")));
+    btn.type = "button";
+    const count = el("span", "ix-tree-count");
+    bar.appendChild(btn); bar.appendChild(count); root.appendChild(bar);
+    const tip = el("div", "ix-tree-tip"); tip.hidden = true; stage.appendChild(tip);
+
+    const shown = new Map();
+    const slug = live ? ixSlug() : "", layerId = (ctx && ctx.layerId) || "";
+    const mineKey = "seoz_wish_v1_" + slug + "_" + layerId;
+    const mine = () => { try { return JSON.parse(lsGet(mineKey) || "[]"); } catch (e) { return []; } };
+    function setCount(n) { count.textContent = n ? IXL("{n} dilek", { n }) : ""; }
+    function addIcon(it, fly) {
+      if (shown.has(it.id)) return shown.get(it.id);
+      const p = wishSpot(Number(it.slot) || 0);
+      const b = el("button", "ix-wish" + (mine().indexOf(it.id) >= 0 ? " is-mine" : ""), { left: p.x + "%", top: p.y + "%" });
+      b.type = "button"; b.style.setProperty("--d", ((Number(it.slot) || 0) % 7) * 0.35 + "s");
+      b.innerHTML = WISH_SVG[icon](color) + (it.initials ? `<b class="ix-wish-ini">${esc(it.initials)}</b>` : "");
+      b.setAttribute("aria-label", it.initials ? IXL("Dilek ({i})", { i: it.initials }) : IXL("Dilek"));
+      b.__it = it;
+      layer.appendChild(b); shown.set(it.id, b);
+      if (fly && !reduced()) {
+        const sr = stage.getBoundingClientRect(), br = btn.getBoundingClientRect(), sc = sr.width / (stage.offsetWidth || 1) || 1;
+        const dx = ((br.left + br.width / 2) - (sr.left + sr.width * p.x / 100)) / sc, dy = ((br.top) - (sr.top + sr.height * p.y / 100)) / sc;
+        AN(b, [{ transform: `translate(-50%,-50%) translate(${dx}px,${dy}px) scale(.4)`, opacity: 0.2 },
+               { transform: `translate(-50%,-50%) translate(${dx * 0.35}px,${dy * 0.55 - 30}px) scale(1.25)`, opacity: 1, offset: 0.6 },
+               { transform: "translate(-50%,-50%) scale(1)", opacity: 1 }], { duration: 1300, easing: "cubic-bezier(.2,.8,.2,1)", fill: "none" });
+        setTimeout(() => { b.classList.add("is-landed"); burst(stage, "simli"); }, reduced() ? 0 : 1250);
+      }
+      return b;
+    }
+    // Simgeye dokununca: açıksa isim + dilek, kilitliyse kısa bilgi
+    stage.addEventListener("click", e => {
+      const b = e.target.closest(".ix-wish");
+      if (!b) { tip.hidden = true; return; }
+      const it = b.__it || {};
+      tip.innerHTML = isPublic && it.wish != null
+        ? `<b>${esc(it.name || "")}</b><span>${esc(it.wish).replace(/\n/g, "<br>")}</span>`
+        : `<span>🔒 ${esc(IXL("Dilekler gizli — yalnızca organizatör okuyabilir."))}</span>`;
+      tip.style.left = b.style.left; tip.style.top = b.style.top;
+      tip.classList.toggle("is-below", parseFloat(b.style.top) < 30);
+      tip.hidden = false;
+    });
+
+    if (!live) {   // editörde örnek simgeler
+      for (let i = 0; i < 9; i++) addIcon({ id: "ornek" + i, slot: i * 3, initials: i % 3 === 0 ? "AK" : null });
+      btn.disabled = true; setCount(0);
+      return;
+    }
+
+    const ES = global.SeozEventStore;
+    let last = 0;
+    function refresh() {
+      if (!slug || !ES || !ES.wishTreeGet) return;
+      last = Date.now();
+      ES.wishTreeGet(slug, layerId).then(d => {
+        const items = d && Array.isArray(d.items) ? d.items : [];
+        const keep = new Set(items.map(it => it.id));
+        shown.forEach((b, id) => { if (!keep.has(id)) { b.remove(); shown.delete(id); } });   // organizatörün gizlediği/sildiği
+        items.forEach(it => { const b = addIcon(it, false); b.__it = it; });
+        setCount(items.length);
+      }).catch(() => { /* sessiz: sonraki yenilemede tekrar denenir */ });
+    }
+    refresh();
+    const iv = setInterval(() => {
+      if (!root.isConnected) { clearInterval(iv); return; }
+      if (document.visibilityState === "visible" && Date.now() - last > 40000) refresh();
+    }, 5000);
+
+    btn.addEventListener("click", () => openForm());
+    function openForm() {
+      if (!slug) { toastIx(root, IXL("Bu bir önizleme: dilekler yayınlanan davetiyede kaydedilir.")); return; }
+      const bg = el("div", "ix-wish-modal"); bg.setAttribute("role", "dialog"); bg.setAttribute("aria-modal", "true");
+      bg.innerHTML = `<form class="ix-wish-box" novalidate>
+        <h3>${esc(IXL("Dileğini bırak"))}</h3>
+        <label>${esc(IXL("Adınız"))}<input name="n" maxlength="60" autocomplete="name" required></label>
+        <label>${esc(IXL("Dileğiniz"))}<textarea name="w" maxlength="400" rows="4" required></textarea><small class="ix-wish-cnt">0 / 400</small></label>
+        <label class="ix-wish-chk"><input type="checkbox" name="i"> <span>${esc(IXL("Adımın baş harfleri simgede görünsün"))}</span></label>
+        <input name="hp" tabindex="-1" autocomplete="off" class="ix-wish-hp" aria-hidden="true">
+        <p class="ix-wish-note">${esc(IXL(isPublic ? "Dileğiniz bu davetiyede herkes tarafından okunabilir." : "Dileğinizi yalnızca organizatör okuyabilir."))}</p>
+        <p class="ix-wish-err" role="alert" hidden></p>
+        <div class="ix-wish-row"><button type="button" class="ix-wish-cancel">${esc(IXL("Vazgeç"))}</button><button type="submit" class="ix-wish-send">${esc(IXL("Gönder"))}</button></div>
+      </form>`;
+      document.body.appendChild(bg);
+      const f = bg.querySelector("form"), err = bg.querySelector(".ix-wish-err"), send = bg.querySelector(".ix-wish-send");
+      const close = () => bg.remove();
+      bg.querySelector(".ix-wish-cancel").addEventListener("click", close);
+      bg.addEventListener("click", e => { if (e.target === bg) close(); });
+      f.w.addEventListener("input", () => { bg.querySelector(".ix-wish-cnt").textContent = f.w.value.length + " / 400"; });
+      setTimeout(() => { try { f.n.focus(); } catch (e) { /* */ } }, 50);
+      f.addEventListener("submit", e => {
+        e.preventDefault();
+        const name = f.n.value.trim(), wish = f.w.value.trim();
+        const fail = t => { err.textContent = t; err.hidden = false; };
+        if (!name) return fail(IXL(WISH_ERR.name_required));
+        if (!wish) return fail(IXL(WISH_ERR.wish_required));
+        send.disabled = true; send.textContent = IXL("Gönderiliyor...");
+        ES.wishTreeAdd(slug, layerId, { name, wish, showInitials: f.i.checked, hp: f.hp.value }).then(r => {
+          const ids = mine(); ids.push(r.id); lsSet(mineKey, JSON.stringify(ids.slice(-50)));
+          close();
+          const it = { id: r.id, slot: r.slot, initials: r.initials, name: isPublic ? name : null, wish: isPublic ? wish : null };
+          const b = addIcon(it, true); b.classList.add("is-mine");
+          setCount(shown.size);
+          toastIx(root, IXL("Dileğiniz ağaca eklendi ✨"));
+        }).catch(er => {
+          send.disabled = false; send.textContent = IXL("Gönder");
+          const code = String(er && (er.code || er.message) || "");
+          const k = Object.keys(WISH_ERR).find(x => code.indexOf(x) >= 0);
+          fail(k ? IXL(WISH_ERR[k]) : code === "network" ? IXL("Bağlantı kurulamadı. Lütfen tekrar deneyin.") : IXL("Dilek gönderilemedi. Lütfen tekrar deneyin."));
+        });
+      });
+    }
+  }
+  function toastIx(root, text) {
+    const t = el("div", "ix-toast", null, esc(text)); root.appendChild(t);
+    setTimeout(() => t.classList.add("is-out"), 2600); setTimeout(() => t.remove(), 3200);
+  }
+
   function render(settings, mode, o3) {
     const s = Object.assign({}, DEFAULTS, settings);
-    const kind = BUILD[s.kind] ? s.kind : "kazi-kazan";
+    const kind = BUILD[s.kind] || NEW_KINDS.indexOf(s.kind) >= 0 ? s.kind : "kazi-kazan";
     const live = mode === "view";
     const root = el("div", "ix ix-" + kind);
     // ✨ Sahne uyumu: belgede açıksa etkileşim aynı hareket diliyle (karakteriyle) oynar; yoksa eskisi gibi
@@ -1079,13 +1392,15 @@
     root.style.setProperty("--ix-c", s.color); root.style.setProperty("--ix-ink", s.textColor);
     try {
       // E2: türün ana parçası yüklenmişse kendi görselleriyle çalışan yeni çizim; yoksa eski hazır çizim (aynen)
-      if (kind !== "kurdele" && BUILD2[kind] && hasMain(s, kind)) BUILD2[kind](root, s, live);
+      if (kind === "muhurlu-kart") sealBuild(root, s, live, o3);
+      else if (kind === "dilek-agaci") treeBuild(root, s, live, o3);
+      else if (kind !== "kurdele" && BUILD2[kind] && hasMain(s, kind)) BUILD2[kind](root, s, live);
       else BUILD[kind](root, s, live);
     } catch (e) { console.error("[Studio SEOZ] Etkileşim hatası:", e); }
     const hint = el("div", "ix-hint", null, esc(IXD(s.title) || root.__ixHint || IXL(HINT[kind])));
-    if (kind !== "konfeti") root.appendChild(hint);
+    if (kind !== "konfeti" && kind !== "dilek-agaci") root.appendChild(hint);
     // klavye: Enter / Boşluk ile aynı sonuç (kazı-kazan ve mum için kısayol)
-    if (live && (["konfeti", "dilek", "balon"].indexOf(kind) < 0 || root.__ixKey)) {
+    if (live && NEW_KINDS.indexOf(kind) < 0 && (["konfeti", "dilek", "balon"].indexOf(kind) < 0 || root.__ixKey)) {
       root.tabIndex = 0; root.setAttribute("role", "button"); root.setAttribute("aria-label", IXD(s.title) || IXL(HINT[kind]));
       root.addEventListener("keydown", e => {
         if (e.key !== "Enter" && e.key !== " ") return;
@@ -1112,11 +1427,17 @@
     panelActions: { studio(layer, h) { if (global.SeozInteractiveStudio) global.SeozInteractiveStudio.open(layer, h); } },
     validate: (s) => {
       s = Object.assign({}, DEFAULTS, s);
+      if (s.kind === "muhurlu-kart") {
+        if (!sealCards(s).length) return "Mühürlü Kart: en az bir kart ekleyin.";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s.unlockDate || ""))) return "Mühürlü Kart: gizli mesajların açılma tarihi seçilmemiş.";
+        return null;
+      }
+      if (s.kind === "dilek-agaci") return null;   // görsel isteğe bağlı (yoksa yumuşak zemin)
       if (s.resultType === "baglanti" && !String(s.linkUrl || "").trim()) return "Etkileşim: sonuç “Bağlantı” seçilmiş ama adres girilmemiş.";
       if (s.resultType === "gorsel" && !refs(s).length && !s.resultImage) return "Etkileşim: sonuç “Görsel” seçilmiş ama görsel yüklenmemiş.";
       return null;
     }
   });
-  global.SeozInteractive = { KINDS, HINT, DEFAULTS, STUDIO_KINDS, CUT_DEFAULTS, PART_DEFAULTS, PART_DEFS, MOTION_DEFAULTS, MAIN_PART, FLAME_DEFAULTS,
+  global.SeozInteractive = { KINDS, NEW_KINDS, wishSpot, sealUnlockMs, HINT, DEFAULTS, STUDIO_KINDS, CUT_DEFAULTS, PART_DEFAULTS, PART_DEFS, MOTION_DEFAULTS, MAIN_PART, FLAME_DEFAULTS,
     partDefault, balloonDefault, placePart, render };
 })(window);

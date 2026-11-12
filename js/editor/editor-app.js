@@ -761,6 +761,9 @@
         if (layer && layer.moduleId === "interactive") {
           layer.settings.kind = kind;
           if (doc.theme && doc.theme.palette) { layer.settings.color = doc.theme.palette.accent || layer.settings.color; layer.settings.textColor = doc.theme.palette.ink || layer.settings.textColor; }
+          // Mühürlü Kart / Dilek Ağacı: biraz daha yüksek kutu (kart yelpazesi / ağaç + düğme)
+          if (kind === "muhurlu-kart") { layer.w = 300; layer.h = 290; }
+          if (kind === "dilek-agaci") { layer.w = 320; layer.h = 400; }
           updateLayerDOM(layer); renderPropPanel(); scheduleAutosave(true);
         }
       });
@@ -999,6 +1002,13 @@
               return result;
             });
           })
+          // DİLEK AĞACI: yalnızca bilgi (dilek sayısı) — Yayına Hazırla penceresinde elle silme için.
+          .then(result => {
+            const trees = typeof SeozAttendanceSync !== "undefined" && SeozAttendanceSync.wishLayers ? SeozAttendanceSync.wishLayers(doc) : [];
+            if (!trees.length || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerWishCount) return result;
+            return SeozEventStore.ownerWishCount(result.slug).then(info => { result.wishInfo = info || { count: 0 }; return result; })
+              .catch(err => { console.warn("[Studio SEOZ] Dilek sayısı alınamadı:", err); return result; });
+          })
           .then(result => {
             const shortLink = result.shortUrl || result.url;
             showToast("Yayınlandı. Müşteri bağlantısı: " + shortLink);
@@ -1021,6 +1031,8 @@
               makePackageUrl: SeozEventStore.packageUrl ? () => SeozEventStore.packageUrl(result.slug, { album: !!(result.albumUrl || result.albumMissing), panel: !!panelLink }) : null,
               onAlbumSettings: (eventDate, days) => SeozEventStore.ownerAlbumSettings(result.slug, eventDate, days),
               onAlbumPurge: onStep => SeozEventStore.ownerAlbumPurge(result.slug, onStep),
+              wishInfo: result.wishInfo || null,
+              onWishPurge: () => SeozEventStore.ownerWishPurge(result.slug),
               polls: result.polls || [],
               onPollRotate: layerId => SeozEventStore.ownerPollRotate(result.slug, layerId).then(() => SeozEventStore.pollPanelUrl(result.slug, layerId)),
               onPollView: layerId => SeozEventStore.ownerPollViewLink(result.slug, layerId),

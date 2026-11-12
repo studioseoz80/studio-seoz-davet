@@ -322,3 +322,17 @@ body.pn-dragging, body.pn-dragging *{ cursor:grabbing !important; user-select:no
 .pn-lang button{ border:0; background:none; border-radius:999px; padding:3px 10px; min-width:40px; min-height:26px; font-weight:700; font-size:.74rem; letter-spacing:.06em; color:var(--soft); cursor:pointer; }
 .pn-lang button[aria-pressed="true"]{ background:var(--gold); color:#fff; }
 .pn-lang button:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+
+/* ---- Etkileşimler · Dilek Ağacı ---- */
+.pn-wish-head{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.pn-wish-ret b{ display:inline-block; }
+.pn-wish-vis{ margin:0; font-size:13px; }
+.pn-wishes{ display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); }
+.pn-wish{ background:#fff; border:1px solid rgba(0,0,0,.08); border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; break-inside:avoid; }
+.pn-wish header{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:14px; }
+.pn-wish p{ margin:0; font-size:14px; line-height:1.45; white-space:normal; overflow-wrap:anywhere; }
+.pn-wish.is-hidden{ opacity:.6; background:#faf7f3; }
+.pn-wish-ini{ font-size:12px; }
+.pn-wish-act{ display:flex; gap:6px; justify-content:flex-end; }
+.pn-wish-act .pn-danger{ color:#B3261E; }
+@media print{ .pn-wishes{ display:block; } .pn-wish{ margin-bottom:8px; border-color:#ccc; } .pn-wish.is-hidden{ display:none; } }

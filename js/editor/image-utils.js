@@ -46,7 +46,7 @@
   /* Bir görsel dosyasını küçültür ve IndexedDB'ye kaydeder.
      Döner: { ref, naturalWidth, naturalHeight }
      "ref", katmanın content.src alanına yazılacak değerdir. */
-  function processImageFile(file) {
+  function processImageFile(file, opts) {
     return readFileAsImage(file).then(img => {
       let { width, height } = img;
       if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
@@ -60,7 +60,8 @@
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0, width, height);
 
-      const keepPng = file.type === "image/png";
+      // opts.keepAlpha: saydam WebP de PNG olarak saklanır (varsayılan davranış değişmez: WebP → JPEG)
+      const keepPng = file.type === "image/png" || !!(opts && opts.keepAlpha && file.type === "image/webp");
       const mimeType = keepPng ? "image/png" : "image/jpeg";
       const quality = keepPng ? undefined : 0.86;
 
