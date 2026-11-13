@@ -316,6 +316,7 @@
     function backWarnHTML(l, m, a) {
       if (!l || !l.v3 || l.backSrc) return "";
       let turns = !!(m && m.needsBack);
+      if (m && m.id === "flap-open" && (!a || (a.params || {}).inside !== "yok")) turns = false;   // zarf kapağının iç yüzü kendi dokusuyla gösterilir
       if (m && m.pairs && a) { const p = a.params || {}; turns = ["rx0", "rx1", "ry0", "ry1"].some(k => Math.abs(Number(p[k]) || 0) > 90); }
       if (!m) turns = !!(l.d3 && (Math.abs(Number(l.rx) || 0) > 90 || Math.abs(Number(l.ry) || 0) > 90));
       return turns ? `<p class="cs-hint cs-warn">⚠ Bu görselin arka yüzü yok. Arkası izleyiciye döndüğünde görsel görünmez — sahte arka yüz oluşturulmaz. Arkası görünsün istiyorsanız yukarıdan "Arka yüz" görseli yükleyin.</p>` : "";
@@ -576,6 +577,8 @@
           <label class="cs-row"><span>Derinlik</span><input type="range" min="-200" max="200" step="1" data-cs-l="depth" value="${Number(l.depth) || 0}"><output data-cs-lout="depth">${Number(l.depth) || 0}</output></label>
           ${is3 ? "" : `<label class="cs-row"><span>Kalınlık</span><input type="range" min="0" max="40" step="1" data-cs-l="thickness" value="${L.thickness}"><output data-cs-lout="thickness">${L.thickness}</output></label>
           <label class="cs-row"><span>Işık tepkisi</span><input type="range" min="0" max="1.5" step="0.05" data-cs-l="light" value="${L.light}"><output data-cs-lout="light">${Math.round(L.light * 100)}%</output></label>`}
+          ${others.length && !is3 ? `<label class="cs-row cs-row-col"><span>Başka katmana hizala</span><select data-cs-align aria-label="Başka katmana hizala"><option value="">Seçin…</option>
+            ${others.map(o => `<option value="same:${o.id}">${esc(o.name)} ile aynı yer ve boy (aynı ölçüde dışa aktarılmış PNG)</option><option value="top:${o.id}">${esc(o.name)} üst kenarına ve genişliğine oturt (kırpılmış kapak)</option>`).join("")}</select></label>` : ""}
           <button type="button" class="btn btn-outline cs-reset" data-cs-reset>Yerleşimi sıfırla</button>
           <p class="cs-hint">Sahnede katmanı sürükleyin, sağ alt köşeden büyütün, kırmızı artıyla dönme noktasını taşıyın. Ok tuşları 1, Shift ile 10 birim kaydırır.${is3 ? " Model, kutunun içine her açıdan sığacak şekilde ortalanır." : ""}</p>
         </section>
@@ -1290,6 +1293,21 @@
         else if (key === "persp") k.persp = tg.value ? Number(tg.value) : "";
         else k[key] = Number(tg.value) || 0;
         save(); renderLeft(); renderRight(); return showCard();
+      }
+      if (tg.matches("[data-cs-align]")) {   // üstten açılış: kapağı gövdeye birebir hizala (oran bozulmaz)
+        const [mode, tid] = tg.value.split(":"), o = layerById(tid); if (!l || !o || !o.box) return;
+        const os = Number(o.scale) > 0 ? Number(o.scale) : 1, ow = o.box.w * os, oh = o.box.h * os;
+        const ocx = o.box.x + o.box.w / 2 + (Number(o.x) || 0), ocy = o.box.y + o.box.h / 2 + (Number(o.y) || 0);
+        if (mode === "same") l.box = { x: r1(ocx - ow / 2), y: r1(ocy - oh / 2), w: r1(ow), h: r1(oh) };
+        else {
+          // hedefin görseli kutuya "contain" ile oturur: görselin gerçek üst kenarı ve genişliği alınır
+          const ir = (o.check && o.check.info && o.check.info.w / o.check.info.h) || ow / oh, mr = (l.check && l.check.info && l.check.info.w / l.check.info.h) || l.box.w / l.box.h;
+          let iw = ow, ih = ow / ir; if (ih > oh) { ih = oh; iw = oh * ir; }
+          const top = ocy - ih / 2;
+          l.box = { x: r1(ocx - iw / 2), y: r1(top), w: r1(iw), h: r1(iw / mr) };
+        }
+        ["x", "y", "scale"].forEach(k => delete l[k]);
+        save(); renderRight(); return rebuildStage();
       }
       if (tg.matches("[data-cs-addmove]")) { if (tg.value && (l || isCard(state.sel))) addAction(tg.value, l ? l.id : state.sel); return; }
       if (tg.matches("[data-cs-lname]")) {

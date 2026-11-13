@@ -149,7 +149,7 @@
   /* =============================== hareket sınıfları =============================== */
   // ana açılışlar (sahneyi açan, kartı ortaya çıkaran) — sıranın omurgası
   const OPEN = { "split-h": 0.72, "split-v": 0.72, hinge: 0.72, slide: 0.7, quad: 0.72, fold: 0.78, curtain: 0.75, drawer: 0.7, "page-turn": 0.75,
-    seal: 0.22, "ribbon-cut": 0.55, lock: 0.62, burst: 0.18, shatter: 0.4 };   // değer: "doruk" anı (sürecin oranı)
+    seal: 0.22, "ribbon-cut": 0.55, lock: 0.62, burst: 0.18, shatter: 0.4, "flap-open": 0.6 };   // değer: "doruk" anı (sürecin oranı)
   const ENTER = { reveal: 0.6, assemble: 0.8, rise: 0.7, drop: 0.55, card: 0.75, free3d: 0.75, zoom: 0.7, spin: 0.8, "camera-push": 0.7 };
   const LOOPS = { float: 1, shake: 1, tease: 1, parallax: 1, sheen: 1, shadow: 1 };
   const DECO = { "light-leak": "pre", "light-burst": "peak", confetti: "celebrate", fireworks: "celebrate",

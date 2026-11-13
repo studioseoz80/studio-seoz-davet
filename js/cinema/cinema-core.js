@@ -207,11 +207,13 @@
     if (!/^https?:/i.test(url)) return false;
     try { return new URL(url, global.location.href).origin !== global.location.origin; } catch (e) { return false; }
   }
+  // Yüklenen görseller (saydam alan ölçümü için; yalnızca istendiğinde, bir kez ölçülür)
+  const LOADED = new Map(), ABOX = new Map();
   function tryLoad(url, cors) {
     return new Promise(res => {
       const im = new Image();
       let settled = false;
-      const ok = () => { if (settled) return; settled = true; res(true); };
+      const ok = () => { if (settled) return; settled = true; LOADED.set(url, im); res(true); };
       const bad = () => { if (settled) return; settled = true; res(false); };
       if (cors) im.crossOrigin = "anonymous";
       im.onload = () => { if (im.decode) im.decode().then(ok, ok); else ok(); };
@@ -248,6 +250,28 @@
       if (ok) URLS.set(ref, url);
       return ok;
     }).catch(() => false);
+  }
+  /* Görselin DOLU (saydam olmayan) bölgesi, görselin kendi ölçüsüne oranla: { l, t, r, b, ratio }.
+     Ölçülemezse (izin yok / henüz inmedi) null — çağıran taraf kutunun tamamını kullanır. */
+  function alphaBox(ref) {
+    if (!ref) return null;
+    if (ABOX.has(ref)) return ABOX.get(ref);
+    const url = URLS.get(ref), im = url && LOADED.get(url);
+    let out = null;
+    if (im && im.naturalWidth && (!needsCors(url) || MASK_OK.has(ref))) {
+      try {
+        const k = Math.min(1, 256 / Math.max(im.naturalWidth, im.naturalHeight));
+        const w = Math.max(1, Math.round(im.naturalWidth * k)), hh = Math.max(1, Math.round(im.naturalHeight * k));
+        const cv = document.createElement("canvas"); cv.width = w; cv.height = hh;
+        const g = cv.getContext("2d"); g.drawImage(im, 0, 0, w, hh);
+        const d = g.getImageData(0, 0, w, hh).data;
+        let l = w, t = hh, r = -1, b = -1;
+        for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 24) { if (x < l) l = x; if (x > r) r = x; if (y < t) t = y; if (y > b) b = y; }
+        if (r >= 0) out = { l: l / w, t: t / hh, r: (r + 1) / w, b: (b + 1) / hh, ratio: im.naturalWidth / im.naturalHeight };
+      } catch (e) { out = null; }
+    }
+    if (out) ABOX.set(ref, out);
+    return out;
   }
   function preload(refs, timeoutMs) {
     const list = Array.from(new Set((refs || []).filter(Boolean)));
@@ -1367,7 +1391,7 @@
     businesses: () => BUSINESS_ORDER.map(id => BUSINESS[id]), business: id => BUSINESS[id],
     accessories: () => Object.keys(ACCESSORIES).map(id => Object.assign({ id }, ACCESSORIES[id])),
     normalize, scenarioOf, conceptOf, play, stop, isPlaying: () => !!active, cardLayersIn, cardLayersSpan, cardLayersOf, CL_ANIMS,
-    preload, sourcesOf, layoutOf, registerVideos, isVideoRef: ref => VIDEO.has(ref), registerModels, isModelRef: ref => MODEL.has(ref), setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
+    preload, alphaBox, sourcesOf, layoutOf, registerVideos, isVideoRef: ref => VIDEO.has(ref), registerModels, isModelRef: ref => MODEL.has(ref), setV2Adapter, modelOf, applyLayout, honestBack, poseOf, card3dOn, CARD_ID,
     listPresets, savePreset, deletePreset,
     Sound, util: { h, svg, img, rnd, pick, mix, addPiece, initials }
   };

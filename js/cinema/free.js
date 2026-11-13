@@ -195,11 +195,36 @@
     note: "Kapak katmanına uygulayın: üst kenarından geriye doğru katlanır. Gövde, kapak, iç kart ve mühür ayrı katmanlar olmalı (kapağın üst kenarı zarfın üst kenarıyla aynı hizada). Kartı kapağın ARKASINA yerleştirip \"Zarftan yükselme\" verin.",
     params: [
       { key: "angle", label: "Katlanma açısı", def: 180, options: [[150, "150°"], [165, "165°"], [180, "180° (tam açık)"]] },
-      { key: "behind", label: "Açılınca arkasına geçsin", type: "layer", def: "" }
+      { key: "behind", label: "Açılınca arkasına geçsin", type: "layer", def: "" },
+      { key: "inside", label: "Açık kapağın iç yüzü", def: "doku", options: [["doku", "Kapağın kendi dokusu, hafif gölgeli"], ["yok", "Yalnızca yüklenen arka yüz görseli"]] }
     ],
     prepare(ctx, a, def) {
       const inner = ctx.L[a.layer], u = ctx.cfg.layers[a.layer] || {};
-      if (inner && !u.origin) inner.style.transformOrigin = "50% 0%";   // menteşe: üst kenar (kullanıcı ayarladıysa ona dokunulmaz)
+      if (!inner) return;
+      // menteşe: kapağın GÖRÜNEN üst kenarı. PNG'nin üstünde şeffaf boşluk varsa (ör. Magnific dışa aktarımı)
+      // dolu bölge ölçülür; görsel kutuya "contain" ile oturduğu için kutudaki gerçek yeri hesaba katılır.
+      if (!u.origin) {   // kullanıcı dönme noktasını kendisi ayarladıysa ona dokunulmaz
+        let oy = 0;
+        const ab = C.alphaBox ? C.alphaBox(u.src) : null, bx = ctx.box[a.layer];
+        if (ab && bx && bx.w && bx.h) {
+          let iw = bx.w, ih = bx.w / ab.ratio; if (ih > bx.h) { ih = bx.h; iw = bx.h * ab.ratio; }
+          oy = Math.max(0, Math.min(100, ((bx.h - ih) / 2 + ab.t * ih) / bx.h * 100));
+        }
+        inner.style.transformOrigin = `50% ${oy.toFixed(2)}%`;
+      }
+      // Yeni (3D-1) katmanlarda arka yüz yüklenmemişse arkası boş kalır; açılan zarf kapağının iç yüzü ise
+      // görünmelidir: kapağın KENDİ görseli hafif gölgeli olarak arkaya konur (kullanıcı "yok" seçebilir).
+      // Arka yüz rotateY ile çevrildiği için kapak 180° katlanınca üçgen doğru yöne (yukarı) bakar.
+      if (C.honestBack && C.honestBack(u) && P(a, def, "inside") !== "yok" && !inner.__flapBack) {
+        const front = inner.querySelector(".sc-front");
+        if (front) {
+          inner.__flapBack = true;
+          const back = vis(front, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%", objectFit: front.style.objectFit || "contain", display: "block", pointerEvents: "none",
+            transform: "rotateY(180deg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", filter: "brightness(.78) saturate(.9)" });
+          back.classList.add("sc-flapback");
+          inner.insertBefore(back, front);
+        }
+      }
     },
     run(ctx, a, def, begin) {
       const t = timing(a, def), ang = Math.max(90, Math.min(180, num(P(a, def, "angle"), 180)));
@@ -413,6 +438,72 @@
     note: "Eklemezseniz kart, son hareketten sonra kendiliğinden yükselerek gelir.",
     params: [{ key: "style", label: "Biçim", def: "yuksel", options: [["yuksel", "Aşağıdan yükselerek"], ["belir", "Derinden belirerek"], ["in", "Yukarıdan inerek"]] }],
     run(ctx, a, def, begin) { const t = timing(a, def); revealCard(ctx, P(a, def, "style"), t, begin); return t.dur; } });
+
+  /* İÇ KARTIN ZARFTAN ÇIKMASI (üstten açılış): editörün kendi iç kartı (yazılı kart ya da kart görseli —
+     ayrıca PNG gerekmez) zarf gövdesinin İÇİNDEN, gövdenin arkasından yükselir; seçilen miktar kadar
+     görünüp kısa bir an bekler, zarftan tamamen çıkar, sonra öne gelip ekranın ortasına yerleşir.
+     Gövdenin dolu (saydam olmayan) alanı ölçülür; kartın gövdenin altından taşan kısmı gizlenir.
+     Gövde katmanı hiç hareket etmez. */
+  function pocketRect(ctx, id) {
+    const bx = ctx.box[id]; if (!bx) return null;
+    const s = bx.s || 1, w = bx.w * s, hh = bx.h * s, x = bx.x + bx.w / 2 - w / 2, y = bx.y + bx.h / 2 - hh / 2;
+    const ab = C.alphaBox ? C.alphaBox((ctx.cfg.layers[id] || {}).src) : null;
+    if (!ab) return { x, y, w, h: hh };
+    // görsel kutuya "contain" ile oturur: önce görselin kutudaki gerçek yeri, sonra dolu bölgesi
+    let iw = w, ih = w / ab.ratio; if (ih > hh) { ih = hh; iw = hh * ab.ratio; }
+    const ix = x + (w - iw) / 2, iy = y + (hh - ih) / 2;
+    return { x: ix + ab.l * iw, y: iy + ab.t * ih, w: (ab.r - ab.l) * iw, h: (ab.b - ab.t) * ih };
+  }
+  function revealPocket(ctx, a, def, t, begin) {
+    if (!ctx.hasCard || ctx.__cardShown) return false;
+    const pick = P(a, def, "from"), bid = pick && ctx.S[pick] ? pick : (a.layer !== C.CARD_ID && ctx.S[a.layer] ? a.layer : null);
+    const R = bid && pocketRect(ctx, bid), wrap = ctx.cardWrap;
+    if (!R || !wrap) return false;
+    ctx.__cardShown = true;
+    if (C.cardLayersIn) C.cardLayersIn(ctx, begin + t.dur);
+    const { zc, k } = cardPlace(ctx), cs = (ctx.box[C.CARD_ID] && ctx.box[C.CARD_ID].s) || 1;
+    const CW = 300, CH = 520, OX = 50 + CW / 2, OY = 90 + CH / 2;           // kartın sahnedeki yeri (merkez)
+    const fit = Math.max(0.4, Math.min(1, num(P(a, def, "fit"), 72) / 100));
+    const sc = fit * R.w / (CW * cs), ch = CH * cs * sc;                      // zarf içindeki ölçek ve görünen boy
+    const zb = (ctx.S[bid] ? zOf(ctx.S[bid]) : 0) - 1;                        // gövdenin hemen arkası
+    const clipY = R.y + R.h - 2;                                              // gövdenin alt kenarı: aşağı taşan kısım gizlenir
+    const top0 = R.y + R.h * 0.05, rise = Math.min(ch + R.h, ch * Math.max(0.1, num(P(a, def, "amount"), 40) / 100));
+    const outTop = Math.min(top0 - rise, R.y - 6 - ch);                       // tamamen çıktığı yer (alt kenarı zarfın üstünde)
+    const at = (cx, top, z, s2, clip) => {
+      const cy = top + ch / 2, bottom = top + ch;
+      const cut = clip ? Math.max(0, (bottom - clipY) / (cs * s2)) : 0;
+      return { transform: `translate3d(${((cx - OX) / cs).toFixed(2)}px, ${((cy - OY) / cs).toFixed(2)}px, ${z}px) scale(${s2})`,
+        clipPath: clip ? `inset(0px 0px ${cut.toFixed(2)}px 0px)` : "none", opacity: 1 };
+    };
+    const cx = R.x + R.w / 2, stay = P(a, def, "then") === "kalsin";
+    // her aşama kendi eğrisiyle, gerçek zamanda: yükselme → kısa bekleme → zarftan çıkış → öne gelme
+    const kf = [
+      Object.assign(at(cx, top0, zb, sc, true), { offset: 0, easing: t.e }),
+      Object.assign(at(cx, top0 - rise, zb, sc, true), { offset: stay ? 1 : 0.4 })
+    ];
+    if (!stay) kf.push(
+      Object.assign(at(cx, top0 - rise, zb, sc, true), { offset: 0.52, easing: EASE.hizlanarak || t.e }),
+      Object.assign(at(cx, outTop, zb, sc, true), { offset: 0.74, easing: "linear" }),
+      Object.assign(at(cx, outTop, zc, sc, false), { offset: 0.741, easing: t.e }),
+      { transform: `translateY(0) translateZ(${zc}px) scale(${k})`, clipPath: "none", opacity: 1, offset: 1 });
+    kf[1].easing = "linear";   // bekleme
+    ctx.anim(wrap, kf, { d: t.dur, delay: begin, e: "linear", fill: "forwards" });
+    ctx.later(begin + t.dur * (stay ? 0.5 : 0.8), () => ctx.sfx("chime"));
+    return true;
+  }
+  registerMove({ id: "card-pocket", group: "kart", label: "İç kartın zarftan çıkması", single: true, duration: 3.2, easing: "yumusak", scene: true, isCard: true,
+    note: "Editördeki iç kart (yazılı kart ya da kart görseli) zarf gövdesinin içinden yükselir; ayrıca kart PNG'si gerekmez. Gövde katmanına uygulayın ya da gövdeyi aşağıdan seçin.",
+    params: [
+      { key: "from", label: "Zarf gövdesi (boşsa bu katman)", type: "layer", def: "" },
+      { key: "amount", label: "İlk yükselme", def: 40, options: [[25, "%25"], [40, "%40"], [55, "%55"], [70, "%70"], [85, "%85"]] },
+      { key: "fit", label: "Kartın zarf içindeki genişliği", def: 72, options: [[60, "%60"], [72, "%72"], [84, "%84"], [95, "%95"]] },
+      { key: "then", label: "Sonra", def: "one", options: [["one", "Zarftan çıkıp öne ve ortaya gelsin"], ["kalsin", "Zarfta yükselmiş kalsın"]] }
+    ],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def);
+      if (!revealPocket(ctx, a, def, t, begin)) revealCard(ctx, "yuksel", t, begin);   // gövde yoksa bugünkü yükselme
+      return t.dur;
+    } });
 
   /* =================== A2.2 — MENÜNÜN DEVAMI =================== */
   /* Görseli gerçek parçalarına bölen ortak yardımcı (ızgara). Her parça yalnızca
