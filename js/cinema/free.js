@@ -182,6 +182,85 @@
       ctx.later(begin, () => ctx.sfx("creak"));
       return t.dur;
     } });
+
+  /* ÜSTTEN AÇILIŞ (zarf kapağı): kapak katmanı ÜST kenarından menteşelenip geriye/yukarı katlanır.
+     Gövde, kapak, iç kart ve mühür kullanıcının AYRI katmanlarıdır (tek görselden kapak ayrıştırılmaz).
+     Kapak dik açıyı (90°) geçtiği an — tam o anda kenarından göründüğü için fark edilmeden — seçilen
+     katmanın (boşsa diğer bütün katmanların) arkasına alınır: yükselen kart açık kapağın ÖNÜNDE kalır.
+     Arka yüz: katmanın "arka yüz" görseli (yoksa ön yüzün koyulaştırılmış hâli) kullanılır. */
+  function zOf(el) {
+    try { return new DOMMatrix(getComputedStyle(el).transform).m43 || 0; } catch (e) { return 0; }
+  }
+  registerMove({ id: "flap-open", group: "acilma", label: "Üstten açılış (zarf kapağı)", single: true, duration: 1.3, easing: "agir", needsBack: true, needsLit: true,
+    note: "Kapak katmanına uygulayın: üst kenarından geriye doğru katlanır. Gövde, kapak, iç kart ve mühür ayrı katmanlar olmalı (kapağın üst kenarı zarfın üst kenarıyla aynı hizada). Kartı kapağın ARKASINA yerleştirip \"Zarftan yükselme\" verin.",
+    params: [
+      { key: "angle", label: "Katlanma açısı", def: 180, options: [[150, "150°"], [165, "165°"], [180, "180° (tam açık)"]] },
+      { key: "behind", label: "Açılınca arkasına geçsin", type: "layer", def: "" }
+    ],
+    prepare(ctx, a, def) {
+      const inner = ctx.L[a.layer], u = ctx.cfg.layers[a.layer] || {};
+      if (inner && !u.origin) inner.style.transformOrigin = "50% 0%";   // menteşe: üst kenar (kullanıcı ayarladıysa ona dokunulmaz)
+    },
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), ang = Math.max(90, Math.min(180, num(P(a, def, "angle"), 180)));
+      const me = ctx.S[a.layer];
+      // arkasına geçilecek derinlik: seçilen katman ya da (boşsa) bu katman dışındaki en arkadaki katman
+      let D = 0;
+      if (me) {
+        const tid = otherLayer(ctx, a, "behind", def);
+        const others = tid ? [ctx.S[tid]] : ctx.model.slots.filter(sl => sl.id !== a.layer && !sl.backdrop && ctx.S[sl.id] && ctx.S[sl.id] !== me && !(ctx.cfg.layers[sl.id] || {}).parent).map(sl => ctx.S[sl.id]);
+        const zMe = zOf(me), zMin = others.length ? Math.min.apply(null, others.map(zOf)) : zMe;
+        D = Math.max(0, zMe - zMin) + 2;
+      }
+      const el = ctx.L[a.layer];
+      ctx.anim(el, [
+        { transform: "translateZ(0px) rotateX(0deg)", offset: 0, easing: "linear" },
+        { transform: "translateZ(0px) rotateX(90deg)", offset: 0.5 },
+        { transform: `translateZ(${-D}px) rotateX(90deg)`, offset: 0.501 },
+        { transform: `translateZ(${-D}px) rotateX(${ang}deg)`, offset: 1 }
+      ], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      ctx.later(begin, () => ctx.shade(a.layer, 0.45, { d: t.dur, e: t.e }));
+      if (num(P(a, def, "sound"), 1)) ctx.later(begin, () => ctx.sfx("swoosh"));
+      return t.dur;
+    } });
+  /* KAYBOLMA (mühür / fiyonk): katman solarak, yukarı uçarak ya da küçülerek kaybolur; "Kalsın" seçilirse
+     hiç hareket etmez (kapağın üstündeyse "bağlı katman" yapılarak kapakla birlikte katlanabilir). */
+  registerMove({ id: "fade-away", group: "etkilesim", label: "Kaybolma (mühür / fiyonk)", single: true, duration: 0.7, easing: "yumusak",
+    params: [{ key: "style", label: "Biçim", def: "sol", options: [["sol", "Solarak kaybolsun"], ["yukari", "Yukarı uçup kaybolsun"], ["kucul", "Küçülerek kaybolsun"], ["kalsin", "Kalsın"]] }],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), el = ctx.L[a.layer], st = P(a, def, "style"); if (!el || st === "kalsin") return st === "kalsin" ? 0 : t.dur;
+      const to = st === "yukari" ? "translate3d(0px, -90px, 0px) scale(0.9)" : st === "kucul" ? "translate3d(0px, 0px, 0px) scale(0.2)" : "translate3d(0px, -6px, 0px) scale(1.08)";
+      ctx.anim(el, [{ transform: "translate3d(0px, 0px, 0px) scale(1)" }, { transform: to }], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      ctx.anim(ctx.C[a.layer] || el, [{ opacity: 1 }, { opacity: 0 }], { d: t.dur, delay: begin, e: t.e, fill: "forwards" });
+      return t.dur;
+    } });
+  /* ZARFTAN YÜKSELME: katman (ör. iç kart görseli) kendi boyunun seçilen oranı kadar yukarı çıkar;
+     zarf gövdesinin ARKASINA yerleştirildiğinde gövdenin içinden yükseliyor görünür. İstenirse ardından
+     öne ve sahnenin ortasına gelir. */
+  registerMove({ id: "pocket-rise", group: "kart", label: "Zarftan yükselme", single: true, duration: 1.2, easing: "yavaslayarak",
+    note: "Kart görselini gövdenin arkasına (katman listesinde gövdenin altına) koyun. Yükselme miktarı kartın kendi boyuna göredir.",
+    params: [
+      { key: "amount", label: "Yükselme miktarı", def: 60, options: [[30, "%30"], [45, "%45"], [60, "%60"], [75, "%75"], [90, "%90"], [110, "%110 (tamamen çıksın)"]] },
+      { key: "then", label: "Sonra", def: "kalsin", options: [["kalsin", "Olduğu yerde kalsın"], ["one", "Öne ve ortaya gelsin"]] }
+    ],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), el = ctx.L[a.layer]; if (!el) return t.dur;
+      const c = center(ctx, a.layer), up = Math.round(c.b.h * num(P(a, def, "amount"), 60) / 100);
+      if (P(a, def, "then") !== "one") {
+        ctx.anim(el, [{ transform: "translate3d(0px, 0px, 0px)" }, { transform: `translate3d(0px, ${-up}px, 0px)` }], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+        return t.dur;
+      }
+      // yükselir (%55), sonra öne gelip ortalanır (%45); derinlik, diğer katmanların önüne geçecek kadar
+      const dx = Math.round(C.FRAME_W / 2 - c.x), dy = Math.round(C.FRAME_H / 2 - (c.y - up));
+      const S = ctx.S[a.layer], zs = ctx.model.slots.filter(sl => !sl.backdrop && ctx.S[sl.id]).map(sl => zOf(ctx.S[sl.id]));
+      const front = Math.max(0, (zs.length ? Math.max.apply(null, zs) : 0) - (S ? zOf(S) : 0)) + 6;
+      ctx.anim(el, [
+        { transform: "translate3d(0px, 0px, 0px)", offset: 0 },
+        { transform: `translate3d(0px, ${-up}px, 0px)`, offset: 0.55, easing: EASE.yumusak },
+        { transform: `translate3d(${dx}px, ${dy - up}px, ${front}px)`, offset: 1 }
+      ], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      return t.dur;
+    } });
   registerMove({ id: "slide", group: "acilma", label: "Sürgülü açılma", single: true, duration: 1.2, easing: "yumusak",
     note: "Katman kendi genişliği kadar kayarak çekilir.",
     params: [{ key: "dir", label: "Yön", def: "left", options: [["left", "Sola"], ["right", "Sağa"], ["up", "Yukarı"], ["down", "Aşağı"]] }],
@@ -713,7 +792,7 @@
   /* Hepsi yalnızca kullanıcının kendi görsel(ler)ini hareket ettirir. Kesen hareketler
      (mühür, kurdele) görselin gerçek parçalarını kullanır; kilit ve gizli görsel ayrı
      katman ister. Anahtar, kilit halkası ve makas isteğe bağlı ayrı katmanlardır. */
-  const OPENERS = ["split-h", "split-v", "hinge", "slide", "quad", "fold", "curtain", "drawer", "page-turn"];
+  const OPENERS = ["split-h", "split-v", "hinge", "slide", "quad", "fold", "curtain", "drawer", "page-turn", "flap-open"];
   function openerFor(ctx, a) {
     const acts = ctx.cfg.actions || [], i = acts.findIndex(x => x.id === a.id);
     const same = x => x.layer === a.layer && OPENERS.includes(x.move);
@@ -748,6 +827,9 @@
         const ax = side === "top" || side === "bottom" ? "rotateX" : "rotateY", sign = side === "right" || side === "top" ? -1 : 1;
         const deg = (ax === "rotateX" ? -sign * ang : sign * ang) * amt;
         go(inner, `${ax}(0deg)`, `${ax}(${deg}deg)`);
+      } else if (tm && tg.move === "flap-open") {
+        // üstten açılış: kapak üst kenarından hafifçe kalkıp geri iner
+        go(inner, "rotateX(0deg)", `rotateX(${Math.round(70 * amt / 0.18)}deg)`);
       } else if (tm && tg.move === "slide") {
         const d = tp("dir"), m = amt * 55;
         go(inner, "translate(0%, 0%)", { left: `translate(${-m}%, 0%)`, right: `translate(${m}%, 0%)`, up: `translate(0%, ${-m}%)`, down: `translate(0%, ${m}%)` }[d] || `translate(${-m}%, 0%)`);
