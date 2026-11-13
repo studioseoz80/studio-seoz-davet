@@ -83,6 +83,7 @@
           <option value="dual-wing" ${entry.type === "dual-wing" ? "selected" : ""}>4) Çift Kanat / Ortadan Açılan Zarf + İç Kart</option>
           <option value="video" ${entry.type === "video" ? "selected" : ""}>5) MP4 / WebM Video Giriş</option>
           ${global.SeozCinema ? `<option value="cinema" ${entry.type === "cinema" ? "selected" : ""}>6) Sinematik Açılış (Animasyon Stüdyosu)</option>` : ""}
+          <option value="flap" ${entry.type === "flap" ? "selected" : ""}>7) Üstten Açılış — Ayrı Kapak + Gövde + İç Kart</option>
         </select>
       </div>
 
@@ -328,8 +329,126 @@
       wireDurationAndSizeFields(bodyEl);
     }
 
+
+    /* ÜSTTEN AÇILIŞ (entry.type "flap"): gövde, üçgen kapak, iç kart ve isteğe bağlı mühür AYRI yüklenir.
+       Tek parça zarf görselinden kapak otomatik ayrılmaz (gerçekçi olmaz) — bu yüzden ayrı alanlar var.
+       PNG/WebP saydamlığı korunur. Diğer giriş türlerinin alanlarına dokunulmaz. */
+    function loadAlphaImage(file, key) {
+      if (!/^image\/(png|webp|jpeg)$/.test(file.type)) { alert("Lütfen PNG veya WebP görsel yükleyin (saydam zemin önerilir)."); return Promise.resolve(false); }
+      if (!confirmLargeFile(SeozImageUtils.estimateFileSizeMB(file), "image")) return Promise.resolve(false);
+      return SeozImageUtils.processImageFile(file, { keepAlpha: true }).then(r => { entry[key] = r.ref; return r; });
+    }
+    // Kapağın ucu: görselin orta sütununda en alttaki dolu piksel (gerçek ölçüm; kapak görseli tarayıcıda, CORS yok)
+    function measureFlap(ref) {
+      return SeozBlobStore.resolveToObjectURL(ref).then(url => new Promise(res => {
+        const im = new Image();
+        im.onload = () => {
+          try {
+            const W = Math.min(600, im.naturalWidth), H = Math.round(im.naturalHeight * W / im.naturalWidth);
+            const c = document.createElement("canvas"); c.width = W; c.height = H;
+            const x = c.getContext("2d"); x.drawImage(im, 0, 0, W, H);
+            const d = x.getImageData(0, 0, W, H).data, a = (px, py) => d[(py * W + px) * 4 + 3];
+            let tip = H - 1;
+            for (let y = H - 1; y >= 0; y--) { if (a(Math.floor(W / 2), y) > 40) { tip = y; break; } }
+            const transparent = a(1, H - 2) < 20 || a(W - 2, H - 2) < 20;
+            res({ tipPct: Math.round(tip / W * 1000) / 10, transparent });
+          } catch (e) { res(null); }
+        };
+        im.onerror = () => res(null);
+        im.src = url;
+      }));
+    }
+    let flapWarn = "";   // yalnızca editörde gösterilir, belgeye yazılmaz
+    function renderFlapFields(bodyEl) {
+      const exit = entry.flapSealExit || "solarak";
+      const up = (key, label, btn, help) => `
+        <div class="field" style="margin-top:14px;">
+          <label style="font-size:.76rem;color:var(--ink-soft);margin-bottom:5px;display:block;">${label}</label>
+          ${entry[key] ? `<img data-flap-prev="${key}" style="width:100%;max-height:150px;object-fit:contain;margin-bottom:8px;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0 0/16px 16px;border-radius:4px;">` : ""}
+          <button type="button" class="btn btn-outline" data-flap-up="${key}" style="width:100%;">${entry[key] ? "Görseli Değiştir" : btn}</button>
+          <input type="file" accept="image/png,image/webp,image/jpeg" data-flap-in="${key}" class="hidden">
+          ${help ? `<p style="font-size:.72rem;color:var(--ink-soft);margin-top:6px;">${help}</p>` : ""}
+        </div>`;
+      bodyEl.innerHTML = `
+        <p style="font-size:.74rem;color:var(--ink-soft);margin:0 0 4px;">
+          Gerçekçi üstten açılış için zarfın <b>gövdesi</b> ve <b>üst kapağı</b> ayrı görsel olarak yüklenir.
+          Tek parça bir zarf görselinden kapak otomatik ayrılmaz.
+        </p>
+        ${up("flapBodySrc", "1) Zarf gövdesi (ön yüz) — zorunlu", "Gövde Görseli Yükle", "Kapaksız zarfın ön yüzü. PNG/WebP önerilir.")}
+        ${up("flapSrc", "2) Üst kapak (üçgen) — zorunlu", "Kapak Görseli Yükle",
+             `Kapağın üst kenarı zarfın üst kenarıyla aynı hizada olmalı: gövdeyle aynı boyutta saydam zeminli ya da yalnızca üçgen olarak kesilmiş olabilir.${flapWarn ? `<br><b style="color:#B3261E;">${flapWarn}</b>` : ""}`)}
+        <div class="field" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
+          <label style="font-size:.76rem;color:var(--ink-soft);margin-bottom:5px;display:block;">3) İç Kart (isteğe bağlı)</label>
+          ${slotPreviewHTML(entry.cardSrc, entry.cardMedia, "data-preview-card")}
+          ${slotOptsHTML(entry.cardMedia, "cardMedia")}
+          <button type="button" class="btn btn-outline" data-upload-card style="width:100%;">${entry.cardSrc ? "Kartı Değiştir" : "Kart Görseli / MP4 Yükle"}</button>
+          <input type="file" accept="${ACCEPT}" data-upload-card-input class="hidden">
+          ${entry.cardSrc ? `<button type="button" class="btn-danger-text" data-remove-card style="margin-top:6px;">Kartı Kaldır</button>` : ""}
+          <p style="font-size:.72rem;color:var(--ink-soft);margin-top:6px;">Kapak açılınca kart gövdenin içinden yükselir ve öne gelir. Boşsa kapak açılınca davetiye açılır.</p>
+        </div>
+        <div class="field" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
+          ${up("flapSealSrc", "4) Mühür / Fiyonk (isteğe bağlı)", "Mühür / Fiyonk Yükle", "")}
+          ${entry.flapSealSrc ? `
+            <button type="button" class="btn-danger-text" data-flap-remove-seal style="margin-top:2px;">Mühürü Kaldır</button>
+            <label style="font-size:.76rem;color:var(--ink-soft);margin:10px 0 5px;display:block;">Açılırken</label>
+            <select data-flap-exit>
+              <option value="solarak" ${exit === "solarak" ? "selected" : ""}>Solarak kaybolsun</option>
+              <option value="yukari" ${exit === "yukari" ? "selected" : ""}>Yukarı uçarak kaybolsun</option>
+              <option value="kalsin" ${exit === "kalsin" ? "selected" : ""}>Kaybolmasın (kapakla birlikte açılsın)</option>
+            </select>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <label style="flex:1;font-size:.74rem;color:var(--ink-soft);">Boyut (% zarf)<input type="number" data-flap-num="flapSealSize" value="${Number(entry.flapSealSize) || 24}" min="6" max="60"></label>
+              <label style="flex:1;font-size:.74rem;color:var(--ink-soft);">Dikey konum<input type="number" data-flap-num="flapSealTop" value="${Number(entry.flapSealTop) || 40}" min="0" max="200" step="0.5"></label>
+            </div>
+            <p style="font-size:.72rem;color:var(--ink-soft);margin-top:6px;">Dikey konum, kapağın ucuna göre otomatik ölçülür; gerekirse ince ayar yapın.</p>` : ""}
+        </div>
+        ${durationFieldHTML()}
+        ${sizeFieldsHTML(true)}
+      `;
+      bodyEl.querySelectorAll("[data-flap-prev]").forEach(el => showPreview(el, entry[el.dataset.flapPrev]));
+      const cardPreview = bodyEl.querySelector("[data-preview-card]");
+      if (cardPreview) showPreview(cardPreview, entry.cardSrc);
+      bodyEl.querySelectorAll("[data-flap-up]").forEach(b => {
+        const key = b.dataset.flapUp, inp = bodyEl.querySelector(`[data-flap-in="${key}"]`);
+        b.addEventListener("click", () => inp.click());
+        inp.addEventListener("change", () => {
+          const file = inp.files[0]; if (!file) return;
+          loadAlphaImage(file, key).then(r => {
+            if (r === false) return null;
+            if (key !== "flapSrc") return null;
+            return measureFlap(entry.flapSrc).then(m => {
+              if (!m) return;
+              entry.flapSealTop = m.tipPct;
+              flapWarn = m.transparent ? "" : "Kapak görselinin alt köşeleri saydam değil: kapak dikdörtgen görünebilir. Saydam zeminli üçgen kapak önerilir.";
+            });
+          }).then(() => { renderBody(); cb.onChange(); })
+            .catch(() => alert("Görsel yüklenemedi. Lütfen PNG veya WebP deneyin."));
+        });
+      });
+      const cardInput = bodyEl.querySelector("[data-upload-card-input]");
+      bodyEl.querySelector("[data-upload-card]").addEventListener("click", () => cardInput.click());
+      cardInput.addEventListener("change", () => {
+        const file = cardInput.files[0]; if (!file) return;
+        loadSlotFile(file, entry, "cardSrc", "cardMedia").then(ok => { if (ok === false) return; renderBody(); cb.onChange(); })
+          .catch(err => alert(MD && MD.isVideoFile(file) ? (err.message || "Video yüklenemedi.") : "Kart görseli yüklenemedi. Lütfen PNG, JPG, WebP veya MP4 deneyin."));
+      });
+      const rc = bodyEl.querySelector("[data-remove-card]");
+      if (rc) rc.addEventListener("click", () => { entry.cardSrc = ""; delete entry.cardMedia; renderBody(); cb.onChange(); });
+      const rs = bodyEl.querySelector("[data-flap-remove-seal]");
+      if (rs) rs.addEventListener("click", () => { entry.flapSealSrc = ""; renderBody(); cb.onChange(); });
+      const ex = bodyEl.querySelector("[data-flap-exit]");
+      if (ex) ex.addEventListener("change", () => { entry.flapSealExit = ex.value; cb.onChange(); });
+      bodyEl.querySelectorAll("[data-flap-num]").forEach(n => n.addEventListener("input", () => {
+        const v = parseFloat(n.value); if (Number.isFinite(v)) { entry[n.dataset.flapNum] = v; cb.onChange(); }
+      }));
+      wireSlotOpts(bodyEl, entry, cb);
+      wireDurationAndSizeFields(bodyEl);
+    }
+
     function renderBody() {
       const bodyEl = containerEl.querySelector("[data-entry-body]");
+
+      if (entry.type === "flap") { renderFlapFields(bodyEl); return; }
 
       if (entry.type === "none") {
         bodyEl.innerHTML = `<p class="sidebar-empty">Davetiye doğrudan gösterilecek — giriş ekranı yok.</p>`;

@@ -51,6 +51,8 @@
     // yalnızca animasyonu farklıdır, yükleme alanları ortaktır.
     if (entry.type === "dual-wing") return !!entry.pngSrc;
     if (entry.type === "video") return !!entry.videoSrc;
+    // ÜSTTEN AÇILIŞ (ayrı katmanlar): gövde ve üst kapak görselleri ikisi de gerekli.
+    if (entry.type === "flap") return !!(entry.flapBodySrc && entry.flapSrc);
     // AÇILIŞ STÜDYOSU (A1): Sinematik Açılış görsel yüklenmeden de çalışır —
     // yüklenmeyen katmanlarda kodla çizilmiş görünüm kullanılır.
     if (entry.type === "cinema") return !!(global.SeozCinema && global.SeozCinema.models().length);
@@ -369,6 +371,165 @@
     return overlay;
   }
 
+
+  /* ÜSTTEN AÇILIŞ — AYRI KATMANLI ZARF (entry.type "flap")
+     Katmanlar (arkadan öne): iç kart → zarf gövdesi (ön yüz) → üst kapak (üçgen) → mühür/fiyonk.
+     Kapak görselinin ÜST kenarı menteşedir (zarfın üst kenarıyla aynı hizada hazırlanır).
+     Dokununca: (isteğe bağlı) mühür kaybolur → kapak geriye doğru katlanır (3B, rotateX) →
+     iç kart gövdenin içinden yukarı yükselir → öne ve ortaya gelir → süre/dokunuşla davetiye açılır.
+     Tek parça görselden kapak ayırma YAPILMAZ: gövde ve kapak ayrı yüklenir.
+     Yalnızca transform/opacity canlandırılır (mobilde akıcı). Diğer giriş türlerine dokunmaz. */
+  function buildFlapOverlay(entry, onFinish) {
+    const overlay = document.createElement("div");
+    overlay.className = "seoz-entry-overlay seoz-flap-overlay";
+    applySizeVars(overlay, entry);
+    const reduce = !!(global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const T = ms => (reduce ? Math.round(ms * 0.35) : ms);
+
+    const wrap = document.createElement("div");
+    wrap.className = "seoz-flap";
+    const img = (ref, cls) => {
+      const i = document.createElement("img");
+      i.className = cls; i.alt = ""; i.draggable = false;
+      SeozBlobStore.resolveToObjectURL(ref).then(u => { if (u) i.src = u; });
+      return i;
+    };
+    const hasCard = !!entry.cardSrc;
+    let cardBox = null, pocket = null;
+    if (hasCard) {
+      // "cep": kart zarfın içinde durur — gövdenin altından taşan kısmı görünmez, üstten çıkabilir
+      pocket = document.createElement("div");
+      pocket.className = "seoz-flap-pocket";
+      cardBox = document.createElement("div");
+      cardBox.className = "seoz-flap-card";
+      cardBox.appendChild(mediaEl(entry.cardSrc, entry.cardMedia, "seoz-flap-card-media"));
+      pocket.appendChild(cardBox);
+      wrap.appendChild(pocket);
+    }
+    const body = img(entry.flapBodySrc, "seoz-flap-body");
+    wrap.appendChild(body);
+    const lid = document.createElement("div");
+    lid.className = "seoz-flap-lid";
+    const lidImg = img(entry.flapSrc, "seoz-flap-lid-img");
+    lid.appendChild(lidImg);
+    wrap.appendChild(lid);
+
+    const exit = ["solarak", "yukari", "kalsin"].indexOf(entry.flapSealExit) >= 0 ? entry.flapSealExit : "solarak";
+    let seal = null;
+    if (entry.flapSealSrc) {
+      seal = img(entry.flapSealSrc, "seoz-flap-seal");
+      seal.style.width = clamp(Number(entry.flapSealSize) || 24, 6, 60) + "%";
+      seal.style.top = "40%";   // yükleme sonrası fit() ile kesinleşir
+      // "Kapakla birlikte kalsın": mühür kapağın parçası gibi onunla katlanır (konumu gövdeye göre %)
+      if (exit === "kalsin") { lid.appendChild(seal); seal.classList.add("in-lid"); } else wrap.appendChild(seal);
+    }
+    overlay.appendChild(wrap);
+
+    // Ölçü: zarf genişliği editördeki değerden; çok uzun görsellerde ekran yüksekliğine sığacak kadar küçülür.
+    // Kapak, gövdeyle aynı genişlikte; mühürün "kapakta" yüzdesi gövde yüksekliğine göre hesaplanır.
+    function fit() {
+      const nw = body.naturalWidth, nh = body.naturalHeight;
+      if (!nw || !nh) return;
+      wrap.style.width = "";
+      const cssW = wrap.getBoundingClientRect().width || 360;
+      const maxH = global.innerHeight * 0.66;
+      const w = Math.min(cssW, maxH * nw / nh);
+      wrap.style.width = Math.round(w) + "px";
+      // Mühürün dikey yeri: zarfın üst kenarından, zarf GENİŞLİĞİNİN %'si olarak (kapağın ucu, yüklemede ölçülür)
+      if (seal) seal.style.top = Math.round(w * clamp(Number(entry.flapSealTop) || 40, 0, 200) / 100) + "px";
+    }
+    let fitted = false;
+    const tryFit = () => { if (!fitted && body.naturalWidth) { fitted = true; fit(); } };
+    body.addEventListener("load", tryFit); lidImg.addEventListener("load", tryFit);
+    const onResize = () => { fitted = false; tryFit(); };
+    global.addEventListener("resize", onResize);
+
+    const hint = document.createElement("div");
+    hint.className = "seoz-entry-hint";
+    hint.textContent = L("Açmak için dokunun");
+    overlay.appendChild(hint);
+
+    let phase = "envelope";
+    const anims = [];
+    const A = (el, kf, o) => { const a = el.animate(kf, Object.assign({ fill: "forwards" }, o)); anims.push(a); return a; };
+    function finish() {
+      global.removeEventListener("resize", onResize);
+      removeOverlay();
+      onFinish();
+    }
+    function leaveCardPhase() {
+      phase = "leaving";
+      const t = setTimeout(finish, 450);
+      activeTimeouts.push(t);
+      if (cardBox) A(cardBox, [{ opacity: 1 }, { opacity: 0, transform: cardBox.__end + " translateY(-26px) scale(.98)" }], { duration: 420, easing: "ease" });
+    }
+    const later = (ms, fn) => { const t = setTimeout(fn, ms); activeTimeouts.push(t); };
+
+    function open() {
+      phase = "opening";
+      hint.style.display = "none";
+      let t = 0;
+      // 1) mühür / fiyonk (isteğe bağlı)
+      if (seal && exit !== "kalsin") {
+        A(seal, exit === "yukari"
+          ? [{ opacity: 1, transform: "translate(-50%,-50%)" }, { opacity: 0, transform: "translate(-50%,-50%) translateY(-60px) scale(.7) rotate(-12deg)" }]
+          : [{ opacity: 1, transform: "translate(-50%,-50%) scale(1)" }, { opacity: 0, transform: "translate(-50%,-50%) scale(1.25)" }],
+          { duration: T(480), easing: "cubic-bezier(.4,0,.2,1)" });
+        t += T(380);
+      }
+      // 2) kapak geriye doğru katlanır (menteşe: üst kenar). Yarıda kartın arkasına geçer.
+      const LID = T(1050);
+      later(t, () => {
+        A(lid, [{ transform: "rotateX(0deg)", filter: "brightness(1)" },
+                { transform: "rotateX(95deg)", filter: "brightness(.78)", offset: 0.5 },
+                { transform: "rotateX(180deg)", filter: "brightness(.9)" }], { duration: LID, easing: "cubic-bezier(.45,.05,.25,1)" });
+        later(LID * 0.5, () => { lid.style.zIndex = "0"; });
+      });
+      t += LID;
+      if (!hasCard) {   // kart yoksa: zarf hafifçe iner ve kaybolur
+        later(t, () => {
+          A(wrap, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(24px) scale(.97)" }], { duration: T(550), easing: "ease-in" });
+          later(T(560), finish);
+        });
+        phase = "leaving";
+        return;
+      }
+      // 3) iç kart gövdenin içinden yükselir
+      const RISE = T(950);
+      later(t, () => {
+        const h = cardBox.getBoundingClientRect().height, rise = Math.round(h * 0.58);
+        cardBox.__rise = rise;
+        A(cardBox, [{ transform: "translateX(-50%) translateY(0)" }, { transform: `translateX(-50%) translateY(${-rise}px)` }], { duration: RISE, easing: "cubic-bezier(.22,.61,.36,1)" });
+      });
+      t += RISE;
+      // 4) kart öne ve ortaya gelir; zarf aşağı süzülüp solar
+      const FRONT = T(800);
+      later(t, () => {
+        const r = cardBox.getBoundingClientRect(), o = overlay.getBoundingClientRect();
+        const dx = Math.round((o.left + o.width / 2) - (r.left + r.width / 2)), dy = Math.round((o.top + o.height / 2) - (r.top + r.height / 2));
+        const maxH = o.height * 0.86, s = r.height > maxH ? maxH / r.height : 1;
+        pocket.style.zIndex = "6"; pocket.style.clipPath = "none";
+        cardBox.__end = `translateX(-50%) translateY(${-cardBox.__rise}px) translate(${dx}px, ${dy}px) scale(${s.toFixed(3)})`;
+        A(cardBox, [{ transform: `translateX(-50%) translateY(${-cardBox.__rise}px)` }, { transform: cardBox.__end }], { duration: FRONT, easing: "cubic-bezier(.22,.61,.36,1)" });
+        [body, lidImg].concat(seal ? [seal] : []).forEach(el => A(el, [{ opacity: 1 }, { opacity: 0 }], { duration: FRONT, easing: "ease-in" }));
+      });
+      t += FRONT;
+      later(t, () => {
+        phase = "card";
+        scheduleAutoAdvance(entry.cardDisplayDuration, leaveCardPhase);
+      });
+    }
+
+    overlay.addEventListener("click", () => {
+      vUnmute(overlay);
+      if (phase === "envelope") { vStart(overlay, "open"); open(); }
+      else if (phase === "card") { clearActiveTimeouts(); leaveCardPhase(); }
+      else if (phase === "leaving") { clearActiveTimeouts(); finish(); }
+      // "opening": animasyon sürerken dokunuşlar yok sayılır (sarsıntı olmasın)
+    });
+    return overlay;
+  }
+
   function buildVideoOverlay(entry, onFinish) {
     const overlay = document.createElement("div");
     overlay.className = "seoz-entry-overlay";
@@ -432,6 +593,7 @@
     if (entry.type === "card") overlay = buildCardOnlyOverlay(entry, done);
     else if (entry.type === "dual-wing") overlay = buildDualWingOverlay(entry, done);
     else if (entry.type === "png") overlay = buildPngOverlay(entry, done);
+    else if (entry.type === "flap") overlay = buildFlapOverlay(entry, done);
     else overlay = buildVideoOverlay(entry, done);
     // ✨ Sahne uyumu (core/motion.js): belgede açıksa zarf ve kart aynı doğal eğrilerle, birbirine bağlı oynar
     if (global.SeozMotion && global.SeozMotion.of(doc)) overlay.classList.add("seoz-entry-nat");

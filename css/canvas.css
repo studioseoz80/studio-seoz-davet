@@ -274,3 +274,36 @@
 .seoz-entry-nat .seoz-entry-card-inline.leaving{ transition: transform .5s cubic-bezier(.55,.06,.68,.19), opacity .45s ease; }
 .seoz-entry-nat .seoz-entry-wing{ transition: transform 2.2s cubic-bezier(.45,.05,.25,1); }
 .seoz-entry-nat .seoz-entry-hint{ animation-timing-function: cubic-bezier(.37,0,.63,1); }
+
+/* ÜSTTEN AÇILIŞ — AYRI KATMANLI ZARF (entry-scene.js · buildFlapOverlay; yalnızca entry.type "flap")
+   Arkadan öne: cep(iç kart) → gövde → üst kapak → mühür. Kapak üst kenarından (menteşe) 3B katlanır. */
+.seoz-flap{
+  position: relative;
+  width: min(var(--seoz-entry-mobile-w, 90vw), var(--seoz-entry-desktop-w, 420px));
+  perspective: 1400px;
+  -webkit-tap-highlight-color: transparent;
+}
+.seoz-flap-body{ position: relative; z-index: 2; display: block; width: 100%; height: auto; pointer-events: none; user-select: none; }
+.seoz-flap-lid{
+  position: absolute; top: 0; left: 0; width: 100%; z-index: 3;
+  transform-origin: 50% 0; transform-style: preserve-3d; will-change: transform;
+  pointer-events: none;
+}
+.seoz-flap-lid-img{ display: block; width: 100%; height: auto; user-select: none; }
+.seoz-flap-seal{
+  position: absolute; left: 50%; z-index: 4; height: auto;
+  transform: translate(-50%, -50%); pointer-events: none; user-select: none;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.25));
+}
+.seoz-flap-seal.in-lid{ z-index: 1; }
+.seoz-flap-pocket{
+  position: absolute; inset: 0; z-index: 1;
+  clip-path: inset(-400% -40% 0 -40%);   /* gövdenin ALTINDAN taşan kısmı gizli; üstten çıkabilir */
+  pointer-events: none;
+}
+.seoz-flap-card{
+  position: absolute; top: 5%; left: 50%;
+  width: min(var(--seoz-entry-mobile-card-w, 81vw), var(--seoz-entry-desktop-card-w, 378px), 96%);
+  transform: translateX(-50%); will-change: transform;
+}
+.seoz-flap-card-media{ display: block; width: 100%; height: auto; max-height: 78vh; object-fit: contain; }

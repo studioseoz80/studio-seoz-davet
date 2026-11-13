@@ -37,7 +37,7 @@
         const tot = r.main + r.deco + r.loop; if (!tot) return "";
         return `<li><b>${label}</b><span>${r.main} ana hareket · ${r.deco} dekoratif · ${r.loop} sürekli</span></li>`;
       };
-      const entryLabel = { cinema: "Açılış (Animasyon Stüdyosu)", png: "Açılış (zarf + kart)", "dual-wing": "Açılış (çift kanat)", card: "Açılış (tek kart)", video: "Açılış (video)" }[a.entryType];
+      const entryLabel = { cinema: "Açılış (Animasyon Stüdyosu)", png: "Açılış (zarf + kart)", "dual-wing": "Açılış (çift kanat)", card: "Açılış (tek kart)", video: "Açılış (video)", flap: "Açılış (üstten açılış)" }[a.entryType];
       if (a.entryType === "cinema") {
         if (a.preset) rows.push(`<li><b>${entryLabel}</b><span>Hazır kapı kurgusu kullanılıyor — kendi özel zamanlaması aynen korunur; ortam efektleri doğal süzülür.</span></li>`);
         else rows.push(fmt(a.cinema, entryLabel) || `<li><b>${entryLabel}</b><span>Henüz hareket eklenmemiş</span></li>`);
