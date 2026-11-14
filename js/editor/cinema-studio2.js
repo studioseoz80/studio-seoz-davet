@@ -219,6 +219,7 @@
           <label class="cs-row"><span>Kart</span><select data-cs-opt="cardMode">
             <option value="auto" ${n.cardMode === "auto" ? "selected" : ""}>Otomatik</option><option value="image" ${n.cardMode === "image" ? "selected" : ""}>Yüklenen görsel</option>
             <option value="title" ${n.cardMode === "title" ? "selected" : ""}>Yazılı kart</option><option value="plain" ${n.cardMode === "plain" ? "selected" : ""}>Düz kart (yazısız)</option><option value="none" ${n.cardMode === "none" ? "selected" : ""}>Kart yok</option></select></label>
+          <label class="cs-check" title="Yalnızca ortadan (yatay/dikey ikiye ayrılma) ve üstten (zarf kapağı) açılışlarda çalışır"><input type="checkbox" data-cs-opt="cardShade" ${cin.cardShade ? "checked" : ""}> Zarif kart gölgesi (zarf açılışlarında kart gelmeden önce ~1 sn hafif gölge)</label>
           <label class="cs-row"><span>Kart boyutu</span><input type="range" min="60" max="133" step="1" data-cs-opt="cardSize" value="${Number(n.cardSize) || 100}" aria-label="Kart boyutu"><b data-cs-cardsize>%${Number(n.cardSize) || 100}</b></label>
           <label class="cs-row cs-row-col"><span>Yazılı kart başlığı</span><input type="text" maxlength="60" data-cs-opt="cardTitle" placeholder="${esc((doc.meta && doc.meta.title) || "")}" value="${esc(n.cardTitle)}"></label>
           <label class="cs-row"><span>Ekranda kalma</span><select data-cs-hold>
