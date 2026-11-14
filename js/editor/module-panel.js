@@ -87,6 +87,9 @@
       // E1: modülün kendi düzenleme ekranını açan düğme (yalnızca bu tipi kullanan modüllerde)
       case "action-button":
         return `<div class="field"><button type="button" class="btn btn-gold" data-maction="${escapeHTML(field.action)}" style="width:100%;">${escapeHTML(field.label)}</button></div>`;
+      // Kısa kullanım kılavuzu (yalnızca bilgi; ayar değildir). html, modül kodunda sabittir (kullanıcı girdisi değil).
+      case "guide":
+        return `<details class="field mguide"><summary>📘 ${escapeHTML(field.label)}</summary><div class="mguide-body">${field.html || ""}</div></details>`;
       case "checkbox":
         return `<div class="field"><label style="display:flex;align-items:center;gap:6px;">
           <input type="checkbox" data-mkey="${key}" ${value ? "checked" : ""} style="width:auto;">

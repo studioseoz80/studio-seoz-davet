@@ -232,3 +232,11 @@ input, select, textarea{ font: inherit; }
   flex: 1; background: rgba(0,0,0,.55); color: #fff; font-size: .65rem;
   border-radius: 2px; padding: 1px 0;
 }
+
+/* Modül ayarlarında kısa kullanım kılavuzu (module-panel · type "guide") */
+.mguide{ border:1px solid #E7DCC8; border-radius:10px; background:#FBF7EF; padding:0; }
+.mguide summary{ cursor:pointer; padding:9px 11px; font-size:.8rem; font-weight:600; color:#5A4630; list-style:none; }
+.mguide summary::-webkit-details-marker{ display:none; }
+.mguide[open] summary{ border-bottom:1px solid #EFE6D6; }
+.mguide-body{ padding:6px 12px 10px; font-size:.76rem; line-height:1.5; color:var(--ink-soft, #5c5148); }
+.mguide-body ol{ margin:0; padding-left:18px; display:flex; flex-direction:column; gap:5px; }

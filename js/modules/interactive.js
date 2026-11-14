@@ -70,6 +70,7 @@
     { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" }
   ];
   const isSeal = s => s.kind === "muhurlu-kart", isTree = s => s.kind === "dilek-agaci", isOld = s => !isNew(s);
+  const isRibbon = s => isTree(s) && s.wishStyle === "kurdele";
   const SETTINGS_SCHEMA = [
     { key: "kind", type: "select", label: "Nesne", options: KINDS.map(([value, label]) => ({ value, label })), reRenderPanel: true },
     { key: "_studio", type: "action-button", label: "✨ Etkileşim Stüdyosu: kendi görselleriniz, hareket, sürpriz", action: "studio", showIf: s => STUDIO_KINDS.indexOf(s.kind) >= 0 },
@@ -86,8 +87,19 @@
     { key: "unlockTime", type: "time", label: "Açılma saati", showIf: isSeal },
     { key: "unlockTimezone", type: "select", label: "Saat Dilimi", options: SEAL_TZ, showIf: isSeal },
     // ---- Dilek Ağacı ----
-    { key: "images", type: "image-list", keepAlpha: true, single: true, label: "Ağaç / arka plan görseli (PNG veya WebP — ilk görsel kullanılır)", showIf: isTree },
-    { key: "wishIcon", type: "select", label: "Dilek simgesi", showIf: isTree, options: [{ value: "yildiz", label: "⭐ Yıldız" }, { value: "balon", label: "🎈 Balon" }, { value: "cicek", label: "🌸 Çiçek" }] },
+    { key: "wishStyle", type: "select", label: "Görünüm", showIf: isTree, reRenderPanel: true, options: [{ value: "simge", label: "Simgeler — kendi ağaç görselinizin üzerinde (yıldız, balon, çiçek)" }, { value: "kurdele", label: "Kurdeleli not kâğıtları — ince altın dallı ağaç" }] },
+    { key: "_guideRibbon", type: "guide", label: "Kurdeleli not kâğıtları nasıl kullanılır?", showIf: isRibbon, html:
+      "<ol><li>Ağaç hazır çizilir; görsel yüklemeniz gerekmez. İsterseniz arkasına bir zemin görseli koyabilirsiniz.</li>" +
+      "<li>Misafir <b>Dilek Bırak</b>'a dokunup dileğini gönderdiğinde, yeni not kurdelesiyle ağaca asılır.</li>" +
+      "<li>Notlar krem, şampanya ve pudra tonlarında, hafifçe sallanır. Nota dokunulunca büyüyerek açılır; ✕ ile ya da boşluğa dokunarak kapanır.</li>" +
+      "<li><b>Herkese Açık</b> ayarında açılan notta ad ve dilek okunur; <b>Kilitli</b> ayarında dilekleri yalnızca siz panelden okursunuz.</li>" +
+      "<li><b>Notlarda baş harfler</b>: “Misafir isterse göster” seçiliyse, misafir formda onay verirse baş harfleri notun üstünde görünür.</li>" +
+      "<li>Ağaçta aynı anda en fazla 20 not asılı durur; daha fazlası olunca son not “+N” olur ve dokununca tüm dilekler listelenir. Notlar hiçbir ekranda üst üste binmez.</li>" +
+      "<li>Modülü sayfada dikey (yaklaşık 4:5) bir alana yerleştirmeniz önerilir.</li></ol>" },
+    { key: "images", type: "image-list", keepAlpha: true, single: true, label: "Ağaç / arka plan görseli (PNG veya WebP — ilk görsel kullanılır)", showIf: s => isTree(s) && !isRibbon(s) },
+    { key: "images", type: "image-list", keepAlpha: true, single: true, label: "Zemin görseli (isteğe bağlı — ağacın arkasında durur)", showIf: isRibbon },
+    { key: "wishIcon", type: "select", label: "Dilek simgesi", showIf: s => isTree(s) && !isRibbon(s), options: [{ value: "yildiz", label: "⭐ Yıldız" }, { value: "balon", label: "🎈 Balon" }, { value: "cicek", label: "🌸 Çiçek" }] },
+    { key: "noteInitials", type: "select", label: "Notlarda baş harfler", showIf: isRibbon, options: [{ value: "goster", label: "Misafir isterse göster" }, { value: "gizle", label: "Hiç gösterme" }] },
     { key: "wishVisibility", type: "select", label: "Dileklerin görünürlüğü", showIf: isTree, options: [{ value: "kilitli", label: "Kilitli — dilekleri yalnızca organizatör okur" }, { value: "acik", label: "Herkese Açık — misafirler simgeye dokunup okuyabilir" }] },
     { key: "color", type: "color", label: "Simge ve düğme rengi", showIf: isTree },
     { key: "resultType", type: "select", label: "Sonuç", showIf: isOld, options: [{ value: "mesaj", label: "Mesaj" }, { value: "gorsel", label: "Görsel" }, { value: "baglanti", label: "Bağlantı düğmesi" }, { value: "efekt", label: "Yalnızca efekt" }, { value: "anim", label: "Yalnızca animasyon" }] },
@@ -1291,6 +1303,153 @@
     slow_down: "Çok fazla dilek gönderildi; lütfen biraz sonra tekrar deneyin.", tree_not_found: "Dilek ağacı şu anda kullanılamıyor."
   };
 
+  /* ---------------- DİLEK AĞACI · KURDELELİ NOT KÂĞITLARI ----------------
+     Sabit 400×500 koordinatlı sahne: notların yerleri baştan, birbirine değmeyecek biçimde bellidir
+     (4 sıra, 4-5-6-5 = 20 not); dallar bu asılma noktalarından geçecek şekilde çizilir. Sahne her ekranda
+     4:5 oranını korur → hiçbir ekran genişliğinde notlar üst üste binmez. */
+  const RT = (() => {
+    const rows = [[108, 4, 116], [190, 5, 88], [272, 6, 60], [354, 5, 88]], spots = [];
+    rows.forEach(([top, n, x0], ri) => { for (let i = 0; i < n; i++) spots.push({ x: x0 + i * 56, top, rib: 12 + ((i * 7 + ri * 5) % 5) * 3, row: ri }); });
+    spots.forEach(p => { p.ay = p.top - p.rib; });
+    // ilk dilekler ağacın her yerine dağılsın (yalnız tepeye yığılmasın): 7 adımlı dolaşım (20 ile aralarında asal)
+    const order = spots.map((_, i) => (i * 7) % spots.length);
+    return { W: 400, H: 500, NW: 44, NH: 54, rows, spots, order };
+  })();
+  const NOTE_PAPER = ["#FBF6EC", "#F1E3C6", "#F3DCD6"], NOTE_RIBBON = ["#D9B9A6", "#CDB27E", "#E2B8B4", "#C9A35F"];
+  const PAPER_TEX = "url(\"data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="4"/><feColorMatrix values="0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .3  0 0 0 .22 0"/></filter><rect width="120" height="120" filter="url(#n)"/></svg>') + "\")";
+  function ribbonTreeSVG() {
+    const cr = pts => {   // Catmull-Rom → yumuşak dal
+      let d = `M${pts[0][0]} ${pts[0][1]}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+        d += ` C${(p1[0] + (p2[0] - p0[0]) / 6).toFixed(1)} ${(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1)} ${(p2[0] - (p3[0] - p1[0]) / 6).toFixed(1)} ${(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1)} ${p2[0]} ${p2[1]}`;
+      }
+      return d;
+    };
+    let out = "", leaves = "";
+    const leaf = (x, y, a, s) => { leaves += `<path d="M0 0 C${2.6 * s} ${-1.6 * s} ${5.4 * s} ${-1.2 * s} ${7 * s} 0 C${5.4 * s} ${1.2 * s} ${2.6 * s} ${1.6 * s} 0 0Z" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${a})" fill="url(#rtG)" opacity=".85"/>`; };
+    // gövde: alttan en üst sıraya, hafif kıvrımlı iki ince çizgi
+    out += `<path d="${cr([[200, 492], [197, 450], [203, 400], [199, 330], [201, 250], [200, 170], [200, RT.spots[0].ay + 6]])}" stroke-width="3.2"/>`;
+    out += `<path d="${cr([[200, 492], [204, 455], [198, 410], [202, 340]])}" stroke-width="1.2" opacity=".7"/>`;
+    out += `<path d="M200 492 C186 494 172 491 160 486 M200 492 C214 494 230 492 242 487" stroke-width="1.4"/>`;
+    RT.rows.forEach((row, ri) => {
+      const ps = RT.spots.filter(p => p.row === ri), y0 = Math.round(ps.reduce((a, p) => a + p.ay, 0) / ps.length);
+      const left = ps.filter(p => p.x < 200).sort((a, b) => b.x - a.x), right = ps.filter(p => p.x > 200).sort((a, b) => a.x - b.x);
+      [[left, -1], [right, 1]].forEach(([side, dir]) => {
+        if (!side.length) return;
+        const last = side[side.length - 1];
+        const pts = [[200, y0 + 10]].concat(side.map(p => [p.x, p.ay])).concat([[last.x + dir * 22, last.ay - 14]]);
+        out += `<path d="${cr(pts)}" stroke-width="${1.9 - ri * 0.15}"/>`;
+        // ince sürgünler ve yapraklar
+        side.forEach((p, i) => {
+          const tx = p.x + dir * 20, ty = p.ay - 16 - (i % 2) * 6;
+          out += `<path d="M${p.x + dir * 6} ${p.ay - 1} Q${p.x + dir * 12} ${p.ay - 10} ${tx} ${ty}" stroke-width=".9"/>`;
+          leaf(tx, ty, dir > 0 ? -35 : -145, 1); leaf(p.x + dir * 13, p.ay - 7, dir > 0 ? 25 : 155, 0.8);
+        });
+        leaf(last.x + dir * 22, last.ay - 14, dir > 0 ? -20 : -160, 1.1);
+      });
+      if (ri === 0) leaf(200, RT.spots[0].ay + 4, -90, 1.2);
+    });
+    return `<svg class="ix-rt-svg" viewBox="0 0 ${RT.W} ${RT.H}" aria-hidden="true" focusable="false">
+      <defs><linearGradient id="rtG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A97C2C"/><stop offset=".45" stop-color="#F1D58C"/><stop offset=".7" stop-color="#C79A45"/><stop offset="1" stop-color="#8E6522"/></linearGradient></defs>
+      <g fill="none" stroke="url(#rtG)" stroke-linecap="round" stroke-linejoin="round">${out}</g>${leaves}</svg>`;
+  }
+  function ribbonView(root, s, stage, onEmpty) {
+    root.classList.add("ix-tree-kurdele");
+    const box = el("div", "ix-rt"); stage.appendChild(box); box.style.setProperty("--paper-tex", PAPER_TEX);
+    const ref = refs(s)[0];
+    if (ref) { const im = el("img", "ix-rt-bg"); im.alt = ""; im.draggable = false; setImg(im, ref); box.appendChild(im); }
+    box.insertAdjacentHTML("beforeend", ribbonTreeSVG());
+    const layer = el("div", "ix-rt-notes"); box.appendChild(layer);
+    const fit = () => {   // 4:5 oranını koru (sahnenin içine sığdır)
+      const W = stage.clientWidth, H = stage.clientHeight; if (!W || !H) return;
+      const w = Math.min(W, H * 0.8); box.style.width = w + "px"; box.style.height = w * 1.25 + "px"; box.style.fontSize = (w / RT.W * 10) + "px";
+    };
+    fit(); if (global.ResizeObserver) new ResizeObserver(fit).observe(stage); else global.addEventListener("resize", fit);
+    const isPublic = s.wishVisibility === "acik", ini = s.noteInitials !== "gizle";
+    const notes = new Map(); let more = null, all = [];
+    const hue = n => ({ paper: NOTE_PAPER[n % 3], ribbon: NOTE_RIBBON[(n * 5 + 1) % 4], tilt: ((n * 37) % 7 - 3) * 0.9 });
+    function noteEl(key, n) {
+      const c = hue(n), g = el("button", "ix-note"); g.type = "button";
+      g.style.setProperty("--d", ((n % 9) * 0.41).toFixed(2) + "s"); g.style.setProperty("--t", (4.2 + (n % 5) * 0.45).toFixed(2) + "s");
+      g.innerHTML = `<span class="ix-note-sway"><svg class="ix-note-rib" viewBox="0 0 44 30" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M22 0V30" stroke="${c.ribbon}" stroke-width="2.4"/><path d="M22.5 0V30" stroke="rgba(255,255,255,.55)" stroke-width=".7"/></svg>
+        <svg class="ix-note-bow" viewBox="0 0 24 14" aria-hidden="true"><path d="M12 6C8 0 2 1 3 5s6 3 9 1zM12 6c4-6 10-5 9-1s-6 3-9 1z" fill="${c.ribbon}" stroke="rgba(0,0,0,.12)" stroke-width=".4"/>
+          <path d="M11 7l-3 7M13 7l3 7" stroke="${c.ribbon}" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="6.2" r="1.6" fill="${c.ribbon}" stroke="rgba(255,255,255,.5)" stroke-width=".5"/></svg>
+        <span class="ix-note-paper" style="--p:${c.paper};--tilt:${c.tilt}deg"><i class="ix-note-hole"></i><b class="ix-note-txt"></b></span></span>`;
+      g.__key = key; return g;
+    }
+    function place(g, p) {
+      g.style.left = (p.x / RT.W * 100) + "%"; g.style.top = (p.ay / RT.H * 100) + "%";
+      g.style.setProperty("--rib", (p.rib / RT.NW).toFixed(4));
+    }
+    function paint(g, it) {
+      const t = g.querySelector(".ix-note-txt");
+      const show = ini && it.initials;
+      t.innerHTML = show ? esc(it.initials) : `<svg viewBox="0 0 24 10" aria-hidden="true"><path d="M2 6c4-4 7 2 10-1s6-3 10 0" fill="none" stroke="#C49B4E" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+      g.setAttribute("aria-label", show ? IXL("Dilek ({i})", { i: it.initials }) : IXL("Dilek"));
+      g.__it = it;
+    }
+    // Yerleşim: en yeni notlar ağaçta; tercih edilen yer sıra numarasından (herkes aynı yeri görür), doluysa sıradaki boş yer
+    function layout(list) {
+      all = list.slice().sort((a, b) => (Number(a.slot) || 0) - (Number(b.slot) || 0));
+      const over = all.length > RT.spots.length, cap = over ? RT.spots.length - 1 : RT.spots.length;
+      const vis = all.slice(-cap), used = new Array(RT.spots.length).fill(false), keep = new Set();
+      if (over) used[RT.spots.length - 1] = true;
+      vis.forEach(it => {
+        let o = (Number(it.slot) || 0) % cap, k = RT.order[o];
+        while (used[k]) { o = (o + 1) % RT.order.length; k = RT.order[o]; }
+        used[k] = true; keep.add(it.id);
+        let g = notes.get(it.id); if (!g) { g = noteEl(it.id, Number(it.slot) || 0); layer.appendChild(g); notes.set(it.id, g); }
+        place(g, RT.spots[k]); paint(g, it);
+      });
+      notes.forEach((g, id) => { if (!keep.has(id)) { g.remove(); notes.delete(id); } });
+      if (over) {
+        if (!more) { more = noteEl("__more", 7); more.classList.add("is-more"); layer.appendChild(more); }
+        place(more, RT.spots[RT.spots.length - 1]);
+        more.querySelector(".ix-note-txt").textContent = "+" + (all.length - cap);
+        more.setAttribute("aria-label", IXL("Tüm dilekler ({n})", { n: all.length }));
+      } else if (more) { more.remove(); more = null; }
+      if (onEmpty) onEmpty(all.length);
+    }
+    function drop(id) {   // yeni not: yukarıdan süzülüp kurdelesiyle dala oturur
+      const g = notes.get(id); if (!g || reduced()) return;
+      AN(g, [{ transform: "translate(-50%,-34%) rotate(-10deg)", opacity: 0 }, { transform: "translate(-50%,3%) rotate(7deg)", opacity: 1, offset: 0.45 },
+             { transform: "translate(-50%,-1%) rotate(-4deg)", offset: 0.68 }, { transform: "translate(-50%,0) rotate(1.6deg)", offset: 0.86 }, { transform: "translate(-50%,0) rotate(0deg)" }],
+         { duration: 1500, easing: "cubic-bezier(.3,.7,.3,1)", fill: "none" });
+      g.classList.add("is-new"); setTimeout(() => { g.classList.remove("is-new"); burst(stage, "simli"); }, 1400);
+    }
+    // Nota dokununca: not büyüyerek açılır; ✕, boşluk ya da Esc ile kapanır
+    function openNote(g) {
+      const it = g.__it || {}, isMore = g === more, c = hue(isMore ? 7 : Number(it.slot) || 0);
+      const bg = el("div", "ix-note-open"); bg.setAttribute("role", "dialog"); bg.setAttribute("aria-modal", "true"); bg.style.setProperty("--paper-tex", PAPER_TEX);
+      let body;
+      if (!isPublic) body = `<p class="ix-note-lock">🔒 ${esc(IXL("Dilekler gizli — yalnızca organizatör okuyabilir."))}</p>`;
+      else if (isMore) body = `<h3>${esc(IXL("Tüm dilekler ({n})", { n: all.length }))}</h3><ul class="ix-note-list">${all.slice().reverse().map(x => `<li><b>${esc(x.name || "")}</b><span>${esc(x.wish || "").replace(/\n/g, "<br>")}</span></li>`).join("")}</ul>`;
+      else body = `<h3>${esc(it.name || "")}</h3><p class="ix-note-msg">${esc(it.wish || "").replace(/\n/g, "<br>")}</p>`;
+      bg.innerHTML = `<div class="ix-note-big" style="--p:${c.paper}"><i class="ix-note-hole"></i>${body}<button type="button" class="ix-note-x" aria-label="${esc(IXL("Kapat"))}">✕</button></div>`;
+      document.body.appendChild(bg);
+      const big = bg.querySelector(".ix-note-big"), from = g.querySelector(".ix-note-paper").getBoundingClientRect(), to = big.getBoundingClientRect();
+      const fx = (from.left + from.width / 2) - (to.left + to.width / 2), fy = (from.top + from.height / 2) - (to.top + to.height / 2), fs = Math.max(0.08, from.width / to.width);
+      AN(big, [{ transform: `translate(${fx}px,${fy}px) scale(${fs})`, opacity: 0.6 }, { transform: "none", opacity: 1 }], { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)", fill: "none" });
+      AN(bg, [{ backgroundColor: "rgba(20,16,12,0)" }, { backgroundColor: "rgba(20,16,12,.42)" }], { duration: 300, fill: "none" });
+      g.classList.add("is-open");
+      let closing = false;
+      const close = () => {
+        if (closing) return; closing = true; document.removeEventListener("keydown", onKey);
+        const a = AN(big, [{ transform: "none", opacity: 1 }, { transform: `translate(${fx}px,${fy}px) scale(${fs})`, opacity: 0 }], { duration: 300, easing: "cubic-bezier(.4,0,.6,1)" });
+        const done = () => { bg.remove(); g.classList.remove("is-open"); try { g.focus({ preventScroll: true }); } catch (e) { /* */ } };
+        if (a && !reduced()) a.onfinish = done; else done();
+      };
+      const onKey = e => { if (e.key === "Escape") close(); };
+      document.addEventListener("keydown", onKey);
+      bg.addEventListener("click", e => { if (e.target === bg || e.target.closest(".ix-note-x")) close(); });
+      setTimeout(() => { try { bg.querySelector(".ix-note-x").focus({ preventScroll: true }); } catch (e) { /* */ } }, 60);
+    }
+    layer.addEventListener("click", e => { const g = e.target.closest(".ix-note"); if (g) { e.stopPropagation(); openNote(g); } });
+    return { layout, drop, has: id => notes.has(id), items: () => all };
+  }
+
   function treeBuild(root, s, live, ctx) {
     const icon = WISH_SVG[s.wishIcon] ? s.wishIcon : "yildiz", color = s.color || "#E7B53C";
     const isPublic = s.wishVisibility === "acik";
@@ -1298,8 +1457,10 @@
     root.style.setProperty("--tree-c", color);
     root.style.setProperty("--tree-ink", s.textColor || "#3A2E28");
     const stage = el("div", "ix-tree-stage"); root.appendChild(stage);
+    const ribbon = s.wishStyle === "kurdele";
     const ref = refs(s)[0];
-    if (ref) { const im = el("img", "ix-tree-bg"); im.alt = ""; im.draggable = false; setImg(im, ref); stage.appendChild(im); }
+    if (ribbon) { /* kurdeleli notlar: ağaç hazır çizilir (zemin görseli isteğe bağlı, ribbonView içinde) */ }
+    else if (ref) { const im = el("img", "ix-tree-bg"); im.alt = ""; im.draggable = false; setImg(im, ref); stage.appendChild(im); }
     else stage.appendChild(el("div", "ix-tree-bg ix-tree-ph", null, live ? "" : "Ağaç / arka plan görseli yükleyin"));
     const layer = el("div", "ix-tree-icons"); stage.appendChild(layer);
     const bar = el("div", "ix-tree-bar");
@@ -1308,6 +1469,7 @@
     const count = el("span", "ix-tree-count");
     bar.appendChild(btn); bar.appendChild(count); root.appendChild(bar);
     const tip = el("div", "ix-tree-tip"); tip.hidden = true; stage.appendChild(tip);
+    const RV = ribbon ? ribbonView(root, s, stage) : null;
 
     const shown = new Map();
     const slug = live ? ixSlug() : "", layerId = (ctx && ctx.layerId) || "";
@@ -1346,6 +1508,12 @@
       tip.hidden = false;
     });
 
+    if (!live && RV) {   // editörde örnek notlar
+      const ini = ["AK", null, "EY", null, "MS", null, "ZD", null, "BT", null, "CK", null];
+      RV.layout(ini.map((x, i) => ({ id: "ornek" + i, slot: i, initials: x, name: "Örnek misafir", wish: "Örnek dilek" })));
+      btn.disabled = true; setCount(0);
+      return;
+    }
     if (!live) {   // editörde örnek simgeler
       for (let i = 0; i < 9; i++) addIcon({ id: "ornek" + i, slot: i * 3, initials: i % 3 === 0 ? "AK" : null });
       btn.disabled = true; setCount(0);
@@ -1359,6 +1527,7 @@
       last = Date.now();
       ES.wishTreeGet(slug, layerId).then(d => {
         const items = d && Array.isArray(d.items) ? d.items : [];
+        if (RV) { RV.layout(items); setCount(items.length); return; }
         const keep = new Set(items.map(it => it.id));
         shown.forEach((b, id) => { if (!keep.has(id)) { b.remove(); shown.delete(id); } });   // organizatörün gizlediği/sildiği
         items.forEach(it => { const b = addIcon(it, false); b.__it = it; });
@@ -1379,7 +1548,7 @@
         <h3>${esc(IXL("Dileğini bırak"))}</h3>
         <label>${esc(IXL("Adınız"))}<input name="n" maxlength="60" autocomplete="name" required></label>
         <label>${esc(IXL("Dileğiniz"))}<textarea name="w" maxlength="400" rows="4" required></textarea><small class="ix-wish-cnt">0 / 400</small></label>
-        <label class="ix-wish-chk"><input type="checkbox" name="i"> <span>${esc(IXL("Adımın baş harfleri simgede görünsün"))}</span></label>
+        <label class="ix-wish-chk"${RV && s.noteInitials === "gizle" ? ' hidden style="display:none"' : ""}><input type="checkbox" name="i"> <span>${esc(IXL(RV ? "Adımın baş harfleri notta görünsün" : "Adımın baş harfleri simgede görünsün"))}</span></label>
         <input name="hp" tabindex="-1" autocomplete="off" class="ix-wish-hp" aria-hidden="true">
         <p class="ix-wish-note">${esc(IXL(isPublic ? "Dileğiniz bu davetiyede herkes tarafından okunabilir." : "Dileğinizi yalnızca organizatör okuyabilir."))}</p>
         <p class="ix-wish-err" role="alert" hidden></p>
@@ -1403,6 +1572,11 @@
           const ids = mine(); ids.push(r.id); lsSet(mineKey, JSON.stringify(ids.slice(-50)));
           close();
           const it = { id: r.id, slot: r.slot, initials: r.initials, name: isPublic ? name : null, wish: isPublic ? wish : null };
+          if (RV) {
+            RV.layout(RV.items().filter(x => x.id !== it.id).concat([it])); RV.drop(it.id);
+            setCount(RV.items().length); toastIx(root, IXL("Dileğiniz ağaca eklendi ✨"));
+            return;
+          }
           const b = addIcon(it, true); b.classList.add("is-mine");
           setCount(shown.size);
           toastIx(root, IXL("Dileğiniz ağaca eklendi ✨"));

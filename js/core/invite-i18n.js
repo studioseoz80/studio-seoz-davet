@@ -281,6 +281,8 @@
     "Adınız": "Your name",
     "Dileğiniz": "Your wish",
     "Adımın baş harfleri simgede görünsün": "Show my initials on the icon",
+    "Adımın baş harfleri notta görünsün": "Show my initials on the note",
+    "Tüm dilekler ({n})": "All wishes ({n})",
     "Dileğiniz bu davetiyede herkes tarafından okunabilir.": "Everyone who opens this invitation can read your wish.",
     "Dileğinizi yalnızca organizatör okuyabilir.": "Only the host can read your wish.",
     "Dileğiniz ağaca eklendi ✨": "Your wish was added to the tree ✨",

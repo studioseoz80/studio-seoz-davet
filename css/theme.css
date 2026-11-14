@@ -578,3 +578,42 @@ button.tp-shell{ border:0; background:transparent; padding:0; cursor:pointer; }
 .ix-wish-send{ background:#2A2420; color:#fff; }
 .ix-wish-send:disabled{ opacity:.6; }
 @media (prefers-reduced-motion: reduce){ .ix-wish svg, .ix-seal-card, .ix-seal-front, .ix-seal-msg{ animation:none !important; transition:none !important; } }
+
+/* ---- Dilek Ağacı · Kurdeleli not kâğıtları (wishStyle "kurdele") ----
+   .ix-rt: 400×500 birimlik sahne, JS ile 4:5 oranında sığdırılır; 1em = sahne genişliği/40 (10 birim). */
+.ix-tree-kurdele .ix-tree-stage{ display:flex; align-items:center; justify-content:center; overflow:visible; }
+.ix-rt{ position:relative; flex:0 0 auto; width:100%; aspect-ratio:4/5; }
+.ix-rt-bg{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:1.2em; pointer-events:none; opacity:.95; }
+.ix-rt-svg{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; filter:drop-shadow(0 .06em .08em rgba(90,60,20,.25)); }
+.ix-rt-notes{ position:absolute; inset:0; }
+.ix-note{ position:absolute; width:11%; padding:0; margin:0; border:0; background:none; cursor:pointer; transform:translateX(-50%); -webkit-tap-highlight-color:transparent; }
+.ix-note-sway{ display:block; position:relative; transform-origin:50% 0; animation:ixNoteSway var(--t, 4.6s) ease-in-out var(--d, 0s) infinite; }
+.ix-note-rib{ display:block; width:100%; height:auto; aspect-ratio:1 / var(--rib, .4); }
+.ix-note-bow{ position:absolute; left:50%; top:-.55em; width:58%; transform:translateX(-50%); filter:drop-shadow(0 .03em .04em rgba(0,0,0,.18)); }
+.ix-note-paper{ position:relative; display:flex; align-items:center; justify-content:center; width:100%; aspect-ratio:44/54; margin-top:-.2em; box-sizing:border-box;
+  background:linear-gradient(170deg, rgba(255,255,255,.55), rgba(255,255,255,0) 45%, rgba(120,90,50,.06)), var(--p, #FBF6EC);
+  border-radius:.18em .18em .3em .25em; transform:rotate(var(--tilt, 0deg)); transform-origin:50% 0;
+  box-shadow:0 .08em .12em rgba(70,50,25,.16), 0 .35em .6em -.15em rgba(70,50,25,.28), inset 0 0 0 .04em rgba(150,120,80,.18); }
+.ix-note-paper::before{ content:""; position:absolute; inset:0; border-radius:inherit; background-image:var(--paper-tex); background-size:6em 6em; mix-blend-mode:multiply; opacity:.9; pointer-events:none; }
+.ix-note-hole{ position:absolute; left:50%; top:.42em; width:.42em; height:.42em; margin-left:-.21em; border-radius:50%; background:rgba(110,85,55,.28); box-shadow:inset 0 .05em .06em rgba(0,0,0,.25); }
+.ix-note-txt{ position:relative; font:italic 600 1.45em/1 "Cormorant Garamond", serif; color:#6B4E2E; letter-spacing:.02em; margin-top:.3em; }
+.ix-note-txt svg{ display:block; width:1.5em; height:auto; }
+.ix-note.is-more .ix-note-txt{ font:700 1.05em/1 "Manrope", sans-serif; font-style:normal; color:#8A6A3E; }
+.ix-note:focus-visible .ix-note-paper{ outline:.12em solid #C49B4E; outline-offset:.12em; }
+.ix-note.is-open{ visibility:hidden; }
+.ix-note.is-new .ix-note-sway{ animation:none; }
+@keyframes ixNoteSway{ 0%,100%{ transform:rotate(-1.4deg); } 50%{ transform:rotate(1.4deg); } }
+.ix-note-open{ position:fixed; inset:0; z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(20,16,12,.42); }
+.ix-note-big{ position:relative; width:min(340px, 88vw); max-height:78vh; overflow:auto; box-sizing:border-box; padding:46px 26px 28px; color:#3A2C1E; text-align:center;
+  background:linear-gradient(170deg, rgba(255,255,255,.6), rgba(255,255,255,0) 50%, rgba(120,90,50,.06)), var(--p, #FBF6EC); border-radius:4px 4px 7px 6px;
+  box-shadow:0 2px 3px rgba(60,40,20,.18), 0 24px 50px -12px rgba(40,25,10,.5); }
+.ix-note-big::before{ content:""; position:absolute; inset:0; border-radius:inherit; background-image:var(--paper-tex); background-size:120px 120px; mix-blend-mode:multiply; pointer-events:none; }
+.ix-note-big .ix-note-hole{ top:16px; width:11px; height:11px; margin-left:-5.5px; }
+.ix-note-big h3{ position:relative; margin:0 0 10px; font:italic 600 26px/1.15 "Cormorant Garamond", serif; color:#5A3F22; }
+.ix-note-msg{ position:relative; margin:0; font:400 19px/1.45 "Cormorant Garamond", serif; white-space:normal; overflow-wrap:anywhere; }
+.ix-note-lock{ position:relative; margin:6px 0 0; font:500 15px/1.5 "Manrope", sans-serif; }
+.ix-note-list{ position:relative; list-style:none; margin:0; padding:0; text-align:left; display:flex; flex-direction:column; gap:12px; }
+.ix-note-list li{ display:flex; flex-direction:column; gap:2px; padding-bottom:10px; border-bottom:1px solid rgba(140,110,70,.2); font:400 17px/1.4 "Cormorant Garamond", serif; overflow-wrap:anywhere; }
+.ix-note-list b{ font-style:italic; font-weight:600; color:#5A3F22; }
+.ix-note-x{ position:absolute; top:8px; right:8px; width:40px; height:40px; border:0; border-radius:50%; background:rgba(255,255,255,.55); color:#5A3F22; font-size:17px; cursor:pointer; }
+@media (prefers-reduced-motion: reduce){ .ix-note-sway{ animation:none !important; } }
