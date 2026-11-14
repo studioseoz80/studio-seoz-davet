@@ -182,6 +182,110 @@
       ctx.later(begin, () => ctx.sfx("creak"));
       return t.dur;
     } });
+
+  /* ÜSTTEN AÇILIŞ (zarf kapağı): kapak katmanı ÜST kenarından menteşelenip geriye/yukarı katlanır.
+     Gövde, kapak, iç kart ve mühür kullanıcının AYRI katmanlarıdır (tek görselden kapak ayrıştırılmaz).
+     Kapak dik açıyı (90°) geçtiği an — tam o anda kenarından göründüğü için fark edilmeden — seçilen
+     katmanın (boşsa diğer bütün katmanların) arkasına alınır: yükselen kart açık kapağın ÖNÜNDE kalır.
+     Arka yüz: katmanın "arka yüz" görseli (yoksa ön yüzün koyulaştırılmış hâli) kullanılır. */
+  function zOf(el) {
+    try { return new DOMMatrix(getComputedStyle(el).transform).m43 || 0; } catch (e) { return 0; }
+  }
+  registerMove({ id: "flap-open", group: "acilma", label: "Üstten açılış (zarf kapağı)", single: true, duration: 1.3, easing: "agir", needsBack: true, needsLit: true,
+    note: "Kapak katmanına uygulayın: üst kenarından geriye doğru katlanır. Gövde, kapak, iç kart ve mühür ayrı katmanlar olmalı (kapağın üst kenarı zarfın üst kenarıyla aynı hizada). Kartı kapağın ARKASINA yerleştirip \"Zarftan yükselme\" verin.",
+    params: [
+      { key: "angle", label: "Katlanma açısı", def: 180, options: [[150, "150°"], [165, "165°"], [180, "180° (tam açık)"]] },
+      { key: "behind", label: "Açılınca arkasına geçsin", type: "layer", def: "" },
+      { key: "inside", label: "Açık kapağın iç yüzü", def: "doku", options: [["doku", "Kapağın kendi dokusu, hafif gölgeli"], ["yok", "Yalnızca yüklenen arka yüz görseli"]] }
+    ],
+    prepare(ctx, a, def) {
+      const inner = ctx.L[a.layer], u = ctx.cfg.layers[a.layer] || {};
+      if (!inner) return;
+      // menteşe: kapağın GÖRÜNEN üst kenarı. PNG'nin üstünde şeffaf boşluk varsa (ör. Magnific dışa aktarımı)
+      // dolu bölge ölçülür; görsel kutuya "contain" ile oturduğu için kutudaki gerçek yeri hesaba katılır.
+      if (!u.origin) {   // kullanıcı dönme noktasını kendisi ayarladıysa ona dokunulmaz
+        let oy = 0;
+        const ab = C.alphaBox ? C.alphaBox(u.src) : null, bx = ctx.box[a.layer];
+        if (ab && bx && bx.w && bx.h) {
+          let iw = bx.w, ih = bx.w / ab.ratio; if (ih > bx.h) { ih = bx.h; iw = bx.h * ab.ratio; }
+          oy = Math.max(0, Math.min(100, ((bx.h - ih) / 2 + ab.t * ih) / bx.h * 100));
+        }
+        inner.style.transformOrigin = `50% ${oy.toFixed(2)}%`;
+      }
+      // Yeni (3D-1) katmanlarda arka yüz yüklenmemişse arkası boş kalır; açılan zarf kapağının iç yüzü ise
+      // görünmelidir: kapağın KENDİ görseli hafif gölgeli olarak arkaya konur (kullanıcı "yok" seçebilir).
+      // Arka yüz rotateY ile çevrildiği için kapak 180° katlanınca üçgen doğru yöne (yukarı) bakar.
+      if (C.honestBack && C.honestBack(u) && P(a, def, "inside") !== "yok" && !inner.__flapBack) {
+        const front = inner.querySelector(".sc-front");
+        if (front) {
+          inner.__flapBack = true;
+          const back = vis(front, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%", objectFit: front.style.objectFit || "contain", display: "block", pointerEvents: "none",
+            transform: "rotateY(180deg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", filter: "brightness(.78) saturate(.9)" });
+          back.classList.add("sc-flapback");
+          inner.insertBefore(back, front);
+        }
+      }
+    },
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), ang = Math.max(90, Math.min(180, num(P(a, def, "angle"), 180)));
+      const me = ctx.S[a.layer];
+      // arkasına geçilecek derinlik: seçilen katman ya da (boşsa) bu katman dışındaki en arkadaki katman
+      let D = 0;
+      if (me) {
+        const tid = otherLayer(ctx, a, "behind", def);
+        const others = tid ? [ctx.S[tid]] : ctx.model.slots.filter(sl => sl.id !== a.layer && !sl.backdrop && ctx.S[sl.id] && ctx.S[sl.id] !== me && !(ctx.cfg.layers[sl.id] || {}).parent).map(sl => ctx.S[sl.id]);
+        const zMe = zOf(me), zMin = others.length ? Math.min.apply(null, others.map(zOf)) : zMe;
+        D = Math.max(0, zMe - zMin) + 2;
+      }
+      const el = ctx.L[a.layer];
+      ctx.anim(el, [
+        { transform: "translateZ(0px) rotateX(0deg)", offset: 0, easing: "linear" },
+        { transform: "translateZ(0px) rotateX(90deg)", offset: 0.5 },
+        { transform: `translateZ(${-D}px) rotateX(90deg)`, offset: 0.501 },
+        { transform: `translateZ(${-D}px) rotateX(${ang}deg)`, offset: 1 }
+      ], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      ctx.later(begin, () => ctx.shade(a.layer, 0.45, { d: t.dur, e: t.e }));
+      if (num(P(a, def, "sound"), 1)) ctx.later(begin, () => ctx.sfx("swoosh"));
+      return t.dur;
+    } });
+  /* KAYBOLMA (mühür / fiyonk): katman solarak, yukarı uçarak ya da küçülerek kaybolur; "Kalsın" seçilirse
+     hiç hareket etmez (kapağın üstündeyse "bağlı katman" yapılarak kapakla birlikte katlanabilir). */
+  registerMove({ id: "fade-away", group: "etkilesim", label: "Kaybolma (mühür / fiyonk)", single: true, duration: 0.7, easing: "yumusak",
+    params: [{ key: "style", label: "Biçim", def: "sol", options: [["sol", "Solarak kaybolsun"], ["yukari", "Yukarı uçup kaybolsun"], ["kucul", "Küçülerek kaybolsun"], ["kalsin", "Kalsın"]] }],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), el = ctx.L[a.layer], st = P(a, def, "style"); if (!el || st === "kalsin") return st === "kalsin" ? 0 : t.dur;
+      const to = st === "yukari" ? "translate3d(0px, -90px, 0px) scale(0.9)" : st === "kucul" ? "translate3d(0px, 0px, 0px) scale(0.2)" : "translate3d(0px, -6px, 0px) scale(1.08)";
+      ctx.anim(el, [{ transform: "translate3d(0px, 0px, 0px) scale(1)" }, { transform: to }], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      ctx.anim(ctx.C[a.layer] || el, [{ opacity: 1 }, { opacity: 0 }], { d: t.dur, delay: begin, e: t.e, fill: "forwards" });
+      return t.dur;
+    } });
+  /* ZARFTAN YÜKSELME: katman (ör. iç kart görseli) kendi boyunun seçilen oranı kadar yukarı çıkar;
+     zarf gövdesinin ARKASINA yerleştirildiğinde gövdenin içinden yükseliyor görünür. İstenirse ardından
+     öne ve sahnenin ortasına gelir. */
+  registerMove({ id: "pocket-rise", group: "kart", label: "Zarftan yükselme", single: true, duration: 1.2, easing: "yavaslayarak",
+    note: "Kart görselini gövdenin arkasına (katman listesinde gövdenin altına) koyun. Yükselme miktarı kartın kendi boyuna göredir.",
+    params: [
+      { key: "amount", label: "Yükselme miktarı", def: 60, options: [[30, "%30"], [45, "%45"], [60, "%60"], [75, "%75"], [90, "%90"], [110, "%110 (tamamen çıksın)"]] },
+      { key: "then", label: "Sonra", def: "kalsin", options: [["kalsin", "Olduğu yerde kalsın"], ["one", "Öne ve ortaya gelsin"]] }
+    ],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def), el = ctx.L[a.layer]; if (!el) return t.dur;
+      const c = center(ctx, a.layer), up = Math.round(c.b.h * num(P(a, def, "amount"), 60) / 100);
+      if (P(a, def, "then") !== "one") {
+        ctx.anim(el, [{ transform: "translate3d(0px, 0px, 0px)" }, { transform: `translate3d(0px, ${-up}px, 0px)` }], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+        return t.dur;
+      }
+      // yükselir (%55), sonra öne gelip ortalanır (%45); derinlik, diğer katmanların önüne geçecek kadar
+      const dx = Math.round(C.FRAME_W / 2 - c.x), dy = Math.round(C.FRAME_H / 2 - (c.y - up));
+      const S = ctx.S[a.layer], zs = ctx.model.slots.filter(sl => !sl.backdrop && ctx.S[sl.id]).map(sl => zOf(ctx.S[sl.id]));
+      const front = Math.max(0, (zs.length ? Math.max.apply(null, zs) : 0) - (S ? zOf(S) : 0)) + 6;
+      ctx.anim(el, [
+        { transform: "translate3d(0px, 0px, 0px)", offset: 0 },
+        { transform: `translate3d(0px, ${-up}px, 0px)`, offset: 0.55, easing: EASE.yumusak },
+        { transform: `translate3d(${dx}px, ${dy - up}px, ${front}px)`, offset: 1 }
+      ], { d: t.dur, delay: begin, e: t.e, fill: "forwards", comp: "add" });
+      return t.dur;
+    } });
   registerMove({ id: "slide", group: "acilma", label: "Sürgülü açılma", single: true, duration: 1.2, easing: "yumusak",
     note: "Katman kendi genişliği kadar kayarak çekilir.",
     params: [{ key: "dir", label: "Yön", def: "left", options: [["left", "Sola"], ["right", "Sağa"], ["up", "Yukarı"], ["down", "Aşağı"]] }],
@@ -333,7 +437,80 @@
   registerMove({ id: "card", group: "kart", label: "İç kartın ortaya çıkması", single: true, duration: 1.4, easing: "yavaslayarak", scene: true, isCard: true,
     note: "Eklemezseniz kart, son hareketten sonra kendiliğinden yükselerek gelir.",
     params: [{ key: "style", label: "Biçim", def: "yuksel", options: [["yuksel", "Aşağıdan yükselerek"], ["belir", "Derinden belirerek"], ["in", "Yukarıdan inerek"]] }],
-    run(ctx, a, def, begin) { const t = timing(a, def); revealCard(ctx, P(a, def, "style"), t, begin); return t.dur; } });
+    run(ctx, a, def, begin) { const t = timing(a, def); revealCard(ctx, P(a, def, "style"), t, begin); return t.dur + shadeLead(ctx.cfg); } });
+
+  /* İÇ KARTIN ZARFTAN ÇIKMASI (üstten açılış): editörün kendi iç kartı (yazılı kart ya da kart görseli —
+     ayrıca PNG gerekmez) zarf gövdesinin İÇİNDEN, gövdenin arkasından yükselir; seçilen miktar kadar
+     görünüp kısa bir an bekler, zarftan tamamen çıkar, sonra öne gelip ekranın ortasına yerleşir.
+     Gövdenin dolu (saydam olmayan) alanı ölçülür; kartın gövdenin altından taşan kısmı gizlenir.
+     Gövde katmanı hiç hareket etmez. */
+  function pocketRect(ctx, id) {
+    const bx = ctx.box[id]; if (!bx) return null;
+    const s = bx.s || 1, w = bx.w * s, hh = bx.h * s, x = bx.x + bx.w / 2 - w / 2, y = bx.y + bx.h / 2 - hh / 2;
+    const ab = C.alphaBox ? C.alphaBox((ctx.cfg.layers[id] || {}).src) : null;
+    if (!ab) return { x, y, w, h: hh };
+    // görsel kutuya "contain" ile oturur: önce görselin kutudaki gerçek yeri, sonra dolu bölgesi
+    let iw = w, ih = w / ab.ratio; if (ih > hh) { ih = hh; iw = hh * ab.ratio; }
+    const ix = x + (w - iw) / 2, iy = y + (hh - ih) / 2;
+    return { x: ix + ab.l * iw, y: iy + ab.t * ih, w: (ab.r - ab.l) * iw, h: (ab.b - ab.t) * ih };
+  }
+  function revealPocket(ctx, a, def, t, begin) {
+    if (!ctx.hasCard || ctx.__cardShown) return false;
+    const pick = P(a, def, "from"), bid = pick && ctx.S[pick] ? pick : (a.layer !== C.CARD_ID && ctx.S[a.layer] ? a.layer : null);
+    const R = bid && pocketRect(ctx, bid), wrap = ctx.cardWrap;
+    if (!R || !wrap) return false;
+    ctx.__cardShown = true;
+    if (C.cardLayersIn) C.cardLayersIn(ctx, begin + t.dur);
+    const { zc, k } = cardPlace(ctx), cs = (ctx.box[C.CARD_ID] && ctx.box[C.CARD_ID].s) || 1;
+    const CW = 300, CH = 520, OX = 50 + CW / 2, OY = 90 + CH / 2;           // kartın sahnedeki yeri (merkez)
+    const fit = Math.max(0.4, Math.min(1, num(P(a, def, "fit"), 72) / 100));
+    const sc = fit * R.w / (CW * cs), ch = CH * cs * sc;                      // zarf içindeki ölçek ve görünen boy
+    const zb = (ctx.S[bid] ? zOf(ctx.S[bid]) : 0) - 1;                        // gövdenin hemen arkası
+    const clipY = R.y + R.h - 2;                                              // gövdenin alt kenarı: aşağı taşan kısım gizlenir
+    const top0 = R.y + R.h * 0.05, rise = Math.min(ch + R.h, ch * Math.max(0.1, num(P(a, def, "amount"), 40) / 100));
+    const outTop = Math.min(top0 - rise, R.y - 6 - ch);                       // tamamen çıktığı yer (alt kenarı zarfın üstünde)
+    const at = (cx, top, z, s2, clip) => {
+      const cy = top + ch / 2, bottom = top + ch;
+      const cut = clip ? Math.max(0, (bottom - clipY) / (cs * s2)) : 0;
+      return { transform: `translate3d(${((cx - OX) / cs).toFixed(2)}px, ${((cy - OY) / cs).toFixed(2)}px, ${z}px) scale(${s2})`,
+        clipPath: clip ? `inset(0px 0px ${cut.toFixed(2)}px 0px)` : "none", opacity: 1 };
+    };
+    const cx = R.x + R.w / 2, stay = P(a, def, "then") === "kalsin";
+    const lead = shadeLead(ctx.cfg);
+    if (lead) {   // zarfın ağzında, gövdenin hemen arkasında (kapağın önünde): üst kenarın üstünde yumuşak bir koyuluk
+      const cw = CW * cs * sc;
+      cardShade(ctx, { cx, cy: R.y + cw * 0.02, w: cw * 1.08, h: cw * 0.34, z: zb - 0.5, round: "50%", peak: 0.6, blur: 9,
+        bg: "radial-gradient(closest-side, rgba(40,28,18,.5), rgba(40,28,18,.2) 60%, rgba(40,28,18,0))" }, begin, lead, t.dur, stay ? 0.6 : 0.4);
+      begin += lead;
+    }
+    // her aşama kendi eğrisiyle, gerçek zamanda: yükselme → kısa bekleme → zarftan çıkış → öne gelme
+    const kf = [
+      Object.assign(at(cx, top0, zb, sc, true), { offset: 0, easing: t.e }),
+      Object.assign(at(cx, top0 - rise, zb, sc, true), { offset: stay ? 1 : 0.4 })
+    ];
+    if (!stay) kf.push(
+      Object.assign(at(cx, top0 - rise, zb, sc, true), { offset: 0.52, easing: EASE.hizlanarak || t.e }),
+      Object.assign(at(cx, outTop, zb, sc, true), { offset: 0.74, easing: "linear" }),
+      Object.assign(at(cx, outTop, zc, sc, false), { offset: 0.741, easing: t.e }),
+      { transform: `translateY(0) translateZ(${zc}px) scale(${k})`, clipPath: "none", opacity: 1, offset: 1 });
+    kf[1].easing = "linear";   // bekleme
+    ctx.anim(wrap, kf, { d: t.dur, delay: begin, e: "linear", fill: "forwards" });
+    ctx.later(begin + t.dur * (stay ? 0.5 : 0.8), () => ctx.sfx("chime"));
+    return true;
+  }
+  registerMove({ id: "card-pocket", group: "kart", label: "İç kartın zarftan çıkması", single: true, duration: 3.2, easing: "yumusak", scene: true, isCard: true,
+    note: "Editördeki iç kart (yazılı kart ya da kart görseli) zarf gövdesinin içinden yükselir; ayrıca kart PNG'si gerekmez. Gövde katmanına uygulayın ya da gövdeyi aşağıdan seçin.",
+    params: [
+      { key: "from", label: "Zarf gövdesi (boşsa bu katman)", type: "layer", def: "" },
+      { key: "amount", label: "İlk yükselme", def: 40, options: [[25, "%25"], [40, "%40"], [55, "%55"], [70, "%70"], [85, "%85"]] },
+      { key: "fit", label: "Kartın zarf içindeki genişliği", def: 72, options: [[60, "%60"], [72, "%72"], [84, "%84"], [95, "%95"]] },
+      { key: "then", label: "Sonra", def: "one", options: [["one", "Zarftan çıkıp öne ve ortaya gelsin"], ["kalsin", "Zarfta yükselmiş kalsın"]] }
+    ],
+    run(ctx, a, def, begin) {
+      const t = timing(a, def);
+      if (!revealPocket(ctx, a, def, t, begin)) revealCard(ctx, "yuksel", t, begin);   // gövde yoksa bugünkü yükselme
+      return t.dur + shadeLead(ctx.cfg);
+    } });
 
   /* =================== A2.2 — MENÜNÜN DEVAMI =================== */
   /* Görseli gerçek parçalarına bölen ortak yardımcı (ızgara). Her parça yalnızca
@@ -713,7 +890,7 @@
   /* Hepsi yalnızca kullanıcının kendi görsel(ler)ini hareket ettirir. Kesen hareketler
      (mühür, kurdele) görselin gerçek parçalarını kullanır; kilit ve gizli görsel ayrı
      katman ister. Anahtar, kilit halkası ve makas isteğe bağlı ayrı katmanlardır. */
-  const OPENERS = ["split-h", "split-v", "hinge", "slide", "quad", "fold", "curtain", "drawer", "page-turn"];
+  const OPENERS = ["split-h", "split-v", "hinge", "slide", "quad", "fold", "curtain", "drawer", "page-turn", "flap-open"];
   function openerFor(ctx, a) {
     const acts = ctx.cfg.actions || [], i = acts.findIndex(x => x.id === a.id);
     const same = x => x.layer === a.layer && OPENERS.includes(x.move);
@@ -748,6 +925,9 @@
         const ax = side === "top" || side === "bottom" ? "rotateX" : "rotateY", sign = side === "right" || side === "top" ? -1 : 1;
         const deg = (ax === "rotateX" ? -sign * ang : sign * ang) * amt;
         go(inner, `${ax}(0deg)`, `${ax}(${deg}deg)`);
+      } else if (tm && tg.move === "flap-open") {
+        // üstten açılış: kapak üst kenarından hafifçe kalkıp geri iner
+        go(inner, "rotateX(0deg)", `rotateX(${Math.round(70 * amt / 0.18)}deg)`);
       } else if (tm && tg.move === "slide") {
         const d = tp("dir"), m = amt * 55;
         go(inner, "translate(0%, 0%)", { left: `translate(${-m}%, 0%)`, right: `translate(${m}%, 0%)`, up: `translate(0%, ${-m}%)`, down: `translate(0%, ${m}%)` }[d] || `translate(${-m}%, 0%)`);
@@ -982,8 +1162,40 @@
     const { zc, k } = cardPlace(ctx), to = `translateY(0) translateZ(${zc}px) scale(${k})`;
     ctx.anim(ctx.cardWrap, [{ opacity: 1, transform: to }, { opacity: 1, transform: to }], { d: 1, delay: begin, fill: "forwards" });
   }
+  /* ZARİF KART GÖLGESİ (isteğe bağlı, varsayılan kapalı): yalnızca zarf açılışlarında (ortadan: split-h /
+     split-v, üstten: flap-open). Kapaklar açıldıktan sonra kartın çıkacağı yerde çok hafif, yumuşak bir gölge
+     belirir; ~0,9 sn "kart geliyor" hissi verir, kart her zamanki hareketiyle gelir, gölge doğal biçimde söner.
+     Yazı/simge yoktur; kartın boyu ve katman sırası değişmez. */
+  const SHADE_MS = 900, SHADE_OPENERS = ["split-h", "split-v", "flap-open"];
+  function shadeLead(cfg) {
+    if (!cfg || !cfg.cardShade) return 0;   // (hafif modda da çalışır: tek, ucuz bir katman)
+    return (cfg.actions || []).some(a => a && SHADE_OPENERS.indexOf(a.move) >= 0) ? SHADE_MS : 0;
+  }
+  // g: gölgenin sahnedeki yeri {cx, cy, w, h, z}; görünür kalma: begin → begin+lead+dur*fadeAt
+  function cardShade(ctx, g, begin, lead, dur, fadeAt) {
+    if (!ctx.frame) return;
+    const sh = h("div", "sc-cardshade", { position: "absolute", left: (g.cx - g.w / 2).toFixed(1) + "px", top: (g.cy - g.h / 2).toFixed(1) + "px", width: g.w.toFixed(1) + "px", height: g.h.toFixed(1) + "px",
+      borderRadius: g.round || "14px", pointerEvents: "none", opacity: "0", transform: `translateZ(${g.z}px)`,
+      background: g.bg || "radial-gradient(closest-side, rgba(40,28,18,.42), rgba(40,28,18,.22) 55%, rgba(40,28,18,0))", filter: `blur(${g.blur || 14}px)` });
+    ctx.frame.appendChild(sh);
+    const total = lead + dur, a = lead / total, f = (lead + dur * fadeAt) / total;
+    ctx.anim(sh, [{ opacity: 0, offset: 0, easing: EASE.yumusak }, { opacity: g.peak || 0.55, offset: a, easing: "linear" }, { opacity: (g.peak || 0.55) * 0.9, offset: Math.min(0.98, a + (f - a) * 0.4), easing: EASE.yumusak }, { opacity: 0, offset: f }, { opacity: 0, offset: 1 }],
+      { d: total, delay: begin, e: "linear", fill: "forwards" });
+  }
   function revealCard(ctx, style, t, begin) {
     if (!ctx.hasCard || ctx.__cardShown) return;
+    const lead = shadeLead(ctx.cfg);
+    if (lead) {
+      const { zc, k } = cardPlace(ctx), cs = (ctx.box[C.CARD_ID] && ctx.box[C.CARD_ID].s) || 1, w = 300 * cs * k, hh = 520 * cs * k;
+      // kartın varacağı yerin hemen altında, biraz aşağı kaymış yumuşak gölge (kartın arkasında)
+      // koyu zeminde (varsayılan sahne) gölge görünmez: aynı yumuşak iz çok hafif, sıcak bir aydınlık olarak düşer
+      const bg = ctx.cfg.bgColor, hasBack = ctx.model && ctx.model.slots && ctx.model.slots.some(x => x.backdrop);
+      const lum = bg ? (() => { const n = parseInt(bg.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; })() : 0;
+      const dark = !hasBack && lum < 0.4;
+      cardShade(ctx, { cx: 200, cy: 350 + hh * (dark ? 0 : 0.035), w: w * (dark ? 0.9 : 0.86), h: hh * (dark ? 0.9 : 0.86), z: zc - 3, round: "22px", peak: 1, blur: dark ? 22 : 18,
+        bg: dark ? "rgba(255,240,222,.05)" : "rgba(38,26,16,.11)" }, begin, lead, t.dur, 0.85);
+      begin += lead;
+    }
     ctx.__cardShown = true;
     if (C.cardLayersIn) C.cardLayersIn(ctx, begin + t.dur);   // kart üzerindeki katmanlar kart göründükten sonra sırayla gelir
     const { zc, k } = cardPlace(ctx);
@@ -1308,7 +1520,7 @@
             const lead = ctx.motion && ctx.hasCard && !cardAct && i === parts.length - 1 ? (end, ref) => {
               const at = cardLeadAt(ctx.motion, end, ref), d = CARD_AUTO_MS(ctx.motion);
               revealCard(ctx, "yuksel", { dur: d, e: cardEase(ctx.motion) }, at);
-              return Math.max(0, at + d - end);
+              return Math.max(0, at + d + shadeLead(ctx.cfg) - end);
             } : null;
             if ((kind === "pull" || kind === "hold") && !autoRun) await runScrubChunk(ctx, parts[i], kind, head.gdir);
             else await runChunk(ctx, parts[i], lead);
@@ -1317,7 +1529,7 @@
           if (!ctx.__cardShown && ctx.hasCard) {
             const t = { dur: CARD_AUTO_MS(ctx.motion), e: cardEase(ctx.motion) };
             revealCard(ctx, "yuksel", t, 0);
-            await ctx.wait(t.dur);
+            await ctx.wait(t.dur + shadeLead(ctx.cfg));
           }
         }
       }]
@@ -1418,6 +1630,7 @@
       cardStart = ref ? cardLeadAt(prof, end0, { begin: ref.begin, used: ref.end - ref.begin }) : end0;
       cardShown = cardStart + CARD_AUTO_MS(prof);
     }
+    if (hasCard) cardShown += shadeLead(ncfg);   // zarif kart gölgesi açıksa kart o kadar sonra yerine oturur
     const dd = entry && entry.cardDisplayDuration;
     const hold = dd === "tap" ? 3000 : Math.max(1, num(dd, 10)) * 1000;
     const end = Math.max(t, cardShown);

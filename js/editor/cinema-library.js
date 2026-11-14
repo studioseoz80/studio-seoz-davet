@@ -50,6 +50,14 @@
       roles: [{ key: "zarf", label: "Zarf görseli", need: true }, { key: "muhur", label: "Mühür görseli", need: true, hint: "Zarfın önünde, ayrı PNG" }], set: { concept: "dugun" },
       acts: [{ role: "zarf", move: "float", start: "with", repeat: 0, duration: 3 }, { role: "muhur", move: "seal", start: "tap", duration: 1.3 },
         { role: "zarf", move: "quad", start: "after", duration: 1.6, params: { style: "don" } }, { role: "zarf", move: "card", start: "with", delay: 0.6, duration: 1.4 }] },
+    { id: "k:ustten-zarf", label: "Üstten açılan zarf", group: "Çok katmanlı", tags: ["dugun", "nisan", "dogumgunu", "sevgililer"],
+      desc: "İki şeffaf PNG: sabit gövde + üst kapak. Kapak üst kenarından geriye katlanır, editörün iç kartı zarftan yükselip öne gelir.",
+      roles: [{ key: "govde", label: "Zarf gövdesi (sabit)", need: true, hint: "Şeffaf PNG; kapaktan önce (altta) yükleyin" },
+        { key: "kapak", label: "Üst kapak (hareketli)", need: true, hint: "Şeffaf PNG; gövdenin üstünde. \"Başka katmana hizala\" ile gövdeye oturtun" },
+        { key: "muhur", label: "Mühür / fiyonk", need: false, hint: "İsteğe bağlı, kapağın önünde" }], set: { concept: "dugun" },
+      acts: [{ role: "muhur", move: "fade-away", start: "tap", duration: 0.7, params: { style: "sol" } },
+        { role: "kapak", move: "flap-open", start: "after", soloStart: "tap", soloOf: "muhur", duration: 1.3 },
+        { role: "govde", move: "card-pocket", start: "after", duration: 3.2, params: { amount: 40 } }] },
     { id: "k:perde", label: "Gala perdesi", group: "Tek görsel", tags: ["mezuniyet", "lansman", "dernek", "kurumsal"],
       desc: "Spot ışıkları sahneyi tarar; dokununca perde iki yana toplanır, konfeti patlar.",
       roles: [Object.assign({}, ANA, { label: "Perde görseli" })], set: { concept: "gala" },
@@ -148,6 +156,7 @@
         easing: t.easing || "", params: {} };
       if (t.repeat != null) a.repeat = t.repeat;
       if (t.gdir) a.gdir = t.gdir;
+      if (t.soloStart && !map[t.soloOf]) a.start = t.soloStart;   // önceki isteğe bağlı adım yoksa (ör. mühür) bu adım dokunuşla başlar
       Object.keys(t.params || {}).forEach(p => {
         const v = t.params[p];
         if (typeof v === "string" && v.charAt(0) === "@") { if (map[v.slice(1)]) a.params[p] = map[v.slice(1)]; }
