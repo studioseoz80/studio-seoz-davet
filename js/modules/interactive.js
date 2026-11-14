@@ -95,8 +95,12 @@
       "<li><b>Herkese Açık</b> ayarında açılan notta ad ve dilek okunur; <b>Kilitli</b> ayarında dilekleri yalnızca siz panelden okursunuz.</li>" +
       "<li><b>Notlarda baş harfler</b>: “Misafir isterse göster” seçiliyse, misafir formda onay verirse baş harfleri notun üstünde görünür.</li>" +
       "<li>Ağaçta aynı anda en fazla 20 not asılı durur; daha fazlası olunca son not “+N” olur ve dokununca tüm dilekler listelenir. Notlar hiçbir ekranda üst üste binmez.</li>" +
-      "<li>Modülü sayfada dikey (yaklaşık 4:5) bir alana yerleştirmeniz önerilir.</li></ol>" },
+      "<li>Modülü sayfada dikey (yaklaşık 4:5) bir alana yerleştirmeniz önerilir.</li>" +
+      "<li><b>Kendi ağacınız</b>: “Ağaç” ayarından <i>Kendi ağaç görselim</i>'i seçip <b>🌳 Ağaç Görseli Yükle</b>'ye dokunun. Şeffaf PNG/WebP yükleyin, boyutunu ve konumunu ayarlayın; dallara dokunarak notların asılacağı noktaları ekleyin (sürükleyerek taşıyın) ya da <i>Dallara otomatik yerleştir</i>'i kullanın.</li>" +
+      "<li>Görseli değiştirseniz de dilekler silinmez; noktaları yeni ağaca göre yeniden yerleştirmeniz yeterli.</li></ol>" },
     { key: "images", type: "image-list", keepAlpha: true, single: true, label: "Ağaç / arka plan görseli (PNG veya WebP — ilk görsel kullanılır)", showIf: s => isTree(s) && !isRibbon(s) },
+    { key: "treeSource", type: "select", label: "Ağaç", showIf: isRibbon, reRenderPanel: true, options: [{ value: "hazir", label: "Hazır altın dallı ağaç" }, { value: "gorsel", label: "Kendi ağaç görselim (şeffaf PNG / WebP)" }] },
+    { key: "_treeEditor", type: "action-button", label: "🌳 Ağaç Görseli Yükle · boyut, konum ve not noktaları", action: "treeEditor", showIf: s => isRibbon(s) && s.treeSource === "gorsel" },
     { key: "images", type: "image-list", keepAlpha: true, single: true, label: "Zemin görseli (isteğe bağlı — ağacın arkasında durur)", showIf: isRibbon },
     { key: "wishIcon", type: "select", label: "Dilek simgesi", showIf: s => isTree(s) && !isRibbon(s), options: [{ value: "yildiz", label: "⭐ Yıldız" }, { value: "balon", label: "🎈 Balon" }, { value: "cicek", label: "🌸 Çiçek" }] },
     { key: "noteInitials", type: "select", label: "Notlarda baş harfler", showIf: isRibbon, options: [{ value: "goster", label: "Misafir isterse göster" }, { value: "gizle", label: "Hiç gösterme" }] },
@@ -1354,12 +1358,58 @@
       <defs><linearGradient id="rtG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A97C2C"/><stop offset=".45" stop-color="#F1D58C"/><stop offset=".7" stop-color="#C79A45"/><stop offset="1" stop-color="#8E6522"/></linearGradient></defs>
       <g fill="none" stroke="url(#rtG)" stroke-linecap="round" stroke-linejoin="round">${out}</g>${leaves}</svg>`;
   }
-  function ribbonView(root, s, stage, onEmpty) {
+  /* KENDİ AĞAÇ GÖRSELİ (treeSource "gorsel"): şeffaf PNG/WebP, 400×500 sahnede "contain" + boyut/konum;
+     notların asılma noktaları (treeSpots: {x, y, r} sahne birimi; r = kurdele boyu) editörde elle ya da
+     otomatik belirlenir. Görsel değişse de noktalar ve dilekler durur (dilekler sunucuda, sıra numarasıyla). */
+  const TREE_MAX_SPOTS = 30, NOTE_GAP = 4;
+  const treeImgOf = s => { const a = Array.isArray(s.treeImg) ? s.treeImg : []; return a[0] && a[0].ref ? a[0] : null; };
+  function treeImgRect(s) {   // görselin sahnedeki yeri (sahne birimi)
+    const im = treeImgOf(s); if (!im) return null;
+    const iw = Number(im.naturalWidth) || 800, ih = Number(im.naturalHeight) || 1000, f = s.treeFit || {};
+    const sc = Math.max(0.2, Math.min(2.5, (Number(f.s) || 100) / 100)), k = Math.min(RT.W / iw, RT.H / ih) * sc;
+    const w = iw * k, hh = ih * k;
+    return { ref: im.ref, x: (RT.W - w) / 2 + (Number(f.x) || 0), y: (RT.H - hh) / 2 + (Number(f.y) || 0), w, h: hh };
+  }
+  // Notun kâğıt kutusu (sahne birimi); kurdele asılma noktasından aşağı iner
+  const noteBox = p => ({ l: p.x - RT.NW / 2, t: p.ay + p.rib - 2, r: p.x + RT.NW / 2, b: p.ay + p.rib - 2 + RT.NH });
+  const boxHit = (a, b, g) => a.l < b.r + g && b.l < a.r + g && a.t < b.b + g && b.t < a.b + g;
+  // Noktaları temizler; sahneden taşan ya da öncekilerle çakışan noktaları ATLAR → misafirde notlar asla üst üste binmez
+  function cleanSpots(list) {
+    const out = [], skip = [];
+    (Array.isArray(list) ? list : []).slice(0, TREE_MAX_SPOTS).forEach((q, i) => {
+      const x = Number(q && q.x), y = Number(q && q.y), r = Math.max(6, Math.min(60, Number(q && q.r) || 16));
+      if (!isFinite(x) || !isFinite(y)) { skip.push(i); return; }
+      const p = { x, ay: y, rib: r, i }, b = noteBox(p);
+      if (b.l < 0 || b.r > RT.W || y < 0 || b.b > RT.H || out.some(o => boxHit(noteBox(o), b, NOTE_GAP))) { skip.push(i); return; }
+      out.push(p);
+    });
+    return { spots: out, skip };
+  }
+  function stepOrder(n) {   // ilk dilekler ağacın her yerine dağılsın
+    const g = (a, b) => b ? g(b, a % b) : a, st = [7, 5, 3, 11, 13, 1].find(k => g(k, n) === 1) || 1;
+    return Array.from({ length: n }, (_, i) => (i * st) % n);
+  }
+  function treeGeom(s) {
+    if (s.treeSource === "gorsel") {
+      const img = treeImgRect(s), c = cleanSpots(s.treeSpots);
+      if (c.spots.length) return { img, spots: c.spots, order: stepOrder(c.spots.length), custom: true };
+      return { img, spots: RT.spots, order: RT.order, custom: true, fallback: true };
+    }
+    return { img: null, spots: RT.spots, order: RT.order, custom: false };
+  }
+
+  function ribbonView(root, s, stage, live) {
     root.classList.add("ix-tree-kurdele");
     const box = el("div", "ix-rt"); stage.appendChild(box); box.style.setProperty("--paper-tex", PAPER_TEX);
-    const ref = refs(s)[0];
+    const ref = refs(s)[0], G = treeGeom(s), SP = G.spots;
     if (ref) { const im = el("img", "ix-rt-bg"); im.alt = ""; im.draggable = false; setImg(im, ref); box.appendChild(im); }
-    box.insertAdjacentHTML("beforeend", ribbonTreeSVG());
+    if (G.custom) {
+      if (G.img) {   // kendi ağaç görseli: oranı korunur (yalnızca boyut ve konum)
+        const im = el("img", "ix-rt-tree"); im.alt = ""; im.draggable = false; setImg(im, G.img.ref);
+        Object.assign(im.style, { left: (G.img.x / RT.W * 100) + "%", top: (G.img.y / RT.H * 100) + "%", width: (G.img.w / RT.W * 100) + "%", height: (G.img.h / RT.H * 100) + "%" });
+        box.appendChild(im);
+      } else if (!live) box.appendChild(el("div", "ix-rt-empty", null, "Ağaç görseli yükleyin"));
+    } else box.insertAdjacentHTML("beforeend", ribbonTreeSVG());
     const layer = el("div", "ix-rt-notes"); box.appendChild(layer);
     const fit = () => {   // 4:5 oranını koru (sahnenin içine sığdır)
       const W = stage.clientWidth, H = stage.clientHeight; if (!W || !H) return;
@@ -1393,24 +1443,23 @@
     // Yerleşim: en yeni notlar ağaçta; tercih edilen yer sıra numarasından (herkes aynı yeri görür), doluysa sıradaki boş yer
     function layout(list) {
       all = list.slice().sort((a, b) => (Number(a.slot) || 0) - (Number(b.slot) || 0));
-      const over = all.length > RT.spots.length, cap = over ? RT.spots.length - 1 : RT.spots.length;
-      const vis = all.slice(-cap), used = new Array(RT.spots.length).fill(false), keep = new Set();
-      if (over) used[RT.spots.length - 1] = true;
+      const N = SP.length, over = all.length > N, cap = over ? Math.max(1, N - 1) : N;
+      const vis = all.slice(-cap), used = new Array(N).fill(false), keep = new Set();
+      if (over) used[N - 1] = true;
       vis.forEach(it => {
-        let o = (Number(it.slot) || 0) % cap, k = RT.order[o];
-        while (used[k]) { o = (o + 1) % RT.order.length; k = RT.order[o]; }
+        let o = (Number(it.slot) || 0) % cap, k = G.order[o % N];
+        while (used[k]) { o = (o + 1) % N; k = G.order[o]; }
         used[k] = true; keep.add(it.id);
         let g = notes.get(it.id); if (!g) { g = noteEl(it.id, Number(it.slot) || 0); layer.appendChild(g); notes.set(it.id, g); }
-        place(g, RT.spots[k]); paint(g, it);
+        place(g, SP[k]); paint(g, it);
       });
       notes.forEach((g, id) => { if (!keep.has(id)) { g.remove(); notes.delete(id); } });
       if (over) {
         if (!more) { more = noteEl("__more", 7); more.classList.add("is-more"); layer.appendChild(more); }
-        place(more, RT.spots[RT.spots.length - 1]);
+        place(more, SP[N - 1]);
         more.querySelector(".ix-note-txt").textContent = "+" + (all.length - cap);
         more.setAttribute("aria-label", IXL("Tüm dilekler ({n})", { n: all.length }));
       } else if (more) { more.remove(); more = null; }
-      if (onEmpty) onEmpty(all.length);
     }
     function drop(id) {   // yeni not: yukarıdan süzülüp kurdelesiyle dala oturur
       const g = notes.get(id); if (!g || reduced()) return;
@@ -1447,7 +1496,7 @@
       setTimeout(() => { try { bg.querySelector(".ix-note-x").focus({ preventScroll: true }); } catch (e) { /* */ } }, 60);
     }
     layer.addEventListener("click", e => { const g = e.target.closest(".ix-note"); if (g) { e.stopPropagation(); openNote(g); } });
-    return { layout, drop, has: id => notes.has(id), items: () => all };
+    return { layout, drop, has: id => notes.has(id), items: () => all, spots: SP };
   }
 
   function treeBuild(root, s, live, ctx) {
@@ -1469,7 +1518,7 @@
     const count = el("span", "ix-tree-count");
     bar.appendChild(btn); bar.appendChild(count); root.appendChild(bar);
     const tip = el("div", "ix-tree-tip"); tip.hidden = true; stage.appendChild(tip);
-    const RV = ribbon ? ribbonView(root, s, stage) : null;
+    const RV = ribbon ? ribbonView(root, s, stage, live) : null;
 
     const shown = new Map();
     const slug = live ? ixSlug() : "", layerId = (ctx && ctx.layerId) || "";
@@ -1510,7 +1559,8 @@
 
     if (!live && RV) {   // editörde örnek notlar
       const ini = ["AK", null, "EY", null, "MS", null, "ZD", null, "BT", null, "CK", null];
-      RV.layout(ini.map((x, i) => ({ id: "ornek" + i, slot: i, initials: x, name: "Örnek misafir", wish: "Örnek dilek" })));
+      const n = s.treeSource === "gorsel" ? RV.spots.length : ini.length;
+      RV.layout(Array.from({ length: n }, (_, i) => ({ id: "ornek" + i, slot: i, initials: ini[i % ini.length], name: "Örnek misafir", wish: "Örnek dilek" })));
       btn.disabled = true; setCount(0);
       return;
     }
@@ -1638,7 +1688,8 @@
     defaultLayerSize: { w: 300, h: 220 },
     settingsSchema: SETTINGS_SCHEMA,
     render: render,
-    panelActions: { studio(layer, h) { if (global.SeozInteractiveStudio) global.SeozInteractiveStudio.open(layer, h); } },
+    panelActions: { studio(layer, h) { if (global.SeozInteractiveStudio) global.SeozInteractiveStudio.open(layer, h); },
+      treeEditor(layer, h) { if (global.SeozWishTreeEditor) global.SeozWishTreeEditor.open(layer, h); } },
     validate: (s) => {
       s = Object.assign({}, DEFAULTS, s);
       if (s.kind === "muhurlu-kart") {
@@ -1652,6 +1703,7 @@
       return null;
     }
   });
+  global.SeozWishTree = { RT, TREE_MAX_SPOTS, NOTE_GAP, noteBox, boxHit, cleanSpots, treeImgRect, treeGeom };
   global.SeozInteractive = { KINDS, NEW_KINDS, wishSpot, sealUnlockMs, HINT, DEFAULTS, STUDIO_KINDS, CUT_DEFAULTS, PART_DEFAULTS, PART_DEFS, MOTION_DEFAULTS, MAIN_PART, FLAME_DEFAULTS,
     partDefault, balloonDefault, placePart, render };
 })(window);
