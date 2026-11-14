@@ -43,3 +43,17 @@
 .is-chip.is-del{ color:#A33A3A; }
 .is-chip[disabled]{ opacity:.5; cursor:default; }
 .is-row input[type=number]{ grid-column:2 / span 2; }
+/* Dilek Ağacı · kendi ağaç görseli editörü */
+.wt-frame{ background:repeating-conic-gradient(#ECE7DB 0 25%, #F5F1E8 0 50%) 0 0 / 18px 18px; }
+.wt-stage{ position:relative; flex:none; transform-origin:50% 50%; background:#FFFDF8; box-shadow:0 0 0 1px #D9CFBC, 0 10px 30px -14px rgba(60,40,20,.35); cursor:crosshair; touch-action:none; user-select:none; }
+.wt-tree{ position:absolute; object-fit:contain; pointer-events:none; }
+.wt-empty{ position:absolute; inset:30% 12%; display:flex; align-items:center; justify-content:center; text-align:center; color:#8A7A5E; font-size:15px; border:2px dashed #D6C9AE; border-radius:14px; }
+.wt-rib{ position:absolute; width:2px; background:#CDB27E; pointer-events:none; }
+.wt-paper{ position:absolute; display:flex; align-items:center; justify-content:center; box-sizing:border-box; background:rgba(251,246,236,.82); border:1.5px solid #C9A45C; border-radius:3px; cursor:grab; font:600 12px/1 "Manrope", sans-serif; color:#8A6A3E; }
+.wt-paper em{ font-style:normal; }
+.wt-dot{ position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#C9A45C; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.35); cursor:grab; }
+.wt-spot.is-sel .wt-dot{ background:#FFD24A; box-shadow:0 0 0 3px rgba(255,210,74,.45), 0 0 0 1px #222; }
+.wt-spot.is-sel .wt-paper{ border-color:#E0A800; box-shadow:0 0 0 2px rgba(255,210,74,.45); }
+.wt-spot.is-bad .wt-paper{ background:rgba(255,226,226,.85); border-color:#C84B4B; color:#B23A3A; }
+.wt-spot.is-bad .wt-dot{ background:#C84B4B; }
+.wt-msg{ background:#FFF7E2; border:1px solid #EBD9A8; border-radius:8px; padding:6px 8px; color:#6B5420; }
