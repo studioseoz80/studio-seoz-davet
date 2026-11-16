@@ -127,7 +127,8 @@
     root.innerHTML = `
       <div class="sp-card">
         <button type="button" class="sp-x" data-sp-close aria-label="Kapat">×</button>
-        <h3>Davetiye yayında 🎉</h3>
+        <h3>${opts.finalInfo ? "Nihai yayın tamamlandı 🎉" : "Davetiye yayında 🎉"}</h3>
+        ${opts.finalInfo ? `<p class="sp-note">✓ Ödeme onayı kaydedildi${opts.finalInfo.closed_previews ? ` · ${Number(opts.finalInfo.closed_previews)} ön izleme bağlantısı kapatıldı` : ""}. Kalıcı bağlantı filigransızdır; aşağıdaki teslimat paketini müşteriye gönderebilirsiniz.</p>` : ""}
         <div class="sp-wa-card sp-hero"><div class="sp-img" data-sp-img></div>
           <div class="sp-txt"><b data-sp-t>${esc(title)}</b><small data-sp-d>${esc(desc)}</small><i>${esc(domain)}</i></div></div>
         <div class="sp-link"><input readonly data-share-url value="${esc(opts.shortUrl)}" data-long="${esc(opts.longUrl)}" aria-label="Davetiye bağlantısı"></div>

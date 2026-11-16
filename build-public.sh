@@ -22,6 +22,9 @@ mkdir -p "$OUT/js" "$OUT/css"
 # olmadan açılırsa yalnızca "davetiyeye işaret etmiyor" mesajı çıkar.
 cp view.html "$OUT/view.html"
 cp view.html "$OUT/index.html"
+# GÜVENLİ ÖN İZLEME: <alan-adı>/onizleme#t=<anahtar> — aynı davetiye sayfası, ön izleme kipinde açılır
+# (js/view-app.js). Kalıcı davetiye bağlantılarından tamamen bağımsızdır.
+cp view.html "$OUT/onizleme.html"
 
 cp css/canvas.css "$OUT/css/canvas.css"
 # Açılış Stüdyosu: sinematik açılış motoru (yalnızca görüntüleme kodu)

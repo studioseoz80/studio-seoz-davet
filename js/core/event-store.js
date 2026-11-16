@@ -34,7 +34,14 @@
     } catch (e) { return String(text || ""); }
   }
 
+  // GÜVENLİ ÖN İZLEME: misafir kayıt fonksiyonları ön izlemede hiç çağrılmaz (sunucu zaten reddeder;
+  // bu yalnızca misafire anlaşılır bilgi vermek içindir).
+  const DEMO_WRITES = ["rsvp_submit", "poll_submit", "wish_tree_add", "memory_register"];
   async function rpc(name, args, asOwner) {
+    if (!asOwner && global.SeozDemoMode && DEMO_WRITES.indexOf(name) >= 0) {
+      if (global.SeozCloudStore && global.SeozCloudStore.demoNotice) global.SeozCloudStore.demoNotice();
+      const e = new Error("demo_readonly"); e.code = "demo_readonly"; throw e;
+    }
     if (!isConfigured()) {
       const e = new Error("not_configured"); e.code = "not_configured"; throw e;
     }
@@ -323,7 +330,10 @@
   }
   const ownerWishPurge = slug => rpc("wish_owner_purge", { p_slug: slug }, true);
 
+  // Studio SEOZ sahip işlemleri (ör. Güvenli Ön İzleme) için aynı güvenli çağrı yolu
+  const ownerRpc = (name, args) => rpc(name, args, true);
   global.SeozEventStore = {
+    ownerRpc,
     sealedCardGet,
     prepareSealedForPublish,
     stripSealed,

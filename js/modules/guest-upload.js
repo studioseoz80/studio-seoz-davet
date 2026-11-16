@@ -241,6 +241,9 @@
 
     btn.addEventListener("click", e => {
       if (uploading) return;
+      if (global.SeozCloudStore && global.SeozCloudStore.isDemo && global.SeozCloudStore.isDemo()) {   // güvenli ön izleme: dosya seçtirilmez, yükleme yok
+        e.preventDefault(); if (global.SeozCloudStore.demoNotice) global.SeozCloudStore.demoNotice(); return;
+      }
       // GÜVENLİK: yalnızca BU modülün kendi uploadUrl değeri kullanılır; başka modüllerin bağlantılarına asla geçilmez.
       if (drive) {
         if (!s.uploadUrl) return;

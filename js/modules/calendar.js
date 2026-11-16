@@ -75,7 +75,15 @@
         { value: "Europe/Amsterdam", label: "Hollanda / Belçika" },
         // ABD Doğu Saati (New York, Charleston, Miami, Atlanta, Boston…): EST −05:00 / EDT −04:00,
         // yaz/kış saati geçişi tarayıcının saat dilimi bilgisiyle otomatik hesaplanır.
-        { value: "America/New_York", label: "America/New_York (ABD Doğu Saati)" }
+        { value: "America/New_York", label: "America/New_York (ABD Doğu Saati)" },
+        // Uluslararası müşteriler (IANA). Yaz/kış saati tarayıcının saat dilimi bilgisiyle otomatik.
+        { value: "Africa/Freetown", label: "Sierra Leone / Freetown – Africa/Freetown (UTC+00:00)" },
+        { value: "America/Los_Angeles", label: "ABD / Los Angeles – America/Los_Angeles" },
+        { value: "America/Chicago", label: "ABD / Chicago – America/Chicago" },
+        { value: "America/Toronto", label: "Kanada / Toronto – America/Toronto" },
+        { value: "Europe/Brussels", label: "Belçika – Europe/Brussels" },
+        { value: "Australia/Sydney", label: "Avustralya / Sydney – Australia/Sydney" },
+        { value: "Asia/Dubai", label: "BAE / Dubai – Asia/Dubai (UTC+04:00)" }
       ]
     },
     { key: "fontFamily", type: "font-select", label: "Buton Fontu" },

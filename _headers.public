@@ -4,3 +4,12 @@
   X-Robots-Tag: noindex, nofollow
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
+
+# Güvenli ön izleme sayfası: önbelleğe alınmaz, başka sitelere adres bilgisi gönderilmez.
+# (Ön izleme anahtarı adresin # kısmındadır; # kısmı zaten sunucuya ve başka sitelere gitmez.)
+/onizleme
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+/onizleme.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer

@@ -495,11 +495,49 @@
     return rows[0].document_data;
   }
 
+  /* ---------------- GÜVENLİ ÖN İZLEME (müşteri demosu) ----------------
+     Ön izleme yayınlanmış bir davetiye DEĞİLDİR: ayrı, korumalı tabloda durur ve yalnızca
+     demo_preview_get(anahtar) ile — sunucu süre/iptal kontrolünü yaptıktan sonra — okunur.
+     Ön izleme sayfası gerçek davetiye adresini (slug) bilmez; modüllere "onizleme_demo" adı verilir
+     (alt çizgi gerçek adreslerde bulunamaz → sunucudaki kayıt fonksiyonları bu adı her zaman reddeder). */
+  const DEMO_SLUG = "onizleme_demo";
+  const isDemo = () => !!global.SeozDemoMode;
+  function demoError() { const e = new Error("demo_readonly"); e.code = "demo_readonly"; return e; }
+  // Ön izlemede gönderim denendiğinde misafire zarif bir bilgi (aynı anda tek bilgi kutusu)
+  function demoNotice() {
+    if (!global.document) return;
+    const I = global.SeozInviteI18n, msg = I ? I.L("Bu bir ön izlemedir — gönderim ve kayıt yapılmaz.") : "Bu bir ön izlemedir — gönderim ve kayıt yapılmaz.";
+    let el = document.querySelector(".seoz-demo-toast");
+    if (!el) { el = document.createElement("div"); el.className = "seoz-demo-toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = msg; el.classList.add("show");
+    clearTimeout(el.__t); el.__t = setTimeout(() => el.classList.remove("show"), 3200);
+  }
+  async function loadDemoPreview(token) {
+    if (!isConfigured()) throw new Error("Supabase yapılandırılmamış.");
+    const res = await fetchWithTimeout(`${baseUrl()}/rest/v1/rpc/demo_preview_get`, {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ p_token: String(token || "") })
+    }, 20000);
+    if (!res.ok) throw new Error(await errorText(res));
+    return res.json();
+  }
+  // Ön izleme kopyasının medyası: gerçek davetiye adresinden BAĞIMSIZ bir klasöre yüklenir (adres sızmaz).
+  async function uploadSnapshotMedia(snapshot, folder, onProgress) {
+    const progress = typeof onProgress === "function" ? onProgress : () => {};
+    const refs = Array.from(collectRefs(snapshot, new Set())), map = new Map(), cache = readAssetCache();
+    for (let i = 0; i < refs.length; i++) {
+      const label = `Medya yükleniyor (${i + 1}/${refs.length})`;
+      progress(label + "...");
+      map.set(refs[i], await uploadRef(refs[i], folder, cache, (k, n) => progress(`${label} · yeniden deneniyor (${k}/${n})...`)));
+    }
+    return replaceRefs(snapshot, map);
+  }
+
   /* ---------------- GÖRÜŞ BİLDİR (ziyaretçi) ----------------
      Ziyaretçi yalnızca anon anahtarla kayıt EKLER; return=minimal
      sayesinde tabloyu okuma izni gerekmez (ve verilmez). */
   const FEEDBACK_TABLE = "feedback_submissions";
   async function insertFeedback(row) {
+    if (isDemo()) throw demoError();   // ön izleme: kayıt yok
     if (!isConfigured()) throw new Error("Supabase yapılandırılmamış.");
     const clip = (v, n) => (v == null ? null : String(v).slice(0, n));
     const body = {
@@ -522,17 +560,23 @@
   // Açık davetiyenin slug'ı: view.html?slug=... (eski) ya da kısa bağlantı alan-adı/<slug>.
   // Modüller (Katılım Formu, Görüş Bildir, Anı Yükle, Anket) bunu kullanır.
   function currentSlug() {
+    if (isDemo()) return DEMO_SLUG;
     try {
       const q = new URLSearchParams(global.location.search);
       if (q.get("slug")) return q.get("slug");
       if (q.get("doc")) return "";
       const m = global.location.pathname.toLowerCase().match(/^\/([a-z0-9][a-z0-9-]{1,78}[a-z0-9])\/?$/);
-      return m && ["view", "index", "panel", "album", "anket", "anket-panel", "anket-sonuc"].indexOf(m[1]) < 0 ? m[1] : "";
+      return m && ["view", "index", "panel", "album", "anket", "anket-panel", "anket-sonuc", "onizleme"].indexOf(m[1]) < 0 ? m[1] : "";
     } catch (e) { return ""; }
   }
 
   global.SeozCloudStore = {
     currentSlug,
+    isDemo,
+    demoNotice,
+    demoError,
+    loadDemoPreview,
+    uploadSnapshotMedia,
     // KATILIM SİSTEMİ (event-store.js) sahip işlemleri için mevcut oturumu
     // kullanır. Yalnızca dışarıya açıldı; davranışı değişmedi.
     getAccessToken,

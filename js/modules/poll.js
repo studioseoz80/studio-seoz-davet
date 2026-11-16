@@ -213,6 +213,8 @@
     return lines.join("\n");
   }
 
+  const inDemo = () => !!(global.SeozCloudStore && global.SeozCloudStore.isDemo && global.SeozCloudStore.isDemo());   // güvenli ön izleme: gönderim yok
+  const demoNotice = () => { if (global.SeozCloudStore && global.SeozCloudStore.demoNotice) global.SeozCloudStore.demoNotice(); };
   function openWhatsApp(number, message) {
     const clean = String(number || "").replace(/[^0-9]/g, "");
     const url = `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
@@ -515,6 +517,7 @@
 
       const participantName = nameInput ? nameInput.value.trim() : "";
       const commentValues = commentInputs.map(c => ({ title: c.title, value: c.el.value.trim() }));
+      if (inDemo()) { demoNotice(); showStatus(L("Bu bir ön izlemedir — gönderim ve kayıt yapılmaz."), false); return; }
 
       // WHATSAPP — form kilitlenmez: katılımcı WhatsApp'ı kapatıp
       // göndermezse tekrar deneyebilsin.

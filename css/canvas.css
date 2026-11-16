@@ -274,3 +274,23 @@
 .seoz-entry-nat .seoz-entry-card-inline.leaving{ transition: transform .5s cubic-bezier(.55,.06,.68,.19), opacity .45s ease; }
 .seoz-entry-nat .seoz-entry-wing{ transition: transform 2.2s cubic-bezier(.45,.05,.25,1); }
 .seoz-entry-nat .seoz-entry-hint{ animation-timing-function: cubic-bezier(.37,0,.63,1); }
+
+/* =============================================================================
+   GÜVENLİ ÖN İZLEME (yalnızca /onizleme sayfası — normal davetiyede bu öğeler hiç oluşmaz)
+   Filigran tasarımı ve animasyonları kapatmaz: yarı saydam, dokunuşları geçirir (pointer-events:none).
+   Güvenlik filigrana DAYANMAZ: süre/iptal sunucuda denetlenir, kayıt işlemleri sunucuda reddedilir.
+   ============================================================================= */
+.seoz-demo-wm{ position:fixed; inset:0; z-index:2147483600; pointer-events:none; overflow:hidden; user-select:none; -webkit-user-select:none; }
+.seoz-demo-wm-grid{ position:absolute; left:-50%; top:-50%; width:200%; height:200%; display:flex; flex-wrap:wrap; align-content:space-around; justify-content:space-around;
+  gap:9vh 14vw; transform:rotate(-24deg); }
+.seoz-demo-wm-grid span{ font:600 clamp(12px, 3.4vw, 19px)/1 "Manrope", system-ui, sans-serif; letter-spacing:.32em; white-space:nowrap;
+  color:rgba(255,255,255,.24); text-shadow:0 0 1px rgba(40,30,20,.32), 0 0 10px rgba(40,30,20,.06); }
+.seoz-demo-chip{ position:fixed; left:50%; top:max(10px, env(safe-area-inset-top)); transform:translateX(-50%); z-index:2147483601; pointer-events:none;
+  padding:6px 14px; border-radius:999px; background:rgba(28,22,16,.62); color:#fff; font:600 11px/1.2 "Manrope", system-ui, sans-serif; letter-spacing:.06em;
+  -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); max-width:calc(100vw - 32px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.seoz-demo-toast{ position:fixed; left:50%; bottom:max(18px, env(safe-area-inset-bottom)); transform:translate(-50%, 16px); z-index:2147483602; opacity:0; pointer-events:none;
+  padding:10px 16px; border-radius:12px; background:rgba(28,22,16,.88); color:#fff; font:500 13px/1.4 "Manrope", system-ui, sans-serif; text-align:center;
+  max-width:calc(100vw - 32px); box-shadow:0 8px 24px rgba(0,0,0,.25); transition:opacity .25s ease, transform .25s ease; }
+.seoz-demo-toast.show{ opacity:1; transform:translate(-50%, 0); }
+.view-message-en{ margin-top:14px; font-size:.86em; opacity:.75; }
+@media print{ .seoz-demo-wm{ position:absolute; } }

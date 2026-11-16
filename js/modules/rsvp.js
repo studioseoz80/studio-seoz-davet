@@ -83,6 +83,8 @@
     const cleanNumber = (number || "").replace(/[^0-9]/g, "");
     return `https://wa.me/${cleanNumber}?text=${encodeURIComponent(message || "")}`;
   }
+  const inDemo = () => !!(global.SeozCloudStore && global.SeozCloudStore.isDemo && global.SeozCloudStore.isDemo());   // güvenli ön izleme: gönderim yok
+  const demoNotice = () => { if (global.SeozCloudStore && global.SeozCloudStore.demoNotice) global.SeozCloudStore.demoNotice(); };
 
   function styledButton(s, text) {
     const btn = document.createElement("button");
@@ -149,6 +151,7 @@
       const btn = styledButton(s, s.buttonText || L("Katılım Bildir"));
       setDisabledIfEmpty(btn, !!s.whatsappNumber);
       btn.addEventListener("click", () => {
+        if (inDemo()) return demoNotice();
         if (!s.whatsappNumber) return;
         const url = buildWhatsAppUrl(s.whatsappNumber, L("Merhaba, davetinize katılıyorum."));
         window.open(url, "_blank", "noopener");
@@ -160,6 +163,7 @@
       const btn = styledButton(s, s.buttonText || L("Katılım Bildir"));
       setDisabledIfEmpty(btn, !!s.googleFormUrl);
       btn.addEventListener("click", () => {
+        if (inDemo()) return demoNotice();
         if (!s.googleFormUrl) return;
         window.open(s.googleFormUrl, "_blank", "noopener");
       });
@@ -178,6 +182,7 @@
       const acceptBtn = styledButton(s, s.acceptButtonText || L("Katılıyorum"));
       setDisabledIfEmpty(acceptBtn, hasNumber);
       acceptBtn.addEventListener("click", () => {
+        if (inDemo()) return demoNotice();
         if (!s.whatsappNumber) return;
         window.open(buildWhatsAppUrl(s.whatsappNumber, s.acceptMessage), "_blank", "noopener");
       });
@@ -188,6 +193,7 @@
       declineBtn.style.color = s.bgColor;
       setDisabledIfEmpty(declineBtn, hasNumber);
       declineBtn.addEventListener("click", () => {
+        if (inDemo()) return demoNotice();
         if (!s.whatsappNumber) return;
         window.open(buildWhatsAppUrl(s.whatsappNumber, s.declineMessage), "_blank", "noopener");
       });

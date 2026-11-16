@@ -301,7 +301,8 @@
     limit_reached: "Bu form için yanıt sınırına ulaşıldı.",
     rejected: "Yanıt gönderilemedi.",
     payload_too_large: "Yanıt çok uzun. Lütfen kısaltıp tekrar deneyin.",
-    not_configured: "Katılım formu şu anda kullanılamıyor."
+    not_configured: "Katılım formu şu anda kullanılamıyor.",
+    demo_readonly: "Bu bir ön izlemedir — gönderim ve kayıt yapılmaz."
   };   // gösterilirken L() ile çevrilir
 
   /* Yerel (tarayıcı) kontrolü — sunucu da aynı kuralları ayrıca uygular. */
@@ -615,6 +616,10 @@
       }
       if (mode === "edit") { st.wasUpdate = !!st.own; st.phase = "done"; st.status = ""; repaint(); return; }
       if (!live) { st.status = L("Bu form yalnızca yayınlanmış davetiye bağlantısında yanıt alır."); st.statusErr = true; repaint(); return; }
+      if (global.SeozCloudStore && global.SeozCloudStore.isDemo && global.SeozCloudStore.isDemo()) {   // güvenli ön izleme: yanıt gönderilmez
+        if (global.SeozCloudStore.demoNotice) global.SeozCloudStore.demoNotice();
+        st.status = L("Bu bir ön izlemedir — gönderim ve kayıt yapılmaz."); st.statusErr = false; repaint(); return;
+      }
 
       const ps = partySize(st, s, questions);
       const answers = {};

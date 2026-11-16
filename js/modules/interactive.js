@@ -67,7 +67,12 @@
     { value: "America/Los_Angeles", label: "🇺🇸 Amerika / Los Angeles (Batı) – America/Los_Angeles" },
     { value: "Europe/Berlin", label: "🇩🇪 Almanya – Europe/Berlin" },
     { value: "Europe/Amsterdam", label: "🇳🇱 Hollanda – Europe/Amsterdam" },
-    { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" }
+    { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" },
+    { value: "Africa/Freetown", label: "🇸🇱 Sierra Leone / Freetown – Africa/Freetown (UTC+00:00)" },
+    { value: "Europe/London", label: "🇬🇧 İngiltere / Londra – Europe/London (UTC+00:00, yaz saatinde UTC+01:00)" },
+    { value: "America/Toronto", label: "🇨🇦 Kanada / Toronto – America/Toronto" },
+    { value: "Australia/Sydney", label: "🇦🇺 Avustralya / Sydney – Australia/Sydney" },
+    { value: "Asia/Dubai", label: "🇦🇪 BAE / Dubai – Asia/Dubai (UTC+04:00)" }
   ];
   const isSeal = s => s.kind === "muhurlu-kart", isTree = s => s.kind === "dilek-agaci", isOld = s => !isNew(s);
   const isRibbon = s => isTree(s) && s.wishStyle === "kurdele";
@@ -1300,6 +1305,7 @@
     return { x: Math.max(6, Math.min(94, 50 + 41 * r * Math.cos(a) + lap * 2.2)), y: Math.max(6, Math.min(70, 37 + 30 * r * Math.sin(a) + lap * 1.6)) };
   }
   const WISH_ERR = {   // (cihaz kodları önce: "device_slow_down" içinde "slow_down" da geçer)
+    demo_readonly: "Bu bir ön izlemedir — gönderim ve kayıt yapılmaz.",
     device_slow_down: "Kısa sürede çok fazla dilek gönderdiniz; lütfen biraz sonra tekrar deneyin.",
     device_limit: "Bu cihazdan bu ağaca bırakılabilecek dilek sayısına ulaşıldı.",
     name_required: "Lütfen adınızı yazın.", wish_required: "Lütfen dileğinizi yazın.", name_too_long: "Ad en fazla 60 karakter olabilir.",

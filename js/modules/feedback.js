@@ -166,7 +166,11 @@
     }).then(() => ({ sent: true })).catch(() => ({ sent: false }));
   }
 
+  // GÜVENLİ ÖN İZLEME: görünüm aynen, gönderim yok (sunucu da reddeder; bu yalnızca misafire bilgi)
+  const inDemo = () => !!(global.SeozCloudStore && global.SeozCloudStore.isDemo && global.SeozCloudStore.isDemo());
+  const DEMO_MSG = "Bu bir ön izlemedir — gönderim ve kayıt yapılmaz.";
   function openUrl(url) {
+    if (inDemo()) { if (global.SeozCloudStore.demoNotice) global.SeozCloudStore.demoNotice(); return; }
     // DÜZELTME: eskiden window.open boş dönünce (açılır pencere engeli, uygulama içi tarayıcı)
     // davetiyenin KENDİSİ WhatsApp'a yönlendiriliyordu. Artık bağlantı yalnızca yeni sekmede
     // açılır; davetiye olduğu yerde kalır (Hediye Listesi ile aynı yöntem).
@@ -411,6 +415,7 @@
       if (consentBox && !consentBox.checked) return showStatus(L("Devam etmek için onay kutusunu işaretleyin."), true);
 
       if (trap.value) { submitted = true; lock(); showStatus(s.successMessage, false); return; }
+      if (inDemo()) return showStatus(L(DEMO_MSG), false);
 
       if (s.sendMethod === "whatsapp") {
         if (!digits(s.fbWhatsappNumber)) return showStatus(L("WhatsApp numarası tanımlanmamış."), true);

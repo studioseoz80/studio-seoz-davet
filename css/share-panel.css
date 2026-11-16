@@ -55,3 +55,14 @@
 .sp-confirm-box h4{ margin:0 0 8px; color:#9A2E22; }
 .sp-confirm-txt{ font-weight:700; color:#3A2220; line-height:1.45; margin:0 0 8px; }
 .sp-confirm-box label{ display:flex; flex-direction:column; gap:4px; margin:10px 0; } .sp-confirm-box input{ font:inherit; padding:8px 10px; border:1px solid #DDD5C4; border-radius:8px; }
+/* Güvenli Ön İzleme / Nihai Yayına Al pencereleri (demo-panel.js) */
+.dp-new{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 4px; }
+.dp-new label{ font-size:.82rem; display:flex; gap:6px; align-items:center; } .dp-new select{ padding:6px 8px; border:1px solid #DDD5C4; border-radius:8px; }
+.dp-msg{ background:#FFF7E2; border:1px solid #EBD9A8; border-radius:8px; padding:7px 9px; color:#6B5420; }
+.dp-item{ border:1px solid #E7DECD; border-radius:12px; padding:10px 12px; margin:8px 0; background:#fff; }
+.dp-item.dp-on{ border-color:#C9A45C; } .dp-item.dp-exp, .dp-item.dp-rev, .dp-item.dp-fin{ opacity:.8; background:#F6F3EC; }
+.dp-row{ display:flex; flex-direction:column; gap:2px; margin-bottom:6px; } .dp-row small{ color:#7A7466; font-size:.74rem; }
+.dp-on .dp-state{ color:#5B7A2E; } .dp-exp .dp-state, .dp-rev .dp-state{ color:#9A4A2A; } .dp-fin .dp-state{ color:#6B6455; }
+.dp-acts{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; } .dp-danger{ color:#9A4A2A; border-color:#E2C2B6; }
+.dp-check{ display:flex; gap:10px; align-items:flex-start; margin:12px 0 8px; font-size:.88rem; line-height:1.4; } .dp-check input{ margin-top:3px; width:18px; height:18px; }
+.dp-note-in{ display:flex; flex-direction:column; gap:4px; font-size:.8rem; color:#6B6455; margin-bottom:10px; } .dp-note-in input{ padding:9px 10px; border:1px solid #DDD5C4; border-radius:10px; }

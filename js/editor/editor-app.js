@@ -68,6 +68,8 @@
           <button class="btn btn-outline" data-export>JSON Dışa Aktar</button>
           <button class="btn btn-outline" data-export-package>Yayın Paketi İndir (.zip)</button>
           <button class="btn btn-outline" data-cloud-auth style="display:none;" title="Yayın için Supabase girişi"></button>
+          <button class="btn btn-outline" data-demo title="Müşteriye filigranlı, süreli (varsayılan 7 gün) ön izleme bağlantısı — kalıcı davetiye yayınlanmaz">🔒 Güvenli Ön İzleme Oluştur</button>
+          <button class="btn btn-outline" data-final-publish title="Ödeme onaylandıktan sonra: filigransız kalıcı yayın + teslimat (yönetici onayı gerekir)">Nihai Yayına Al</button>
           <button class="btn btn-gold" data-publish>Yayına Hazırla</button>
         </div>
 
@@ -913,7 +915,14 @@
     });
     updateCloudAuthButton();
 
-    appRoot.querySelector("[data-publish]").addEventListener("click", () => {
+    // GÜVENLİ ÖN İZLEME / NİHAİ YAYIN (bkz. js/editor/demo-panel.js). Supabase ayarlı değilse düğmeler gizli.
+    const demoBtn = appRoot.querySelector("[data-demo]"), finalBtn = appRoot.querySelector("[data-final-publish]");
+    if (typeof SeozDemoPanel === "undefined" || !SeozPublish.isCloudConfigured()) { demoBtn.style.display = "none"; finalBtn.style.display = "none"; }
+    demoBtn.addEventListener("click", () => SeozDemoPanel.open(doc));
+    finalBtn.addEventListener("click", () => SeozDemoPanel.openFinal(doc, note => runPublish({ final: { note } })));
+
+    // opts.final: { note } → "Nihai Yayına Al" (yönetici ödeme onayı verdi). Yoksa mevcut "Yayına Hazırla" aynen.
+    const runPublish = (opts) => {
       const doPublish = () => {
         // 1) MEVCUT YEREL YAYIN — değişmedi.
         try {
@@ -1014,9 +1023,25 @@
               return result;
             }).catch(err => { if (trees.length) console.warn("[Studio SEOZ] Dilek sayısı alınamadı:", err); return result; });
           })
+          // NİHAİ YAYINA AL: yayın ve teslimat hazırlığı başarılı → ödeme onayı kaydı + açık ön izlemeler kapanır.
+          // Bu adım başarısız olsa bile yayın geçerlidir; yalnızca uyarı verilir.
+          .then(result => {
+            if (!opts || !opts.final || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerRpc) return result;
+            btn.textContent = "Nihai yayın kaydediliyor...";
+            return SeozEventStore.ownerRpc("demo_owner_finalize", { p_doc_id: doc.id, p_slug: result.slug, p_note: opts.final.note || "", p_confirm: true })
+              .then(r => { result.finalInfo = r || { ok: true }; return result; })
+              .catch(err => {
+                console.error("[Studio SEOZ] Nihai yayın kaydı yapılamadı:", err);
+                const code = String((err && (err.code || err.message)) || "");
+                alert("Davetiye yayınlandı ve teslimat hazırlandı, ancak nihai yayın (ödeme onayı) kaydı yapılamadı:\n\n" +
+                  (code === "AUTH_REQUIRED" ? "Studio SEOZ girişi gerekli (☁ Giriş Yap)." : /PGRST202|Could not find/i.test(code) ? "Supabase'de güvenli ön izleme kurulmamış (supabase/guvenli-onizleme.sql çalıştırılmalı)." : code) +
+                  "\n\nAçık ön izleme bağlantıları kapatılmadı; gerekirse Güvenli Ön İzleme penceresinden elle iptal edin.");
+                return result;
+              });
+          })
           .then(result => {
             const shortLink = result.shortUrl || result.url;
-            showToast("Yayınlandı. Müşteri bağlantısı: " + shortLink);
+            showToast((result.finalInfo ? "Nihai yayın tamamlandı. " : "Yayınlandı. ") + "Müşteri bağlantısı: " + shortLink);
             // KATILIM FORMU (Faz B): müşteriye özel panel linki aynı pencerede gösterilir.
             let panelLink = null, panelMissing = false;
             if (result.attendanceSynced && typeof SeozEventStore !== "undefined") {
@@ -1030,6 +1055,7 @@
               return SeozPublish.publishToCloud(doc.id, () => {});
             };
             SeozSharePanel.show({
+              finalInfo: result.finalInfo || null,
               doc, shortUrl: shortLink, longUrl: result.url, panelUrl: panelLink, panelMissing,
               albumUrl: result.albumUrl, albumMissing: result.albumMissing, albumInfo: result.albumInfo, slug: result.slug,
               // TESLİMAT PAKETİ: davetiye + (varsa) anı albümü + (varsa) katılım paneli tek sayfada
@@ -1105,7 +1131,8 @@
         const pb = appRoot.querySelector("[data-publish]"); pb.disabled = true;
         SeozSharePanel.prepare(doc).catch(() => {}).then(() => { pb.disabled = false; doPublish(); });
       } else doPublish();
-    });
+    };
+    appRoot.querySelector("[data-publish]").addEventListener("click", () => runPublish());
 
     /* ---------------- İLK ÇİZİM ---------------- */
     fullCanvasRender();
