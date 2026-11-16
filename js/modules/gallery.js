@@ -424,7 +424,7 @@
     return outer;
   }
 
-  /* HIZLI AÇILIŞ: yayında galeri görselleri, galeri ekrana yaklaşınca (≈ 1 ekran önce) yüklenir; küçültülmüş
+  /* HIZLI AÇILIŞ: yayında galeri görselleri, galeri ekrana yaklaşınca (≈ 400 px önce) yüklenir; küçültülmüş
      kopyası (core/fast-boot.js) varsa o kullanılır. Editörde hemen yüklenir (eskisi gibi). */
   let G = { add: (img, url) => { img.src = url; }, watch: () => {} };
   function render(settings, mode) {

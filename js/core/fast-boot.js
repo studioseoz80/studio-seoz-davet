@@ -136,7 +136,7 @@
     try { const el = global.document.getElementById("seoz-doc"); if (el && el.hasAttribute("data-base")) preloadModules(doc, el.getAttribute("data-base")); } catch (e) { /* önemsiz */ }
   }
 
-  /* Aşağıdaki bölümler (galeri vb.): görseller bölüm ekrana yaklaşınca (≈ 1 ekran önce) yüklenir.
+  /* Aşağıdaki bölümler (galeri vb.): görseller bölüm ekrana yaklaşınca (≈ 400 px önce) yüklenir.
      lazy=false (editör) ya da tarayıcı desteklemiyorsa hemen yüklenir. */
   function gate(lazy) {
     const items = [];
@@ -149,7 +149,7 @@
           if (!es.some(e => e.isIntersecting)) return;
           io.disconnect(); open = true;
           items.splice(0).forEach(a => apply(a[0], a[1], a[2]));
-        }, { rootMargin: "900px 0px 900px 0px" });
+        }, { rootMargin: "400px 0px 400px 0px" });
         io.observe(el);
       }
     };
