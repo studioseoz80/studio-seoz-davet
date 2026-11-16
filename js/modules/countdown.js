@@ -35,7 +35,9 @@
     { value: "America/Los_Angeles", label: "🇺🇸 Amerika / Los Angeles (Batı) – America/Los_Angeles" },
     { value: "Europe/Berlin", label: "🇩🇪 Almanya – Europe/Berlin" },
     { value: "Europe/Amsterdam", label: "🇳🇱 Hollanda – Europe/Amsterdam" },
-    { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" }
+    { value: "Europe/Brussels", label: "🇧🇪 Belçika – Europe/Brussels" },
+    { value: "Africa/Freetown", label: "🇸🇱 Sierra Leone / Freetown – Africa/Freetown (UTC+00:00)" },
+    { value: "Europe/London", label: "🇬🇧 İngiltere / Londra – Europe/London (UTC+00:00, yaz saatinde UTC+01:00)" }
   ];
   const NEW_LAYER_TIMEZONE = "Europe/Istanbul";
 
