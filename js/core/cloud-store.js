@@ -308,18 +308,39 @@
     return safeLocalGet(SLUG_PREFIX + docId);
   }
 
+  /* GÜVENLİ OKUMA (supabase/guvenli-okuma.sql): sunucu fonksiyonu çağrısı. Fonksiyon henüz kurulu değilse
+     { missing: true } döner — çağıran eski yola düşer. Diğer hatalar olduğu gibi döner (sessizce yutulmaz). */
+  async function rpcCall(name, args, owner, ms) {
+    const headers = owner ? await writeHeaders({ "Content-Type": "application/json" }) : authHeaders({ "Content-Type": "application/json" });
+    const res = await fetchRetry(`${baseUrl()}/rest/v1/rpc/${name}`, { method: "POST", headers, body: JSON.stringify(args || {}) }, ms || 20000);
+    if (res.ok) return { ok: true, data: await res.json() };
+    const detail = await errorText(res);
+    const missing = res.status === 404 && /PGRST202|could not find the function|schema cache/i.test(detail || "");
+    return { ok: false, status: res.status, detail, missing };
+  }
+
+  // Bu bağlantı adı dolu mu? Yalnızca Studio SEOZ hesabı sorabilir (sunucu denetler). Hata olursa
+  // "boş" VARSAYILMAZ: hata fırlar, davetiye yayınlanmaz (başka bir davetiyenin üzerine yazma riski yok).
   async function slugExists(slug) {
+    const r = await rpcCall("invitation_slug_taken", { p_slug: slug }, true);
+    if (r.ok) return r.data === true;
+    if (!r.missing) {
+      if (isPermissionError(r.status, r.detail)) throw authRequiredError(r.detail);
+      throw new Error("Slug kontrolü yapılamadı: " + r.detail);
+    }
     const url = `${baseUrl()}/rest/v1/${TABLE}?slug=eq.${encodeURIComponent(slug)}&select=slug&limit=1`;
-    const res = await fetchRetry(url, { headers: authHeaders() }, 20000);
+    const res = await fetchRetry(url, { headers: await writeHeaders() }, 20000);
     if (!res.ok) throw new Error("Slug kontrolü yapılamadı: " + await errorText(res));
     const rows = await res.json();
     return Array.isArray(rows) && rows.length > 0;
   }
 
+  const newSlugs = new Set();   // bu oturumda yeni üretilen bağlantılar (ilk yayın "yalnızca yeni kayıt" kipinde yapılır)
   // Belgenin kalıcı slug'ı: varsa aynısı, yoksa yeni ve BENZERSİZ olanı.
   async function ensureSlug(doc) {
     const existing = getSlug(doc.id);
     if (existing) return existing;
+    newSlugs.add(doc.id);
     const base = slugifyTitle(doc.meta && doc.meta.title);
     for (let attempt = 0; attempt < 5; attempt++) {
       const candidate = base + "-" + randomSuffix(6);
@@ -441,19 +462,33 @@
 
     progress("Davetiye kaydediliyor...");
     const documentData = replaceRefs(snapshot, map);
-    const res = await fetchRetry(`${baseUrl()}/rest/v1/${TABLE}?on_conflict=slug`, {
-      method: "POST",
-      headers: await writeHeaders({
-        "Content-Type": "application/json",
-        // Aynı slug varsa YENİ satır açılmaz, mevcut satır güncellenir.
-        Prefer: "resolution=merge-duplicates,return=minimal"
-      }),
-      body: JSON.stringify({ slug: slug, document_data: documentData })
-    }, 60000, (k, n) => progress(`Davetiye kaydediliyor · bağlantı koptu, yeniden deneniyor (${k}/${n})...`));
-    if (!res.ok) {
-      const detail = await errorText(res);
-      if (isPermissionError(res.status, detail)) throw authRequiredError(detail);
-      throw new Error("Davetiye kaydedilemedi: " + detail);
+    // GÜVENLİ YAYIN: sunucu fonksiyonu sahibi doğrular ve bağlantı adının BU davetiyeye ait olduğunu denetler;
+    // başka bir davetiyenin kaydının üzerine yazmaz. Fonksiyon henüz kurulu değilse eski yöntem kullanılır.
+    const pub = await rpcCall("invitation_owner_publish", {
+      p_slug: slug, p_doc: documentData, p_doc_id: String(documentData.id || ""), p_mode: newSlugs.has(snapshot.id) ? "create" : "any"
+    }, true, 60000);
+    if (pub.ok) newSlugs.delete(snapshot.id);
+    else if (!pub.missing) {
+      if (isPermissionError(pub.status, pub.detail)) throw authRequiredError(pub.detail);
+      if (/slug_belongs_to_other_invitation/.test(pub.detail)) throw new Error("Bu bağlantı adı (" + slug + ") başka bir davetiyeye ait. Güvenlik için üzerine yazılmadı; hiçbir davetiye değişmedi. Davetiyeyi yeni bir bağlantıyla yayınlamak için bana (Studio SEOZ) bildirin.");
+      if (/slug_taken/.test(pub.detail)) throw new Error("Bu bağlantı adı az önce başka bir davetiyeye verildi. Lütfen tekrar \"Yayına Hazırla\"ya basın.");
+      if (/document_id_mismatch|invalid_document/.test(pub.detail)) throw new Error("Davetiye kaydedilemedi: davetiye verisi eksik (kimlik bulunamadı).");
+      throw new Error("Davetiye kaydedilemedi: " + pub.detail);
+    } else {
+      const res = await fetchRetry(`${baseUrl()}/rest/v1/${TABLE}?on_conflict=slug`, {
+        method: "POST",
+        headers: await writeHeaders({
+          "Content-Type": "application/json",
+          // Aynı slug varsa YENİ satır açılmaz, mevcut satır güncellenir.
+          Prefer: "resolution=merge-duplicates,return=minimal"
+        }),
+        body: JSON.stringify({ slug: slug, document_data: documentData })
+      }, 60000, (k, n) => progress(`Davetiye kaydediliyor · bağlantı koptu, yeniden deneniyor (${k}/${n})...`));
+      if (!res.ok) {
+        const detail = await errorText(res);
+        if (isPermissionError(res.status, detail)) throw authRequiredError(detail);
+        throw new Error("Davetiye kaydedilemedi: " + detail);
+      }
     }
 
     return { slug: slug, url: customerUrl(slug), shortUrl: shortUrl(slug), mediaCount: refs.length };
@@ -487,6 +522,14 @@
   async function loadPublishedBySlug(slug) {
     if (!isConfigured()) throw new Error("Supabase yapılandırılmamış.");
     if (!SLUG_RE.test(String(slug || ""))) return null;
+    // GÜVENLİ OKUMA: yalnızca bu davetiye, sunucu fonksiyonuyla (tablo listelenemez). Fonksiyon henüz
+    // kurulu değilse eski tablo okumasına düşülür.
+    const r = await fetchWithTimeout(`${baseUrl()}/rest/v1/rpc/invitation_get`, {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ p_slug: slug })
+    }, 20000);
+    if (r.ok) { const d = await r.json(); return d && typeof d === "object" ? d : null; }
+    const detail = await errorText(r);
+    if (!(r.status === 404 && /PGRST202|could not find the function|schema cache/i.test(detail || ""))) throw new Error(detail);
     const url = `${baseUrl()}/rest/v1/${TABLE}?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`;
     const res = await fetchWithTimeout(url, { headers: authHeaders() }, 20000);
     if (!res.ok) throw new Error(await errorText(res));

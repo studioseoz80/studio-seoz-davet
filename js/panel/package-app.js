@@ -54,7 +54,12 @@
     return { slug: SLUG_RE.test(o.i || "") ? o.i : "", album: TOKEN_RE.test(o.a || "") ? o.a : "", panel: TOKEN_RE.test(o.r || "") ? o.r : "" };
   }
   const hdr = { apikey: key, Authorization: "Bearer " + key };
+  // GÜVENLİ OKUMA: yalnızca bu davetiye, sunucu fonksiyonuyla (supabase/guvenli-okuma.sql). Fonksiyon henüz
+  // kurulu değilse (404) eski tablo okumasına düşülür.
   async function loadDoc(slug) {
+    const r = await fetch(`${base}/rest/v1/rpc/invitation_get`, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, hdr), body: JSON.stringify({ p_slug: slug }) });
+    if (r.ok) { const d = await r.json(); return d && typeof d === "object" ? d : null; }
+    if (r.status !== 404) throw new Error("http " + r.status);
     const res = await fetch(`${base}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`, { headers: hdr });
     if (!res.ok) throw new Error("http " + res.status);
     const rows = await res.json();

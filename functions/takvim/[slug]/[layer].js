@@ -19,7 +19,7 @@
      takvim uygulaması onu aynı etkinlik olarak tanır.
    - Davetiye/katman yoksa 404; editör projesinde (EDITOR_PASSWORD) çalışmaz.
    ========================================================================= */
-import { supabaseConfig } from "../../[slug].js";
+import { supabaseConfig, readInvitation } from "../../[slug].js";   // güvenli okuma: yalnızca bu davetiye
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/;
 const LAYER_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -92,11 +92,7 @@ export async function onRequest(context) {
   try {
     const cfg = await supabaseConfig(env, request);
     if (!cfg) return notFound();
-    const res = await fetch(`${cfg.url}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`,
-      { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" }, cf: { cacheTtl: 60 } });
-    if (!res.ok) return new Response("Takvim bilgisi şu anda alınamadı.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
-    const rows = await res.json();
-    doc = Array.isArray(rows) && rows[0] && rows[0].document_data;
+    doc = await readInvitation(cfg, slug);
   } catch (e) { return new Response("Takvim bilgisi şu anda alınamadı.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } }); }
   const L = doc && Array.isArray(doc.layers) ? doc.layers.find(l => l && l.type === "module" && l.moduleId === "calendar" && l.id === layer) : null;
   const s = Object.assign({ timezone: DEFAULT_TZ }, L && L.settings);

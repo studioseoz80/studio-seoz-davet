@@ -52,6 +52,20 @@ export async function supabaseConfig(env, request) {
   return (CFG = { url: url.replace(/\/+$/, ""), key });
 }
 
+/* GÜVENLİ OKUMA: davetiye yalnızca tam bağlantı adıyla, sunucu fonksiyonu invitation_get ile TEK TEK okunur
+   (supabase/guvenli-okuma.sql). Fonksiyon henüz kurulu değilse (404) eski tablo okumasına düşülür; tablo
+   okuması kapatıldıktan sonra o yol zaten boş döner. Dönen: belge | null (yok). Ağ/sunucu hatasında hata fırlatır. */
+export async function readInvitation(cfg, slug) {
+  const h = { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" };
+  const r = await fetch(`${cfg.url}/rest/v1/rpc/invitation_get`, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, h), body: JSON.stringify({ p_slug: slug }) });
+  if (r.ok) { const d = await r.json(); return d && typeof d === "object" ? d : null; }
+  if (r.status !== 404) throw new Error("invitation_get " + r.status);
+  const res = await fetch(`${cfg.url}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`, { headers: h, cf: { cacheTtl: 60 } });
+  if (!res.ok) throw new Error("published_invitations " + res.status);
+  const rows = await res.json();
+  return Array.isArray(rows) && rows[0] && rows[0].document_data ? rows[0].document_data : null;
+}
+
 // Paylaşım bilgisi: editörün yayında hazırladığı meta.share; yoksa davetiyenin kendi kapağı.
 function shareInfo(doc) {
   const meta = (doc && doc.meta) || {}, share = meta.share || {}, entry = (doc && doc.entry) || {};
@@ -129,12 +143,9 @@ export async function renderInvite(context, slug) {
   try {
     const cfg = await supabaseConfig(env, request);
     if (!cfg) return null;
-    const res = await fetch(`${cfg.url}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`,
-      { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" }, cf: { cacheTtl: 60 } });
-    if (!res.ok) return null;
-    const rows = await res.json();
-    if (!(Array.isArray(rows) && rows[0] && rows[0].document_data)) return { html, found: false };
-    const info = await settleImage(shareInfo(rows[0].document_data), new URL(request.url).origin);
+    const doc = await readInvitation(cfg, slug);
+    if (!doc) return { html, found: false };
+    const info = await settleImage(shareInfo(doc), new URL(request.url).origin);
     return { html: injectMeta(html, info, pageUrl), found: true };
   } catch (e) { return null; /* önizleme bilgisi eklenemedi; sayfa yine açılır */ }
 }
