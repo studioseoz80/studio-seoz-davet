@@ -409,6 +409,22 @@
     return publicUrl;
   }
 
+  // HIZLI AÇILIŞ: görselin küçültülmüş kopyasını (editor/img-optimize.js) aslının yanına yükler.
+  // Var olan dosyanın üzerine ASLA yazılmaz (x-upsert: false); zaten varsa aynı adres kullanılır.
+  async function uploadBlobAt(path, blob) {
+    const url = `${baseUrl()}/storage/v1/object/${encodeURIComponent(bucket())}/${path.split("/").map(encodeURIComponent).join("/")}`;
+    const res = await fetchRetry(url, {
+      method: "POST",
+      headers: await writeHeaders({ "Content-Type": blob.type || "application/octet-stream", "x-upsert": "false", "cache-control": "31536000" }),
+      body: blob
+    }, 120000);
+    if (!res.ok) {
+      const detail = await errorText(res);
+      if (!(res.status === 409 || /duplicate|already exists/i.test(detail))) return "";
+    }
+    return publicAssetUrl(path);
+  }
+
   /* ---------------- YAYIN ---------------- */
   // snapshot: storage.js'in publish() ile ürettiği yerel yayın kopyası.
   // onProgress(metin): isteğe bağlı, editörde durum göstermek için.
@@ -439,8 +455,22 @@
       }
     }
 
-    progress("Davetiye kaydediliyor...");
     const documentData = replaceRefs(snapshot, map);
+    // HIZLI AÇILIŞ: büyük görsellerin ekran boyutunda WebP kopyaları (asıllar aynen kalır). Hata olursa
+    // kopyasız yayınlanır — davetiye eskisi gibi asıl görselleri kullanır.
+    if (documentData.meta) delete documentData.meta.imgv;
+    if (global.SeozImgOptimize && documentData.meta) {
+      try {
+        const refOf = new Map(); map.forEach((u, r) => refOf.set(u, r));
+        const imgv = await global.SeozImgOptimize.run(documentData, {
+          prefix: publicAssetUrl(""), progress,
+          upload: (path, blob) => uploadBlobAt(path, blob),
+          blobFor: url => (refOf.has(url) ? global.SeozBlobStore.getBlob(refOf.get(url).slice(4)) : Promise.resolve(null))
+        });
+        if (imgv && Object.keys(imgv).length) documentData.meta.imgv = imgv;
+      } catch (e) { if (global.console) console.warn("[Studio SEOZ] Görsel kopyaları atlandı:", e); }
+    }
+    progress("Davetiye kaydediliyor...");
     const res = await fetchRetry(`${baseUrl()}/rest/v1/${TABLE}?on_conflict=slug`, {
       method: "POST",
       headers: await writeHeaders({

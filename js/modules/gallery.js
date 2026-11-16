@@ -150,7 +150,7 @@
       img.style.height = "100%";
       img.style.objectFit = "cover";
       img.style.display = "block";
-      SeozBlobStore.resolveToObjectURL(imgData.ref).then(url => { if (url) img.src = url; });
+      { const g = G, cw = Math.ceil(Math.min(window.innerWidth || 390, 1000) / Math.max(1, Number(s.columns) || 2) * 1.25); SeozBlobStore.resolveToObjectURL(imgData.ref).then(url => { if (url) g.add(img, url, cw); }); }   // bu galerinin kapısı · küçük hücreye küçük kopya
 
       cell.appendChild(img);
       grid.appendChild(cell);
@@ -238,7 +238,7 @@
       const img = document.createElement("img");
       img.alt = "";
       Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain", display: "block" });
-      SeozBlobStore.resolveToObjectURL(imgData.ref).then(url => { if (url) img.src = url; });
+      { const g = G; SeozBlobStore.resolveToObjectURL(imgData.ref).then(url => { if (url) g.add(img, url); }); }   // bu galerinin kapısı
       slide.appendChild(img);
       track.appendChild(slide);
       return slide;
@@ -358,7 +358,7 @@
         width: "100%", height: "100%", objectFit: "cover",
         display: "block", transformOrigin: "center center"
       });
-      SeozBlobStore.resolveToObjectURL(imgData.ref).then(url => { if (url) img.src = url; });
+      { const g = G; SeozBlobStore.resolveToObjectURL(imgData.ref).then(url => { if (url) g.add(img, url); }); }   // bu galerinin kapısı
       imgWrap.appendChild(img);
       slide.appendChild(imgWrap);
       viewport.appendChild(slide);
@@ -424,7 +424,16 @@
     return outer;
   }
 
+  /* HIZLI AÇILIŞ: yayında galeri görselleri, galeri ekrana yaklaşınca (≈ 1 ekran önce) yüklenir; küçültülmüş
+     kopyası (core/fast-boot.js) varsa o kullanılır. Editörde hemen yüklenir (eskisi gibi). */
+  let G = { add: (img, url) => { img.src = url; }, watch: () => {} };
   function render(settings, mode) {
+    G = global.SeozImgV ? global.SeozImgV.gate(mode === "view") : { add: (img, url) => { img.src = url; }, watch: () => {} };
+    const out = renderInner(settings, mode);
+    G.watch(out);
+    return out;
+  }
+  function renderInner(settings, mode) {
     const s = Object.assign({}, DEFAULTS, settings);
     const images = Array.isArray(s.images) ? s.images : [];
 

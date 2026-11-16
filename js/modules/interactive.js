@@ -123,7 +123,13 @@
   function el(tag, cls, css, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (css) Object.assign(e.style, css); if (html != null) e.innerHTML = html; return e; }
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const refs = s => (Array.isArray(s.images) ? s.images : []).map(x => x && x.ref).filter(Boolean);
-  function setImg(img, ref) { if (!ref) return; if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(ref).then(u => { if (u) img.src = u; }); else img.src = ref; }
+  // HIZLI AÇILIŞ: yayında ekrana yaklaşınca iner; küçültülmüş kopyası (core/fast-boot.js) varsa o kullanılır
+  const putSrc = (img, u) => { if (global.SeozImgV) global.SeozImgV.apply(img, u); else img.src = u; };
+  function setImg(img, ref) {
+    if (!ref) return;
+    if (global.SeozPublishedSlug) { img.loading = "lazy"; img.decoding = "async"; }   // yalnızca yayındaki davetiye
+    if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(ref).then(u => { if (u) putSrc(img, u); }); else putSrc(img, ref);
+  }
   const reduced = () => !!(global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches);
   function safeUrl(u) { u = String(u || "").trim(); return /^(https?:|mailto:|tel:)/i.test(u) ? u : (u ? "https://" + u.replace(/^\/+/, "") : ""); }
 

@@ -118,6 +118,59 @@ function injectMeta(html, info, pageUrl) {
   return out;
 }
 
+/* ---------------- HIZLI AÇILIŞ ----------------
+   Davetiyenin kendisi (zaten paylaşım önizlemesi için okunuyor) sayfaya gömülür: tarayıcı Supabase'e
+   ayrıca sormaz. js/core/fast-boot.js de gömülür; açılış görselleri sayfa kodlarını beklemeden iner.
+   Yazı tipleri: yalnızca davetiyede kullanılanlar, sayfayı bekletmeden yüklenir. */
+const FONT_BASE = ["Manrope", "Cormorant Garamond", "Great Vibes", "Alex Brush", "Cinzel", "IBM Plex Sans"];   // sayfa kodunun kendi kullandıkları
+let FAST = null, SPECS = null;
+async function assetText(env, request, p) {
+  const r = await env.ASSETS.fetch(new URL(p, request.url));
+  if (!r.ok) throw new Error("asset " + p);
+  return r.text();
+}
+export function fontsHref(docJson, specs) {
+  const fams = Object.keys(specs).filter(f => FONT_BASE.includes(f) || docJson.includes('"' + f + '"') || docJson.includes("'" + f + "'"));
+  return fams.length ? "https://fonts.googleapis.com/css2?" + fams.map(f => "family=" + specs[f]).join("&") + "&display=swap" : "";
+}
+const jsonForScript = s => s.replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+async function injectFast(html, doc, slug, cfg, env, request) {
+  if (FAST === null) FAST = await assetText(env, request, "/js/core/fast-boot.js");
+  if (SPECS === null) {
+    const t = await assetText(env, request, "/js/font-specs.js");
+    SPECS = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
+  }
+  if (/<\/script/i.test(FAST)) throw new Error("fast-boot");
+  const json = JSON.stringify(doc);
+  const supa = esc(new URL(cfg.url).origin);
+  const fonts = fontsHref(json, SPECS);
+  // kod dosyalarının klasörü (sürüm klasörü v/<parmak-izi>/): modül dosyaları erken indirilebilsin
+  const base = (html.match(/src="((?:v\/[0-9]+\/)?)js\/view-app\.js"/) || [])[1] || "";
+  const tags = [
+    `<link rel="preconnect" href="${supa}" crossorigin>`,
+    `<link rel="preconnect" href="${supa}">`,
+    fonts ? `<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="${esc(fonts)}" media="print" onload="this.media='all'" data-seoz-fonts>` : "",
+    `<script type="application/json" id="seoz-doc" data-slug="${esc(slug)}" data-base="${esc(base)}">${jsonForScript(json)}</script>`,
+    `<script>${FAST}</script>`
+  ].filter(Boolean).join("\n");
+  // stil dosyalarından ÖNCE: görseller sayfa kodları ve stiller inerken iner
+  const at = html.search(/<link rel="stylesheet"/i);
+  if (at < 0) throw new Error("no stylesheet");
+  html = html.slice(0, at) + tags + "\n" + html.slice(at);
+  // Sinematik açılışlı davetiyede: sayfa kodları inene kadar boş beyaz ekran yerine açılış ekranının
+  // kendi zemin rengi ve aynı "Hazırlanıyor…" göstergesi görünür (açılış başlayınca kendiliğinden kalkar).
+  const e = doc && doc.entry;
+  if (e && e.type === "cinema" && e.cinema) {
+    const bg = /^#[0-9a-f]{3,8}$/i.test(String(e.cinema.bgColor || "")) ? e.cinema.bgColor : "#0E0C0B";
+    const txt = doc.meta && doc.meta.lang === "en" ? "Preparing…" : "Hazırlanıyor…";
+    const boot = `<div class="seoz-boot" style="position:fixed;inset:0;z-index:4999;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:rgba(255,255,255,.75);font:14px/1.2 system-ui,sans-serif;letter-spacing:.06em">` +
+      `<div style="width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.85);animation:seozBootSpin 1s linear infinite"></div><div>${txt}</div>` +
+      `<style>@keyframes seozBootSpin{to{transform:rotate(360deg)}}</style></div>`;
+    html = html.replace('<div id="stage"></div>', `<div id="stage">${boot}</div>`);
+  }
+  return html;
+}
+
 // Davetiye sayfasını önizleme bilgileriyle hazırlar. Davetiye bulunamazsa null döner.
 // og:url her zaman kısa bağlantıdır (alan-adı/<slug>): uzun bağlantı da aynı karta bağlanır.
 export async function renderInvite(context, slug) {
@@ -130,16 +183,25 @@ export async function renderInvite(context, slug) {
     const cfg = await supabaseConfig(env, request);
     if (!cfg) return null;
     const res = await fetch(`${cfg.url}/rest/v1/published_invitations?slug=eq.${encodeURIComponent(slug)}&select=document_data&limit=1`,
-      { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" }, cf: { cacheTtl: 60 } });
+      { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}`, Accept: "application/json" }, cf: { cacheTtl: 10 } });
     if (!res.ok) return null;
     const rows = await res.json();
     if (!(Array.isArray(rows) && rows[0] && rows[0].document_data)) return { html, found: false };
-    const info = await settleImage(shareInfo(rows[0].document_data), new URL(request.url).origin);
-    return { html: injectMeta(html, info, pageUrl), found: true };
+    const doc = rows[0].document_data;
+    const info = await settleImage(shareInfo(doc), new URL(request.url).origin);
+    html = injectMeta(html, info, pageUrl);
+    // HIZLI AÇILIŞ: davetiye + açılış görsellerini erken başlatan küçük kod sayfaya gömülür (ayrı istek yok).
+    // Bir şey ters giderse yalnızca gömme atlanır; sayfa davetiyeyi eskisi gibi kendisi indirir.
+    let inlined = false;
+    try { const r2 = await injectFast(html, doc, slug, cfg, env, request); html = r2; inlined = true; } catch (e) { /* eski yöntem */ }
+    return { html, found: true, inlined };
   } catch (e) { return null; /* önizleme bilgisi eklenemedi; sayfa yine açılır */ }
 }
 
-export const htmlHeaders = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Content-Type-Options": "nosniff" };
+// HIZLI AÇILIŞ: sayfa önbellekte bekletilmez ("no-cache"): kod dosyaları sürüm klasöründen (v/<parmak-izi>/)
+// geldiği için sayfa her zaman o anki sürümü göstermeli; davetiye gömülüyse yayın güncellenince misafir hemen yenisini görür.
+export const htmlHeaders = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Content-Type-Options": "nosniff" };
+export const inlineHeaders = htmlHeaders;
 export const isInviteSlug = s => SLUG_RE.test(s) && !RESERVED.has(s);
 
 export async function onRequest(context) {
@@ -154,5 +216,5 @@ export async function onRequest(context) {
     if (!page.ok) return next();
     return new Response(request.method === "HEAD" ? null : await page.text(), { status: 200, headers: htmlHeaders });
   }
-  return new Response(request.method === "HEAD" ? null : r.html, { status: r.found ? 200 : 404, headers: htmlHeaders });
+  return new Response(request.method === "HEAD" ? null : r.html, { status: r.found ? 200 : 404, headers: r.inlined ? inlineHeaders : htmlHeaders });
 }

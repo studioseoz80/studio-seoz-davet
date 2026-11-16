@@ -58,6 +58,8 @@
     if (el && el.dataset && el.dataset.seozModel && global.SeozModel3D) return global.SeozModel3D.snapshot(el, style);   // 3D model: o anki kare
     const im = document.createElement("img");
     if (style) Object.assign(im.style, style);
+    // aslıyla AYNI istek türü (CORS): tarayıcı görseli bellekten kullanır, ikinci kez indirmez
+    if (el && el.crossOrigin) im.crossOrigin = el.crossOrigin;
     im.src = el ? el.src : ""; im.alt = "";
     return im;
   }

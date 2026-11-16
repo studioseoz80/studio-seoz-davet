@@ -221,8 +221,9 @@
       const src = srcFor(L);
       img.loading = "lazy"; img.decoding = "async";      // sayfanın altındaki zemin görselleri ekrana yaklaşınca yüklenir
       img.dataset.srcRef = src;
-      if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) img.src = u; });
-      else img.src = src;
+      const put = u => { if (global.SeozImgV) global.SeozImgV.apply(img, u); else img.src = u; };   // hızlı kopya varsa o
+      if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) put(u); });
+      else put(src);
     }
     const mv = wrapMoves(L, img, opt && opt.prof);
     mid.appendChild(mv.top); outer.appendChild(mid);
@@ -262,8 +263,9 @@
       else if (L.src) {
         const src = srcFor(L);
         im.loading = "lazy"; im.decoding = "async"; im.dataset.srcRef = src;
-        if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) { im.src = u; if (after) after(u); } });
-        else { im.src = src; if (after) after(src); }
+        const put = u => { const v = global.SeozImgV ? global.SeozImgV.apply(im, u) : (im.src = u); if (after) after(v); };   // hızlı kopya varsa o
+        if (global.SeozBlobStore) SeozBlobStore.resolveToObjectURL(src).then(u => { if (u) put(u); });
+        else put(src);
       }
     };
     // yumuşak gölge: görselin kendi şekli, BİR KEZ küçük bir tuvale bulanık çizilir; tarayıcı her karede

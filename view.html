@@ -36,6 +36,9 @@
 <!-- Yalnızca çekirdek + view-app.js. js/editor/ klasöründen HİÇBİR dosya
      buraya yüklenmez — müşteri tarafında düzenleme kodu yapısal olarak
      hiç var olmaz. -->
+<!-- Hızlı açılış: görsel kopyaları + (kısa bağlantıda sayfaya gömülü) erken başlatma; yazı tipi listesi -->
+<script src="js/core/fast-boot.js"></script>
+<script src="js/font-specs.js"></script>
 <script src="js/core/document-model.js"></script>
 <script src="js/core/invite-i18n.js"></script>
 <script src="js/core/layout-engine.js"></script>
@@ -47,7 +50,6 @@
 <script src="js/core/renderer.js"></script>
 <script src="js/core/motion.js"></script>
 <script src="js/core/media.js"></script>
-<script src="js/core/qr-encoder.js"></script>
 <script src="js/fonts-library.js"></script>
 <script src="js/entry-scene.js"></script>
 <!-- Açılış Stüdyosu: sinematik açılış motoru ve modelleri -->
@@ -61,30 +63,10 @@
 <script src="js/theme/theme-core.js"></script>
 <script src="js/theme/theme-present.js"></script>
 <script src="js/modules/module-registry.js"></script>
-<script src="js/modules/location.js"></script>
-<script src="js/modules/music.js"></script>
+<!-- HIZLI AÇILIŞ: diğer modüller (Konum, Müzik, LCV, Galeri, Anket, Etkileşimli nesneler ...) yalnızca
+     davetiyede kullanılıyorsa yüklenir — bkz. js/view-app.js → MODULES. Geri Sayım her zaman yüklenir
+     (Mühürlü Kart ve tema sunumları saat dilimi hesabını ondan alır). -->
 <script src="js/modules/countdown.js"></script>
-<script src="js/modules/rsvp.js"></script>
-<script src="js/modules/gallery.js"></script>
-<script src="js/modules/guest-upload.js"></script>
-<script src="js/modules/celebration.js"></script>
-<script src="js/modules/poll.js"></script>
-<script src="js/modules/qrcode.js"></script>
-<script src="js/modules/calendar.js"></script>
-<script src="js/modules/feedback.js"></script>
-<script src="js/modules/gift.js"></script>
-<!-- İşletme modülleri (yeni) -->
-<script src="js/modules/appointment.js"></script>
-<script src="js/modules/social-media.js"></script>
-<script src="js/modules/services.js"></script>
-<script src="js/modules/price-list.js"></script>
-<script src="js/modules/before-after.js"></script>
-<!-- Katılım sistemi (yeni) -->
-<script src="js/modules/attendance-form.js"></script>
-<!-- Yeni modüller: İndirim/Kampanya, Çalışma Saatleri, Etkileşimli nesneler -->
-<script src="js/modules/campaign.js"></script>
-<script src="js/modules/hours.js"></script>
-<script src="js/modules/interactive.js"></script>
 <script src="js/view-app.js"></script>
 </body>
 </html>

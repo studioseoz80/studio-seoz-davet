@@ -190,6 +190,8 @@
     }
     const i = h("img", cls, { width: "100%", height: "100%", objectFit: fit || "contain", display: "block", pointerEvents: "none" });
     i.alt = ""; i.draggable = false;
+    // ön yüklemeyle AYNI istek türü (CORS): tarayıcı görseli bellekteki kopyadan kullanır, ikinci kez indirmez
+    if (URLS.get(ref) && MASK_OK.has(ref) && needsCors(URLS.get(ref))) i.crossOrigin = "anonymous";
     if (URLS.has(ref)) { if (URLS.get(ref)) i.src = URLS.get(ref); }
     else resolveSrc(ref).then(u => { if (u) i.src = u; });
     return i;
@@ -216,6 +218,7 @@
       const ok = () => { if (settled) return; settled = true; LOADED.set(url, im); res(true); };
       const bad = () => { if (settled) return; settled = true; res(false); };
       if (cors) im.crossOrigin = "anonymous";
+      try { im.fetchPriority = "high"; } catch (e) { /* eski tarayıcı */ }   // açılış görselleri öncelikli
       im.onload = () => { if (im.decode) im.decode().then(ok, ok); else ok(); };
       im.onerror = bad;
       im.src = url;
@@ -243,12 +246,17 @@
         await Promise.all([M3 && M3.prefetch ? M3.prefetch(url) : null, pRef && !URLS.has(pRef) ? loadOne(pRef) : null]);
         return true;
       }
-      const cors = needsCors(url);
-      let ok = await tryLoad(url, cors);
-      if (ok) MASK_OK.add(ref);
-      else if (cors) ok = await tryLoad(url, false);
-      if (ok) URLS.set(ref, url);
-      return ok;
+      // HIZLI AÇILIŞ: yayında görselin küçültülmüş WebP kopyası varsa o kullanılır (core/fast-boot.js);
+      // kopya açılamazsa aslına dönülür. Kopya ile aslı aynı görüntüdür, yalnızca boyutu ekrana göredir.
+      const V = global.SeozImgV, fast = V ? V.pick(url) : url;
+      for (const u of fast !== url ? [fast, url] : [url]) {
+        const cors = needsCors(u);
+        let ok = await tryLoad(u, cors);
+        if (ok) MASK_OK.add(ref);
+        else if (cors) ok = await tryLoad(u, false);
+        if (ok) { URLS.set(ref, u); return true; }
+      }
+      return false;
     }).catch(() => false);
   }
   /* Görselin DOLU (saydam olmayan) bölgesi, görselin kendi ölçüsüne oranla: { l, t, r, b, ratio }.
@@ -284,7 +292,7 @@
       timedOut = true;
       list.forEach(r => { if (!URLS.has(r)) failed[r] = true; });
       res({ failed, timedOut });
-    }, timeoutMs != null ? timeoutMs : 8000));
+    }, timeoutMs != null ? timeoutMs : (global.SeozCinemaPreloadMs || 8000)));
     return Promise.race([all, limit]);
   }
   /* Kalınlık dilimleri ve (ayrı yüklenmemiş) arka yüz için PNG'nin
@@ -1246,6 +1254,8 @@
       buildScene(ctx, st);
       fitFrame(st);
       if (opts.freeze) { setPhase("freeze"); return handle; }
+      // HIZLI AÇILIŞ: açılış görselleri hazır — davetiye sayfası artık sıradaki dosyaları (ilk ekran, müzik) indirebilir
+      if (!inBox) { try { global.dispatchEvent(new CustomEvent("seoz:entry-ready")); } catch (e) { /* çok eski tarayıcı */ } }
       st.onResize = () => { fitFrame(st); if (st.fx) st.fx.resize(); };
       global.addEventListener("resize", st.onResize);
       ctx.fx = Particles(fxCanvas, { lite: cfg.lite, intensity: cfg.intensity });

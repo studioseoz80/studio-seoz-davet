@@ -4,3 +4,14 @@
   X-Robots-Tag: noindex, nofollow
   Referrer-Policy: strict-origin-when-cross-origin
   X-Content-Type-Options: nosniff
+
+# HIZLI AÇILIŞ: içerik parmak izli kod/stil klasörü (build-public.sh) — içerik değişince adres değişir.
+/v/*
+  Cache-Control: public, max-age=31536000, immutable
+# Davetiye sayfasının kendisi her açılışta güncel sürümü göstersin (kod dosyaları sürüm klasöründen gelir).
+/view.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache

@@ -70,14 +70,28 @@
      --------------------------------------------------------------------------- */
   const Music = global.SeozMusic || (global.SeozMusic = (function () {
     const players = new Map();
+    /* HIZLI AÇILIŞ: davetiye sayfası açılış görselleri inerken müziği "beklet" der (view-app.js);
+       o sürede müzik dosyası indirilmez, görsellerle bant genişliği paylaşmaz. Bekletme kalkınca
+       (açılış hazır) ya da misafir dokununca dosya hemen bağlanır. Varsayılan: bekletme yok (eskisi gibi). */
+    let deferred = false;
+    function attach(p) {
+      if (!p.pendingUrl) return;
+      const url = p.pendingUrl; p.pendingUrl = "";
+      p.audio.preload = "auto"; p.audio.src = url; p.ready = true;
+      if (p.wantPlay && !p.userPaused) tryPlay(p);
+    }
+    function defer(on) {
+      deferred = !!on;
+      if (!deferred) players.forEach(attach);
+    }
     function get(src) {
       let p = players.get(src);
       if (p) return p;
       const a = document.createElement("audio");
-      a.loop = true; a.preload = "auto";
+      a.loop = true; a.preload = deferred ? "none" : "auto";
       a.setAttribute("playsinline", ""); a.setAttribute("webkit-playsinline", "");
-      p = { audio: a, src, ready: false, wantPlay: false, userPaused: false, uis: new Set() };
-      const setSrc = url => { if (!url) return; a.src = url; p.ready = true; if (p.wantPlay && !p.userPaused) tryPlay(p); };
+      p = { audio: a, src, ready: false, wantPlay: false, userPaused: false, uis: new Set(), pendingUrl: "" };
+      const setSrc = url => { if (!url) return; if (deferred) { p.pendingUrl = url; return; } a.src = url; p.ready = true; if (p.wantPlay && !p.userPaused) tryPlay(p); };
       if (global.SeozBlobStore && global.SeozBlobStore.isRef && global.SeozBlobStore.isRef(src)) global.SeozBlobStore.resolveToObjectURL(src).then(setSrc);
       else setSrc(src);   // http adresi: hemen hazır (dokunuş anında çalabilsin)
       const sync = () => { p.uis.forEach(fn => { if (!fn()) p.uis.delete(fn); }); };
@@ -98,14 +112,15 @@
     function startFromGesture(doc) {
       const p = prepare(doc);
       if (!p || p.userPaused || !p.audio.paused) return false;
+      attach(p);   // bekletilmişse dosya dokunuş anında bağlanır (telefonlar sesi yalnızca dokunuşta açar)
       if (p.ready) tryPlay(p); else p.wantPlay = true;
       return true;
     }
     function toggle(p) {
-      if (p.audio.paused) { p.userPaused = false; if (p.ready) tryPlay(p); else p.wantPlay = true; }
+      if (p.audio.paused) { p.userPaused = false; attach(p); if (p.ready) tryPlay(p); else p.wantPlay = true; }
       else { p.userPaused = true; p.wantPlay = false; p.audio.pause(); }
     }
-    return { get, prepare, startFromGesture, toggle, musicLayer };
+    return { get, prepare, startFromGesture, toggle, musicLayer, defer };
   })());
 
   function render(settings, mode) {

@@ -84,7 +84,8 @@
     }
     const img = document.createElement("img");
     img.className = cls; img.alt = "";
-    SeozBlobStore.resolveToObjectURL(ref).then(url => { img.src = url; });
+    // hızlı kopya (core/fast-boot.js) varsa o; yoksa / açılamazsa aslı
+    SeozBlobStore.resolveToObjectURL(ref).then(url => { if (global.SeozImgV && url) global.SeozImgV.apply(img, url); else img.src = url; });
     return img;
   }
   // video yardımcıları (video yoksa hiçbir şey yapmaz)
@@ -285,9 +286,10 @@
     wrap.appendChild(rightWing);
 
     SeozBlobStore.resolveToObjectURL(entry.pngSrc).then(url => {
-      leftImg.src = url; rightImg.src = url;
+      const V = global.SeozImgV;
+      if (V && url && !pngVideo) { V.apply(leftImg, url); V.apply(rightImg, url); } else { leftImg.src = url; rightImg.src = url; }
       // ölçü için görünmez "hayalet": videoda kapak görseli (ilk kare) kullanılır
-      if (!pngVideo) ghost.src = url;
+      if (!pngVideo) { if (V && url) V.apply(ghost, url); else ghost.src = url; }
       else if (entry.pngMedia.poster) SeozBlobStore.resolveToObjectURL(entry.pngMedia.poster).then(u => { if (u) ghost.src = u; });
       else { ghost.style.aspectRatio = `${entry.pngMedia.w || 9} / ${entry.pngMedia.h || 16}`; }
     });

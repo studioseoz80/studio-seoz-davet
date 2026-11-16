@@ -14,7 +14,7 @@
      gibi sunulur (davetiye sayfası kendi mesajını gösterir).
    - Editör projesinde (EDITOR_PASSWORD tanımlı) hiçbir şey yapmaz.
    ========================================================================= */
-import { renderInvite, htmlHeaders, isInviteSlug } from "./[slug].js";
+import { renderInvite, htmlHeaders, inlineHeaders, isInviteSlug } from "./[slug].js";
 
 export async function onRequest(context) {
   const { request, env, next } = context;
@@ -24,5 +24,5 @@ export async function onRequest(context) {
   if (q.get("doc") || !isInviteSlug(slug)) return next();
   const r = await renderInvite(context, slug);
   if (!r || !r.found) return next();
-  return new Response(request.method === "HEAD" ? null : r.html, { status: 200, headers: htmlHeaders });
+  return new Response(request.method === "HEAD" ? null : r.html, { status: 200, headers: r.inlined ? inlineHeaders : htmlHeaders });
 }

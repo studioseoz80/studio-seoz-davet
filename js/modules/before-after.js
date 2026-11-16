@@ -117,7 +117,7 @@
       position: "absolute", inset: "0", width: "100%", height: "100%",
       objectFit: "cover", display: "block", userSelect: "none", pointerEvents: "none"
     });
-    SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) img.src = url; });
+    SeozBlobStore.resolveToObjectURL(ref).then(url => { if (url) { if (global.SeozImgV) global.SeozImgV.apply(img, url); else img.src = url; } });   // hızlı kopya varsa o
     return img;
   }
 

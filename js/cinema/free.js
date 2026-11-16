@@ -52,7 +52,7 @@
   // bölünen/çoğaltılan parça: görselse <img>, MP4 ise aynı videonun sessiz kopyası (core/media.js)
   function vis(src, style) {
     if (global.SeozMedia) return global.SeozMedia.cloneVisual(src, style);
-    const im = h("img", "", style); im.src = src ? src.src : ""; im.alt = ""; return im;
+    const im = h("img", "", style); if (src && src.crossOrigin) im.crossOrigin = src.crossOrigin; im.src = src ? src.src : ""; im.alt = ""; return im;
   }
   function timing(a, def) {
     // A2.3: harekete özel hız (0,5× yavaş … 2× hızlı) süreyi böler

@@ -125,7 +125,9 @@
       // belgelerdeki gerçek data URL'ler de sorunsuz çalışmaya devam eder
       // (resolveToObjectURL böyle bir değeri olduğu gibi geri döndürür).
       img.dataset.srcRef = layer.content.src;
-      SeozBlobStore.resolveToObjectURL(layer.content.src).then(url => { img.src = url; });
+      // HIZLI AÇILIŞ: yayında görsel ekrana yaklaşınca iner; küçültülmüş kopyası varsa o kullanılır
+      if (mode === "view") { img.loading = "lazy"; img.decoding = "async"; }
+      SeozBlobStore.resolveToObjectURL(layer.content.src).then(url => { if (global.SeozImgV && url) global.SeozImgV.apply(img, url); else img.src = url; });
       wrap.appendChild(img);
     }
 
@@ -257,7 +259,7 @@
       canvasEl.insertBefore(img, canvasEl.firstChild);
 
       SeozBlobStore.resolveToObjectURL(background.value).then(url => {
-        if (url) img.src = url;
+        if (url) { if (global.SeozImgV) global.SeozImgV.apply(img, url); else img.src = url; }
         // Daha önce burada AYNI görsel, YAYIN görünümünde document.body'ye
         // de AYRICA/BAĞIMSIZ olarak uygulanıyordu — bu, farklı bir
         // hatanın (görsel ölçek uyumsuzluğu) kaynağıydı ve daha önce
