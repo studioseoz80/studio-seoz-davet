@@ -40,6 +40,7 @@
             <p class="sub">Davetiyeleriniz — düzenlemeye devam edin veya yeni bir tane başlatın.</p>
           </div>
           <div class="library-actions">
+            <button class="btn btn-outline" data-tasima title="Editör verilerini başka bir adrese (ör. editor.studioseoz.com) eksiksiz taşı">Taşıma Paketi</button>
             <button class="btn btn-outline" data-import>JSON İçe Aktar</button>
             <button class="btn btn-primary" data-new>+ Yeni Davetiye</button>
           </div>
@@ -92,6 +93,7 @@
     }
 
     rootEl.querySelector("[data-new]").addEventListener("click", () => openNewModal(rootEl, onOpen));
+    rootEl.querySelector("[data-tasima]").addEventListener("click", () => { if (global.SeozTasimaPanel) global.SeozTasimaPanel.open(); });
 
     const importInput = rootEl.querySelector("[data-import-input]");
     rootEl.querySelector("[data-import]").addEventListener("click", () => importInput.click());
