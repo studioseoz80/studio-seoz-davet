@@ -232,6 +232,7 @@
     const u = new URL("muzigim.html", b); u.hash = "k=" + token; return u.href;
   }
   const ownerMusicList = () => rpc("music_owner_list", {}, true);
+  const ownerMusicUsage = () => rpc("music_owner_usage", {}, true);
   const ownerMusicSetDisabled = (slug, disabled, reason) => rpc("music_owner_set_disabled", { p_slug: slug, p_disabled: !!disabled, p_reason: reason || null }, true);
 
   /* ---------------- ANKET (Studio SEOZ sistemi) ---------------- */
@@ -372,6 +373,7 @@
     ownerMusicRotate,
     musicUrl,
     ownerMusicList,
+    ownerMusicUsage,
     ownerMusicSetDisabled,
     isConfigured,
     submitResponse,

@@ -27,6 +27,7 @@
       pick: "MP3 dosyası seçin", pickSub: "Telefonunuzdan veya bilgisayarınızdan",
       upBtn: "Müziği Yükle", upBtnNew: "Yeni Müziği Yükle", uploading: "Yükleniyor…", left: "Bugün kalan yükleme hakkı: {n}",
       disabled: "Bu davetiyenin müziği Studio SEOZ tarafından devre dışı bırakıldı ve misafirlere çalınmıyor. Yeni müzik yüklenemez; mevcut dosyayı silebilirsiniz. Ayrıntı için Studio SEOZ ile iletişime geçin.",
+      unavailable: "Müzik yükleme şu anda kullanılamıyor. Lütfen Studio SEOZ ile iletişime geçin.",
       okUp: "Müziğiniz yüklendi. Davetiyenizde artık bu müzik çalar.", okDel: "Müzik silindi. Davetiyeniz artık müziksiz açılır.",
       foot: "Bu bağlantı yalnızca size özeldir; başkalarıyla paylaşmayın. Müzik seçimi ve gerekli izinler sizin sorumluluğunuzdadır. Telif şikâyeti durumunda Studio SEOZ müziği devre dışı bırakabilir.",
       missingT: "Bağlantı eksik", missing: "Bu sayfayı Studio SEOZ'un size gönderdiği bağlantıyla açın.",
@@ -36,7 +37,8 @@
         not_mp3: "Yalnızca MP3 dosyası yüklenebilir.", too_large: "Dosya en fazla 10 MB olabilir.",
         consent_required: "Yüklemeden önce kullanım hakkı onayını vermelisiniz.", daily_limit: "Bugünkü yükleme hakkınız doldu. Yarın tekrar deneyin.",
         music_disabled: "Bu davetiyenin müziği Studio SEOZ tarafından devre dışı bırakıldı.", storage_not_ready: "Müzik deposu henüz hazır değil. Lütfen Studio SEOZ ile iletişime geçin.",
-        preview: "Önizleme sürümünde yükleme kapalıdır.", upload: "Yükleme yapılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.", del: "Müzik silinemedi. Lütfen tekrar deneyin."
+        preview: "Önizleme sürümünde yükleme kapalıdır.",
+        capacity_full: "Müzik yükleme şu anda kullanılamıyor. Lütfen Studio SEOZ ile iletişime geçin.", service_busy: "Müzik yükleme şu anda kullanılamıyor. Lütfen Studio SEOZ ile iletişime geçin.", upload: "Yükleme yapılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.", del: "Müzik silinemedi. Lütfen tekrar deneyin."
       }
     },
     en: {
@@ -47,6 +49,7 @@
       pick: "Choose an MP3 file", pickSub: "From your phone or computer",
       upBtn: "Upload Music", upBtnNew: "Upload New Music", uploading: "Uploading…", left: "Uploads left today: {n}",
       disabled: "The music for this invitation has been disabled by Studio SEOZ and is not being played to guests. New music cannot be uploaded; you can delete the current file. Please contact Studio SEOZ for details.",
+      unavailable: "Music upload is currently unavailable. Please contact Studio SEOZ.",
       okUp: "Your music has been uploaded. It will now play in your invitation.", okDel: "Music deleted. Your invitation now opens without music.",
       foot: "This link is private to you; please don't share it. You are responsible for the choice of music and the necessary permissions. In case of a copyright complaint, Studio SEOZ may disable the music.",
       missingT: "Link incomplete", missing: "Please open this page with the link Studio SEOZ sent you.",
@@ -56,7 +59,8 @@
         not_mp3: "Only MP3 files can be uploaded.", too_large: "The file can be up to 10 MB.",
         consent_required: "Please confirm the usage rights statement before uploading.", daily_limit: "You've reached today's upload limit. Please try again tomorrow.",
         music_disabled: "The music for this invitation has been disabled by Studio SEOZ.", storage_not_ready: "Music storage isn't ready yet. Please contact Studio SEOZ.",
-        preview: "Uploading is disabled in the preview version.", upload: "Upload failed. Please check your internet connection and try again.", del: "The music couldn't be deleted. Please try again."
+        preview: "Uploading is disabled in the preview version.",
+        capacity_full: "Music upload is currently unavailable. Please contact Studio SEOZ.", service_busy: "Music upload is currently unavailable. Please contact Studio SEOZ.", upload: "Upload failed. Please check your internet connection and try again.", del: "The music couldn't be deleted. Please try again."
       }
     }
   };
@@ -127,7 +131,8 @@
           ${confirmDelete ? `<p class="mz-muted" style="margin:8px 0 0">${esc(t.delNote)}</p>` : ""}`
         : `<p class="mz-muted">${esc(t.noMusic)}</p>`}
       </section>
-      ${dis ? "" : `
+      ${!dis && info.upload_available === false ? `<p class="mz-alert info" role="status" data-unavailable>${esc(t.unavailable)}</p>` : ""}
+      ${dis || info.upload_available === false ? "" : `
       <section class="mz-card" aria-labelledby="mz-up">
         <h2 id="mz-up">${esc(has ? t.changeTitle : t.upTitle)}</h2>
         <p class="mz-muted">${esc(t.rules)} ${has ? esc(t.replaceNote) : ""}</p>
@@ -200,6 +205,7 @@
       busy = false;
       if (xhr.status === 200 && r && r.ok) { picked = null; consentChecked = false; refresh({ type: "ok", key: "okUp" }); return; }
       if (r && r.error === "invalid_token") { message("invalid"); return; }
+      if (r && (r.error === "capacity_full" || r.error === "service_busy")) { picked = null; consentChecked = false; info.upload_available = false; render(); return; }
       render();
       setMsg(errText(r && r.error) || errText("upload"), "err");
     };

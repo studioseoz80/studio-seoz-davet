@@ -14,6 +14,44 @@
 - **Metin değişirse sürüm adı da değiştirilmelidir.**
 - İngilizce metin canlıya geçmeden önce onaylanmalıdır.
 
+## Maliyet kontrolü
+
+**Depolama sınırı (sunucuda):** Müşteri müziklerinin toplamı **8 GB**'a yaklaşınca yeni yükleme durur.
+- R2'nin ücretsiz katmanı 10 GB'tır.
+- Tam kural: kalan yer tek bir en büyük dosyaya (10 MB) yetmiyorsa yükleme durur.
+- Müşteri şu mesajı görür: "Müzik yükleme şu anda kullanılamıyor. Lütfen Studio SEOZ ile iletişime geçin." İngilizce sayfada: "Music upload is currently unavailable. Please contact Studio SEOZ."
+- Mevcut müzikler çalmaya devam eder.
+- **Hiçbir müzik kendiliğinden silinmez.** Yer, Müzik Denetimi'nden **elle** silinen müziklerle açılır; yükleme o anda yeniden açılır.
+
+**Eş zamanlı yüklemeler:**
+- Her yükleme, dosya R2'ye yazılmadan önce Supabase'de tek kilit altında yer ayırır. Yer yoksa R2'ye hiçbir şey yazılmaz.
+- 15 dakikada tamamlanmayan ayırma "yarım kalan" sayılır ve toplamdan düşer. Müzik Denetimi'ndeki **Temizle** düğmesiyle elle temizlenir.
+
+**R2 işlem sınırları:**
+
+| Sınır | Değer | Etkisi |
+| --- | --- | --- |
+| Tek dosya | 10 MB | Boyut, dosya okunmadan önce kontrol edilir. |
+| Davetiye başına yükleme | 10 / 24 saat | Aynı anda en fazla 2 yükleme sürebilir. |
+| Bütün müşteriler, toplam yükleme | 200 / 24 saat | Ayda en fazla ~12 bin R2 yazma işlemi; ücretsiz sınır 1 milyon. |
+| Reddedilen yükleme | R2'ye hiç yazılmaz | Onaysız, MP3 olmayan, büyük dosya ya da yer yoksa. |
+
+**R2 okuma işlemleri:**
+- Misafir dinlemesi önce Cloudflare önbelleğinden gelir. Önbellek yalnızca davet.studioseoz.com alan adında çalışır.
+- Önbellekte yoksa istek başına tek R2 okuması yapılır.
+- Şu istekler R2'ye hiç dokunmaz: "müzik var mı?" sorgusu, HEAD istekleri ve tarayıcının "değişmedi" (304) yanıtı.
+- Müzik, misafir dokunmadan indirilmez.
+- Başka sitelerin dosyayı kendi sayfasına gömmesi engellenir.
+
+**Sınırları değiştirmek:** `supabase/muzik-yonetimi.sql` → `seoz_private.music_limits()`.
+
+**Önerilen Cloudflare ayarları (kart bağlandıktan sonra, onayla):**
+1. **Billing → Notifications:** kullanıma dayalı fatura uyarısı (ör. $1).
+2. **R2 uyarıları:** depolama ve işlem kullanımı için Cloudflare'in sunduğu bildirimler.
+3. **studioseoz.com → Security → Rate limiting** (ücretsiz planda 1 kural): `/muzik/*` ve `/api/muzik/*` için IP başına 10 saniyede 60 istekten fazlası engellensin. Bu kural yalnızca alan adında çalışır, pages.dev adresinde çalışmaz.
+
+R2'de kesin bir harcama tavanı yoktur. Yukarıdaki sınırlar kullanımı ücretsiz katmanın içinde tutmak için tasarlandı.
+
 ## Sıra
 
 Her adım ayrı onayla yapılır.

@@ -37,7 +37,11 @@ window.SEOZ_SUPABASE_CONFIG = {
   // KISA BAĞLANTI: davetiyeler "<bu adres><slug>" olarak paylaşılır (ör. https://davet.studioseoz.com/kina-8vsgeh).
   // Önce alan adı Cloudflare'de müşteri projesine (seoz-davet) bağlanmalı; sonra buraya yazılır.
   // Boşsa kısa bağlantı publicViewUrl'in alan adıyla üretilir (ör. https://seoz-davet.pages.dev/kina-8vsgeh).
-  shortBaseUrl: ""
+  shortBaseUrl: "",
+
+  // MÜZİĞİMİ YÖNET: müzik dosyalarının (Cloudflare R2) bağlı olduğu müşteri sitesi. Müzik Denetimi'ndeki
+  // "Dinle" ve yönetici "Müziği Sil" işlemleri bu adrese gider (Türkiye'de pages.dev engelli olabildiği için alan adı).
+  musicApiBase: "https://davet.studioseoz.com"
 };
 
 /* ÖNİZLEME KORUMASI — Cloudflare'in dal önizleme adreslerinde (ör. animasyon-uyum.studio-seoz-davet.pages.dev)
