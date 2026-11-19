@@ -304,8 +304,15 @@
     return out.join("");
   }
 
+  // Tarayıcı deposu yazılamazsa (dolu / kapalı) bağlantı adı en azından bu sayfa açıkken kaybolmasın:
+  // aksi hâlde her "Yayına Hazırla" yeni bir bağlantı (yeni kayıt) üretirdi.
+  const memSlugs = new Map();
   function getSlug(docId) {
-    return safeLocalGet(SLUG_PREFIX + docId);
+    return safeLocalGet(SLUG_PREFIX + docId) || memSlugs.get(docId) || null;
+  }
+  function forgetSlug(docId) {
+    memSlugs.delete(docId);
+    try { localStorage.removeItem(SLUG_PREFIX + docId); } catch (e) { /* yok say */ }
   }
 
   /* GÜVENLİ OKUMA (supabase/guvenli-okuma.sql): sunucu fonksiyonu çağrısı. Fonksiyon henüz kurulu değilse
@@ -335,21 +342,32 @@
     return Array.isArray(rows) && rows.length > 0;
   }
 
-  const newSlugs = new Set();   // bu oturumda yeni üretilen bağlantılar (ilk yayın "yalnızca yeni kayıt" kipinde yapılır)
   // Belgenin kalıcı slug'ı: varsa aynısı, yoksa yeni ve BENZERSİZ olanı.
+  // Dönen fresh=true YALNIZCA bağlantı adı tam bu çağrıda üretildiyse olur ("yalnızca yeni kayıt" kipi).
+  // (Önceki sürüm bu bilgiyi sayfa belleğinde tutuyordu: giriş yapılmadan basılan "Yayına Hazırla" belgeyi
+  //  "yeni" diye işaretli bırakıyor, davetiye başka bir sekmede yayınlandıktan sonra bu sekmedeki her deneme
+  //  kendi kaydına çarpıp "slug_taken" hatası veriyordu.)
   async function ensureSlug(doc) {
     const existing = getSlug(doc.id);
-    if (existing) return existing;
-    newSlugs.add(doc.id);
+    if (existing) return { slug: existing, fresh: false };
     const base = slugifyTitle(doc.meta && doc.meta.title);
     for (let attempt = 0; attempt < 5; attempt++) {
       const candidate = base + "-" + randomSuffix(6);
       if (!(await slugExists(candidate))) {
+        memSlugs.set(doc.id, candidate);
         safeLocalSet(SLUG_PREFIX + doc.id, candidate);
-        return candidate;
+        return { slug: candidate, fresh: true };
       }
     }
     throw new Error("Benzersiz bir bağlantı adı üretilemedi, lütfen tekrar deneyin.");
+  }
+
+  // Bu bağlantıdaki yayın BU davetiyenin mi? (herkese açık tek-davetiye okuması; kimlik karşılaştırılır)
+  async function isOwnPublished(slug, docId) {
+    try {
+      const r = await rpcCall("invitation_get", { p_slug: slug }, false);
+      return !!(r.ok && r.data && docId && String(r.data.id || "") === String(docId));
+    } catch (e) { return false; }
   }
 
   /* ---------------- MEDYA (Storage) ---------------- */
@@ -437,7 +455,8 @@
     if (!isConfigured()) throw new Error("Supabase bağlantı bilgileri girilmemiş (js/supabase-config.js).");
     const progress = typeof onProgress === "function" ? onProgress : () => {};
 
-    const slug = await ensureSlug(snapshot);
+    const slugInfo = await ensureSlug(snapshot);
+    const slug = slugInfo.slug;
     // MÜHÜRLÜ KART: gizli mesajlar önce sunucudaki korumalı tabloya yazılır ve yayın kopyasından çıkarılır.
     // Yazılamazsa burada hata fırlar → medya yüklenmez, davetiye KAYDEDİLMEZ (güvensiz yönteme dönülmez).
     const hasSealed = (snapshot.layers || []).some(l => l && l.moduleId === "interactive" && l.settings && l.settings.kind === "muhurlu-kart");
@@ -464,10 +483,19 @@
     const documentData = replaceRefs(snapshot, map);
     // GÜVENLİ YAYIN: sunucu fonksiyonu sahibi doğrular ve bağlantı adının BU davetiyeye ait olduğunu denetler;
     // başka bir davetiyenin kaydının üzerine yazmaz. Fonksiyon henüz kurulu değilse eski yöntem kullanılır.
-    const pub = await rpcCall("invitation_owner_publish", {
-      p_slug: slug, p_doc: documentData, p_doc_id: String(documentData.id || ""), p_mode: newSlugs.has(snapshot.id) ? "create" : "any"
-    }, true, 60000);
-    if (pub.ok) newSlugs.delete(snapshot.id);
+    const pubArgs = { p_slug: slug, p_doc: documentData, p_doc_id: String(documentData.id || ""), p_mode: slugInfo.fresh ? "create" : "any" };
+    let pub = await rpcCall("invitation_owner_publish", pubArgs, true, 60000);
+    if (!pub.ok && !pub.missing && /slug_taken/.test(pub.detail || "")) {
+      // "Yalnızca yeni kayıt" denemesi dolu bağlantıya çarptı. Kayıt BU davetiyeninse (ör. önceki deneme sunucuda
+      // tamamlandı ama yanıtı kayboldu) normal güncellemeyle devam edilir — sunucu yine kimliği denetler.
+      // Başka bir davetiyeninse hiçbir şey yazılmaz; bu belge için yeni bir bağlantı üretilsin diye ad unutulur.
+      if (await isOwnPublished(slug, documentData.id)) {
+        pub = await rpcCall("invitation_owner_publish", Object.assign({}, pubArgs, { p_mode: "any" }), true, 60000);
+      } else {
+        forgetSlug(snapshot.id);
+      }
+    }
+    if (pub.ok) { /* tamam */ }
     else if (!pub.missing) {
       if (isPermissionError(pub.status, pub.detail)) throw authRequiredError(pub.detail);
       if (/slug_belongs_to_other_invitation/.test(pub.detail)) throw new Error("Bu bağlantı adı (" + slug + ") başka bir davetiyeye ait. Güvenlik için üzerine yazılmadı; hiçbir davetiye değişmedi. Davetiyeyi yeni bir bağlantıyla yayınlamak için bana (Studio SEOZ) bildirin.");
