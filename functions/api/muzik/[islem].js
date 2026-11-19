@@ -44,6 +44,7 @@ export async function onRequest(context) {
   const { request, env, params } = context;
   const islem = String(params.islem || "");
   if (islem === "yonetici") return admin(context);
+  if (islem === "r2-test") return r2Test(context);
   if (request.method !== "POST" || (islem !== "yukle" && islem !== "sil")) return json(405, { ok: false, error: "method" });
   if (isPreviewHost(request.url)) return fail("preview");
   const origin = request.headers.get("Origin");
@@ -157,4 +158,49 @@ async function admin(context) {
     return json(200, { ok: true, removed: (f.data && f.data.removed) || 0 }, cors);
   }
   return json(400, { ok: false, error: "unknown" }, cors);
+}
+
+/* ---------------- R2 BAĞLANTI TESTİ (YALNIZCA ÖNİZLEME) ----------------
+   GET /api/muzik/r2-test — yalnızca Cloudflare dal önizleme adreslerinde ve yalnızca Preview ortamına bağlı
+   AYRI test deposu (MUSIC_TEST_BUCKET → seoz-muzik-test) varsa çalışır. Müşteri deposuna (MUSIC_BUCKET) ve
+   Supabase'e HİÇ dokunmaz. "test/" altına küçük bir MP3 benzeri dosya yazar, okur, parça okur, siler; sonucu döner.
+   Canlı (Production) ortamda bu adres 404 verir. */
+function fakeMp3() {
+  const frame = 417, n = 40, b = new Uint8Array(frame * n);      // MPEG-1 Layer III, 128 kbps, 44.1 kHz
+  for (let i = 0; i < n; i++) { b[i * frame] = 0xFF; b[i * frame + 1] = 0xFB; b[i * frame + 2] = 0x90; b[i * frame + 3] = 0x64; }
+  return b;
+}
+async function r2Test(context) {
+  const { request, env } = context;
+  const bucket = env.MUSIC_TEST_BUCKET;
+  if (request.method !== "GET" || !isPreviewHost(request.url) || !bucket) return new Response(null, { status: 404 });
+  const steps = [], t0 = Date.now();
+  const step = (name, ok, detail) => steps.push({ name, ok: !!ok, detail: detail == null ? null : detail });
+  const key = `test/${randomHex(8)}.mp3`;
+  try {
+    const data = fakeMp3(), sha = await sha256hex(data);
+    step("MP3 içerik denetimi (sunucu kodu)", looksLikeMp3(data), data.length + " bayt");
+    await bucket.put(key, data, { httpMetadata: { contentType: "audio/mpeg" }, customMetadata: { test: "1", sha256: sha } });
+    step("R2'ye yazma (put)", true, key);
+    const h = await bucket.head(key);
+    step("R2 bilgi okuma (head)", h && h.size === data.length, h ? h.size : null);
+    const g = await bucket.get(key);
+    const back = g ? new Uint8Array(await g.arrayBuffer()) : null;
+    step("R2'den tam okuma (get) + parmak izi aynı", back && (await sha256hex(back)) === sha, back ? back.length : null);
+    const r = await bucket.get(key, { range: { offset: 417, length: 4 } });
+    const part = r ? new Uint8Array(await r.arrayBuffer()) : null;
+    step("R2 parça okuma (range)", part && part.length === 4 && part[0] === 0xFF && part[1] === 0xFB, part ? [...part] : null);
+    const l = await bucket.list({ prefix: "test/", limit: 10 });
+    step("Yalnızca test/ klasörü kullanılıyor", l && l.objects.every(o => o.key.startsWith("test/")), l ? l.objects.length : null);
+    const none = await bucket.get("m/olmayan-davetiye-x1/" + "0".repeat(32) + ".mp3");
+    step("Olmayan dosya → boş (null)", none === null, null);
+    step("Cloudflare önbelleği (Cache API) mevcut", typeof caches !== "undefined" && !!caches.default, "pages.dev adresinde önbellek etkisizdir; alan adında çalışır");
+  } catch (e) {
+    step("Hata", false, String(e && e.message || e).slice(0, 200));
+  } finally {
+    try { await bucket.delete(key); const after = await bucket.head(key); step("Silme (delete) → dosya kalmadı", after === null, null); }
+    catch (e) { step("Silme", false, String(e && e.message || e).slice(0, 200)); }
+  }
+  const ok = steps.every(x => x.ok);
+  return json(ok ? 200 : 500, { ok, ortam: "önizleme (Preview) · depo: MUSIC_TEST_BUCKET", sure_ms: Date.now() - t0, adimlar: steps });
 }
