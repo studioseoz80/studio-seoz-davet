@@ -213,6 +213,27 @@
     const u = new URL("album.html", b); u.hash = "k=" + token; return u.href;
   }
 
+  /* ---------------- MÜZİĞİMİ YÖNET (müşteri müziği · supabase/muzik-yonetimi.sql) ---------------- */
+  const MUSIC_KEY_PREFIX = "seoz_music_panel_v1_";   // + slug (yalnızca editör tarayıcısı)
+  async function ownerMusicSync(slug) {
+    const r = await rpc("music_owner_sync", { p_slug: slug }, true);
+    if (r && r.manage_token) safeSet(MUSIC_KEY_PREFIX + slug, r.manage_token);
+    return r;
+  }
+  async function ownerMusicRotate(slug) {
+    const r = await rpc("music_owner_rotate_token", { p_slug: slug }, true);
+    if (r && r.manage_token) safeSet(MUSIC_KEY_PREFIX + slug, r.manage_token);
+    return r;
+  }
+  function musicUrl(slug, token) {
+    token = token || safeGet(MUSIC_KEY_PREFIX + slug);
+    if (!slug || !token) return "";
+    let b; try { b = new URL(global.SeozCloudStore.customerUrl(slug)); } catch (e) { b = new URL("view.html", global.location.href); }
+    const u = new URL("muzigim.html", b); u.hash = "k=" + token; return u.href;
+  }
+  const ownerMusicList = () => rpc("music_owner_list", {}, true);
+  const ownerMusicSetDisabled = (slug, disabled, reason) => rpc("music_owner_set_disabled", { p_slug: slug, p_disabled: !!disabled, p_reason: reason || null }, true);
+
   /* ---------------- ANKET (Studio SEOZ sistemi) ---------------- */
   const POLL_VOTE_PREFIX = "seoz_poll_vote_v1_";    // + slug + "_" + layerId (katılımcının tarayıcısı)
   const POLL_PANEL_PREFIX = "seoz_poll_panel_v1_";  // + slug + "_" + layerId (yalnızca editör tarayıcısı)
@@ -347,6 +368,11 @@
     ownerAlbumPurge,
     packageUrl,
     albumUrl,
+    ownerMusicSync,
+    ownerMusicRotate,
+    musicUrl,
+    ownerMusicList,
+    ownerMusicSetDisabled,
     isConfigured,
     submitResponse,
     getOwnResponse,

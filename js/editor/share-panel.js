@@ -123,7 +123,7 @@
     const root = document.createElement("div");
     root.className = "sp-root"; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "Davetiye yayında");
     const domain = String(opts.shortUrl).replace(/^https?:\/\//, "").split("/")[0];
-    const hasOwner = !!(opts.panelUrl || opts.panelMissing || (opts.polls || []).length || opts.albumUrl || opts.albumMissing);
+    const hasOwner = !!(opts.panelUrl || opts.panelMissing || (opts.polls || []).length || opts.albumUrl || opts.albumMissing || opts.musicUrl || opts.musicMissing);
     root.innerHTML = `
       <div class="sp-card">
         <button type="button" class="sp-x" data-sp-close aria-label="Kapat">×</button>
@@ -169,6 +169,11 @@
             <p class="sp-note">Yalnızca bilgi: süre dolunca hiçbir şey kendiliğinden silinmez. Silme yalnızca aşağıdaki düğmeyle yapılır.</p></details>` : ""}
           ${opts.onAlbumPurge && !opts.albumInfo.purged_at ? `<div class="sp-danger"><button type="button" class="btn sp-del" data-sp-purge>Albüm Verilerini Sil</button>
             <p class="sp-note">Yalnızca Studio SEOZ görür. Bu albümün fotoğraf ve videoları depodan kalıcı olarak silinir; davetiye, diğer albümler ve katılım verileri etkilenmez.</p></div>` : ""}` : ""}</section>` : ""}
+        ${opts.musicUrl || opts.musicMissing ? `<section class="sp-panel" data-sp-music><h4>Müziğimi Yönet</h4>
+          <p class="sp-note">Müşteri davetiyenin müziğini telif onayı vererek kendisi yükler, değiştirir veya siler. Yalnızca etkinlik sahibine verin.${opts.musicInfo && opts.musicInfo.disabled ? " <b>Bu davetiyenin müziği şu an devre dışı.</b>" : ""}</p>
+          ${opts.musicUrl ? `<div class="sp-link"><input readonly data-share-music value="${esc(opts.musicUrl)}"><button type="button" class="btn btn-outline" data-sp-copy-music>Kopyala</button></div>`
+            : `<p class="sp-note sp-warn">Müziğimi Yönet bağlantısı bu tarayıcıda kayıtlı değil (başka tarayıcıdan oluşturulmuş olabilir).</p>`}
+          ${opts.onMusicRotate ? `<button type="button" class="btn btn-outline" data-sp-music-new>Yeni bağlantı üret (eski bağlantı iptal olur)</button>` : ""}</section>` : ""}
         ${opts.wishInfo ? `<section class="sp-panel" data-sp-wish><h4>Dilek Ağacı</h4>
           <p class="sp-note">Dilekler müşteri panelinin <b>Etkileşimler</b> bölümünde görünür; müşteri buradan gizleyebilir, silebilir, Excel/PDF indirebilir. Panelde "etkinlikten sonraki 30 gün içinde indirin" uyarısı gösterilir. Hiçbir şey kendiliğinden silinmez.</p>
           <p class="sp-note" data-sp-wish-n>Kayıtlı dilek: <b>${Number(opts.wishInfo.count || 0)}</b></p>
@@ -233,6 +238,21 @@
       }).catch(err => { b.disabled = false; alert("Yeni albüm linki üretilemedi: " + (err && err.message || "")); });
     });
     if ($("[data-sp-copy-panel]")) $("[data-sp-copy-panel]").addEventListener("click", e => copy(opts.panelUrl, e.currentTarget));
+    // MÜZİĞİMİ YÖNET: kopyala + yeni bağlantı (eskisi anında geçersiz olur; yüklü müzik etkilenmez)
+    const wireMusicCopy = () => { const c = $("[data-sp-copy-music]"); if (c) c.addEventListener("click", e => copy($("[data-share-music]").value, e.currentTarget)); };
+    wireMusicCopy();
+    if ($("[data-sp-music-new]")) $("[data-sp-music-new]").addEventListener("click", e => {
+      const b = e.currentTarget;
+      if (!confirm("Yeni Müziğimi Yönet bağlantısı üretilsin mi?\n\nMüşterideki eski bağlantı hemen çalışmaz olur; yüklü müzik değişmez.")) return;
+      b.disabled = true;
+      Promise.resolve(opts.onMusicRotate()).then(u => {
+        if (!u) throw new Error("bağlantı alınamadı");
+        const box = b.closest("[data-sp-music]"), old = box.querySelector(".sp-link"), w = box.querySelector(".sp-warn");
+        if (old) old.remove(); if (w) w.remove();
+        b.insertAdjacentHTML("beforebegin", `<div class="sp-link"><input readonly data-share-music value="${esc(u)}"><button type="button" class="btn btn-outline" data-sp-copy-music>Kopyala</button></div>`);
+        wireMusicCopy(); b.disabled = false;
+      }).catch(err => { b.disabled = false; alert("Yeni bağlantı üretilemedi: " + (err && err.message || "")); });
+    });
     // TESLİMAT PAKETİ: link (albüm linki yenilenince güncellenir) + "Tüm Linkleri Kopyala"
     const lang = doc.meta && doc.meta.lang === "en" ? "en" : "tr";
     function refreshPkg() {

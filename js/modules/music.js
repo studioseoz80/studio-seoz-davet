@@ -15,6 +15,9 @@
 
   const DEFAULTS = {
     audioSrc: "",
+    // MÜZİĞİMİ YÖNET: "" (alan yok — eski/mevcut davetiyeler) = Studio SEOZ'un yüklediği dosya (audioSrc).
+    // "customer" = müşteri müziğini kendi gizli bağlantısıyla yönetir; dosya /muzik/<davetiye> adresinden gelir.
+    audioSource: "",
     // MADDE 6: yuvarlak arka plan/buton KALDIRILDI — yalnızca zarif bir
     // müzik notası ikonu var. Eski "bgColor"/"iconColor"/"size" alanları
     // (geriye dönük uyumluluk için silinmedi, eski kayıtlarda durabilir
@@ -24,8 +27,13 @@
     metallic: "none"
   };
 
+  const isCustomer = s => !!s && s.audioSource === "customer";
   const SETTINGS_SCHEMA = [
-    { key: "audioSrc", type: "file-audio", label: "Müzik Dosyası" },
+    { key: "audioSource", type: "select", label: "Müziği Kim Yükler?", reRenderPanel: true,
+      options: [{ value: "", label: "Studio SEOZ yükler (mevcut yöntem)" }, { value: "customer", label: "Müşteri kendi müziğini yönetir (Müziğimi Yönet)" }] },
+    { key: "audioSrc", type: "file-audio", label: "Müzik Dosyası", showIf: s => !isCustomer(s) },
+    { key: "_customerGuide", type: "guide", label: "Müziğimi Yönet nasıl çalışır?", showIf: isCustomer,
+      html: "<p>Yayına Hazırla'dan sonra paylaşım penceresinde müşteriye özel <b>Müziğimi Yönet</b> bağlantısı çıkar. Müşteri MP3'ü telif onayı vererek kendisi yükler, değiştirir veya siler.</p><p>Müşteri müzik yüklemediği sürece davetiye müziksiz açılır ve nota görünmez. Editörde müzik çalınmaz; yalnızca yayındaki davetiyede çalar.</p><p>Telif şikâyetinde: kütüphanedeki <b>Müzik Denetimi</b> → Devre dışı bırak.</p>" },
     { key: "noteColor", type: "color", label: "Nota Rengi" },
     { key: "noteSize", type: "number", label: "Nota Boyutu", unit: "px", min: 16 },
     {
@@ -70,34 +78,49 @@
      --------------------------------------------------------------------------- */
   const Music = global.SeozMusic || (global.SeozMusic = (function () {
     const players = new Map();
-    function get(src) {
+    function get(src, customer) {
       let p = players.get(src);
       if (p) return p;
       const a = document.createElement("audio");
-      a.loop = true; a.preload = "auto";
+      a.loop = true; a.preload = customer ? "none" : "auto";   // müşteri müziği: misafir dinlemezse hiç indirilmez
       a.setAttribute("playsinline", ""); a.setAttribute("webkit-playsinline", "");
-      p = { audio: a, src, ready: false, wantPlay: false, userPaused: false, uis: new Set() };
+      p = { audio: a, src, ready: false, wantPlay: false, userPaused: false, uis: new Set(), unavailable: false };
       const setSrc = url => { if (!url) return; a.src = url; p.ready = true; if (p.wantPlay && !p.userPaused) tryPlay(p); };
       if (global.SeozBlobStore && global.SeozBlobStore.isRef && global.SeozBlobStore.isRef(src)) global.SeozBlobStore.resolveToObjectURL(src).then(setSrc);
       else setSrc(src);   // http adresi: hemen hazır (dokunuş anında çalabilsin)
       const sync = () => { p.uis.forEach(fn => { if (!fn()) p.uis.delete(fn); }); };
       ["play", "playing", "pause", "ended"].forEach(ev => a.addEventListener(ev, sync));
       players.set(src, p);
+      if (customer) {
+        // Müşteri müzik yüklemediyse / sildiyse / devre dışıysa: nota gizlenir, davetiye müziksiz devam eder.
+        const off = () => { if (!p.unavailable) { p.unavailable = true; p.wantPlay = false; sync(); } };
+        a.addEventListener("error", off);
+        try { fetch(src + "?durum=1", { cache: "no-store" }).then(r => (r.ok ? r.json() : { available: false })).then(j => { if (!j || !j.available) off(); }).catch(() => { /* ağ hatası: çalmayı deneyince anlaşılır */ }); } catch (e) { /* aynı */ }
+      }
       return p;
+    }
+    /* Katmanın gerçek ses adresi. Müşteri modunda yalnızca yayındaki davetiyede (adı biliniyorsa) vardır. */
+    function srcOf(settings) {
+      if (!settings) return "";
+      if (isCustomer(settings)) {
+        const slug = String(global.SeozPublishedSlug || "");
+        return /^[a-z0-9][a-z0-9-]{1,118}[a-z0-9]$/.test(slug) ? "/muzik/" + slug : "";
+      }
+      return settings.audioSrc || "";
     }
     function tryPlay(p) {
       p.wantPlay = false;
       try { const r = p.audio.play(); if (r && r.catch) r.catch(() => { /* tarayıcı izin vermedi: misafir düğmeyle başlatır */ }); } catch (e) { /* aynı */ }
     }
     function musicLayer(doc) {
-      return (doc && Array.isArray(doc.layers) ? doc.layers : []).find(l => l && l.type === "module" && l.moduleId === "music" && l.settings && l.settings.audioSrc) || null;
+      return (doc && Array.isArray(doc.layers) ? doc.layers : []).find(l => l && l.type === "module" && l.moduleId === "music" && l.settings && srcOf(l.settings)) || null;
     }
     /* Belge açılır açılmaz: ses öğesi hazırlanır (adres önceden yüklenir). */
-    function prepare(doc) { const l = musicLayer(doc); return l ? get(l.settings.audioSrc) : null; }
+    function prepare(doc) { const l = musicLayer(doc); return l ? get(srcOf(l.settings), isCustomer(l.settings)) : null; }
     /* Kullanıcı dokunuşu içinden çağrılır: müzik henüz çalmıyorsa ve misafir kapatmadıysa BİR KEZ başlatır. */
     function startFromGesture(doc) {
       const p = prepare(doc);
-      if (!p || p.userPaused || !p.audio.paused) return false;
+      if (!p || p.unavailable || p.userPaused || !p.audio.paused) return false;
       if (p.ready) tryPlay(p); else p.wantPlay = true;
       return true;
     }
@@ -105,7 +128,7 @@
       if (p.audio.paused) { p.userPaused = false; if (p.ready) tryPlay(p); else p.wantPlay = true; }
       else { p.userPaused = true; p.wantPlay = false; p.audio.pause(); }
     }
-    return { get, prepare, startFromGesture, toggle, musicLayer };
+    return { get, prepare, startFromGesture, toggle, musicLayer, srcOf };
   })());
 
   function render(settings, mode) {
@@ -126,7 +149,7 @@
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      cursor: s.audioSrc ? "pointer" : "default",
+      cursor: Music.srcOf(s) ? "pointer" : "default",
       pointerEvents: mode === "view" ? "none" : "auto",
       WebkitTapHighlightColor: "transparent"
     });
@@ -162,12 +185,15 @@
     paint(false);
     btn.appendChild(iconHost);
 
-    if (s.audioSrc) {
-      const p = Music.get(s.audioSrc);
+    const src = Music.srcOf(s);
+    if (isCustomer(s) && !src) btn.title = "Müşteri müziği — yalnızca yayındaki davetiyede çalar";
+    if (src) {
+      const p = Music.get(src, isCustomer(s));
       // Aynı ses öğesi yeni düğmeye taşınır (Tema sunumları <audio>'yu düğmenin içinde arar).
       btn.appendChild(p.audio);
-      p.uis.add(() => { if (!btn.isConnected && btn.dataset.drawn) return false; paint(!p.audio.paused); return true; });   // eski (silinmiş) düğmeler listeden düşer
-      paint(!p.audio.paused);
+      const hide = () => { btn.style.visibility = p.unavailable ? "hidden" : ""; };
+      p.uis.add(() => { if (!btn.isConnected && btn.dataset.drawn) return false; paint(!p.audio.paused); hide(); return true; });   // eski (silinmiş) düğmeler listeden düşer
+      paint(!p.audio.paused); hide();
       btn.addEventListener("click", () => Music.toggle(p));
     }
 
@@ -207,6 +233,6 @@
     defaultLayerSize: { w: 64, h: 64 },
     settingsSchema: SETTINGS_SCHEMA,
     render: render,
-    validate: (s) => (!s.audioSrc ? "Müzik: ses dosyası yüklenmemiş." : null)
+    validate: (s) => (!s.audioSrc && !isCustomer(s) ? "Müzik: ses dosyası yüklenmemiş." : null)
   });
 })(window);

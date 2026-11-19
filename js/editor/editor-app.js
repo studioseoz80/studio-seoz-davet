@@ -1002,6 +1002,22 @@
               return result;
             });
           })
+          // MÜZİĞİMİ YÖNET: müzik modülü "Müşteri kendi müziğini yönetir" modundaysa müşteriye özel bağlantı hazırlanır.
+          .then(result => {
+            const custMusic = (doc.layers || []).some(l => l.type === "module" && l.moduleId === "music" && l.settings && l.settings.audioSource === "customer");
+            if (!custMusic || typeof SeozEventStore === "undefined" || !SeozEventStore.ownerMusicSync) return result;
+            btn.textContent = "Müziğimi Yönet bağlantısı hazırlanıyor...";
+            return SeozEventStore.ownerMusicSync(result.slug)
+              .then(info => { result.musicUrl = SeozEventStore.musicUrl(result.slug); result.musicMissing = !result.musicUrl; result.musicInfo = info || null; return result; })
+              .catch(err => {
+                console.error("[Studio SEOZ] Müziğimi Yönet hazırlanamadı:", err);
+                const code = (err && (err.code || err.message)) || "";
+                alert("Davetiye yayınlandı, ancak Müziğimi Yönet bağlantısı hazırlanamadı:\n\n" +
+                  (code === "AUTH_REQUIRED" ? "Studio SEOZ girişi gerekli (☁ Giriş Yap)." : /music_owner_sync|PGRST202|Could not find/i.test(code) ? "Supabase'de müzik yönetimi kurulmamış (supabase/muzik-yonetimi.sql çalıştırılmalı)." : code) +
+                  "\n\nDavetiye müziksiz açılır. Sorunu giderip tekrar Yayına Hazırla'ya basın (link değişmez).");
+                return result;
+              });
+          })
           // DİLEK AĞACI: yalnızca bilgi (dilek sayısı) — Yayına Hazırla penceresinde elle silme için.
           .then(result => {
             const trees = typeof SeozAttendanceSync !== "undefined" && SeozAttendanceSync.wishLayers ? SeozAttendanceSync.wishLayers(doc) : [];
@@ -1042,6 +1058,8 @@
               onPollRotate: layerId => SeozEventStore.ownerPollRotate(result.slug, layerId).then(() => SeozEventStore.pollPanelUrl(result.slug, layerId)),
               onPollView: layerId => SeozEventStore.ownerPollViewLink(result.slug, layerId),
               onAlbumRotate: () => SeozEventStore.ownerMemoryRotate(result.slug).then(() => SeozEventStore.albumUrl(result.slug)),
+              musicUrl: result.musicUrl, musicMissing: result.musicMissing, musicInfo: result.musicInfo,
+              onMusicRotate: () => SeozEventStore.ownerMusicRotate(result.slug).then(() => SeozEventStore.musicUrl(result.slug)),
               onUpdate: (title, desc) => {
                 doc.meta.share = Object.assign({}, doc.meta.share, { title: title || undefined, description: desc || undefined });
                 return republish();

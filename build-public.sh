@@ -51,6 +51,10 @@ cp css/album.css "$OUT/css/album.css"
 # Teslimat Paketi (paket.html#i=...&a=...&r=...): davetiye + anı albümü + katılım paneli bağlantıları tek sayfada.
 cp paket.html "$OUT/paket.html"
 cp css/paket.css "$OUT/css/paket.css"
+# Müziğimi Yönet (muzigim.html#k=...): müşteri kendi davetiyesinin müziğini yükler / değiştirir / siler.
+# Dosyalar Cloudflare R2'de (MUSIC_BUCKET); yetki Supabase'de gizli anahtarla denetlenir.
+cp muzigim.html "$OUT/muzigim.html"
+cp css/muzik.css "$OUT/css/muzik.css"
 # Anket sonuç paneli (anket-panel.html#k=...): "Studio SEOZ sistemi" yöntemli anketler.
 cp anket-panel.html "$OUT/anket-panel.html"
 cp css/anket-panel.css "$OUT/css/anket-panel.css"

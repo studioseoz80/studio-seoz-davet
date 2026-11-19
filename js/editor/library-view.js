@@ -40,6 +40,7 @@
             <p class="sub">Davetiyeleriniz — düzenlemeye devam edin veya yeni bir tane başlatın.</p>
           </div>
           <div class="library-actions">
+            <button class="btn btn-outline" data-music-admin-open>♪ Müzik Denetimi</button>
             <button class="btn btn-outline" data-import>JSON İçe Aktar</button>
             <button class="btn btn-primary" data-new>+ Yeni Davetiye</button>
           </div>
@@ -95,6 +96,8 @@
 
     const importInput = rootEl.querySelector("[data-import-input]");
     rootEl.querySelector("[data-import]").addEventListener("click", () => importInput.click());
+    const musicBtn = rootEl.querySelector("[data-music-admin-open]");
+    if (musicBtn) musicBtn.addEventListener("click", () => { if (global.SeozMusicAdmin) global.SeozMusicAdmin.open(); });
     importInput.addEventListener("change", () => {
       const file = importInput.files[0];
       if (!file) return;
