@@ -51,7 +51,7 @@
                 : `<button type="button" class="btn btn-outline" data-ma-disable style="color:#9A3B2E">Devre dışı bırak</button>`}</div>
           </div>
           <small style="display:block;color:#6B6A5E;margin-top:6px">${r.has_music ? `${esc(r.file_name || "dosya")} · ${mb(r.file_size)} · yüklendi ${esc(when(r.uploaded_at))}<br>` : ""}${r.consent_at ? `Son telif onayı: ${esc(when(r.consent_at))} (${esc(r.consent_version)}) · toplam yükleme: ${esc(r.uploads_total)}` : "Telif onayı kaydı yok"}</small>
-          <div data-ma-reason hidden style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+          <div data-ma-reason style="margin-top:8px;display:none;gap:6px;flex-wrap:wrap">
             <input type="text" maxlength="300" placeholder="Neden (ör. telif şikâyeti — gönderen, tarih)" style="flex:1 1 240px" data-ma-reason-in>
             <button type="button" class="btn btn-primary" data-ma-disable-ok>Devre dışı bırak</button>
           </div>
@@ -72,7 +72,7 @@
     list.addEventListener("click", e => {
       const row = e.target.closest("[data-ma-row]"); if (!row) return;
       const slug = row.getAttribute("data-ma-row");
-      if (e.target.closest("[data-ma-disable]")) { const r = row.querySelector("[data-ma-reason]"); r.hidden = false; r.querySelector("input").focus(); }
+      if (e.target.closest("[data-ma-disable]")) { const r = row.querySelector("[data-ma-reason]"); r.style.display = "flex"; r.querySelector("input").focus(); }
       else if (e.target.closest("[data-ma-disable-ok]")) act(slug, true, row.querySelector("[data-ma-reason-in]").value.trim(), row);
       else if (e.target.closest("[data-ma-enable]")) act(slug, false, null, row);
     });
