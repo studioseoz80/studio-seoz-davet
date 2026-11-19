@@ -16,8 +16,9 @@ drop function if exists public.music_manage_delete(text);
 drop function if exists public.music_manage_commit(text, text, integer, text, text, text, text);
 drop function if exists public.music_manage_info(text);
 drop function if exists seoz_private.music_by_token(text);
-drop function if exists seoz_private.music_consent_sha();
-drop function if exists seoz_private.music_consent();
+drop function if exists seoz_private.music_consent_valid(text, text);
+drop function if exists seoz_private.music_consent_sha(text);
+drop function if exists seoz_private.music_consent(text);
 commit;
 
 -- Kayıtların da tamamen silinmesi gerekirse (GERİ DÖNÜŞÜ YOK — önce dışa aktarın), ayrıca çalıştırın:

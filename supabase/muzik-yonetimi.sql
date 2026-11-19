@@ -75,16 +75,27 @@ create policy "sahip okur" on public.music_tracks   for select to authenticated 
 create policy "sahip okur" on public.music_consents for select to authenticated using (public.seoz_is_owner());
 create policy "sahip okur" on public.music_log      for select to authenticated using (public.seoz_is_owner());
 
--- 2) Onay metni (tek kaynak: sayfa metni buradan alır, yükleme bu metnin özetiyle doğrulanır) ----
-create or replace function seoz_private.music_consent()
+-- 2) Onay metinleri (tek kaynak: sayfa metni buradan alır, yükleme bu metnin özetiyle doğrulanır) ----
+-- Türkçe ve İngilizce metnin AYRI sürüm adı vardır; kayıtta hangi dildeki metnin onaylandığı görünür.
+-- Metin değişirse sürüm adı da değiştirilmelidir (eski onaylar eski sürüm adıyla kalır).
+create or replace function seoz_private.music_consent(p_lang text default 'tr')
 returns jsonb language sql immutable set search_path = '' as $$
-  select jsonb_build_object(
-    'version', 'muzik-onay-v1',
-    'text', 'Yüklediğim müzik dosyasının davetiyemde kullanılmasına ve internet üzerinden misafirlere dinletilmesine ilişkin gerekli haklara ve izinlere sahip olduğumu kabul ediyorum. Müzik seçiminden ve gerekli izinlerin temininden sorumlu olduğumu beyan ediyorum.')
+  select case when p_lang = 'en' then jsonb_build_object(
+    'lang', 'en', 'version', 'music-consent-v1-en',
+    'text', 'I confirm that I hold all rights and permissions necessary for the music file I upload to be used in my invitation and played to my guests over the internet. I declare that I am responsible for the choice of music and for obtaining all necessary permissions.')
+  else jsonb_build_object(
+    'lang', 'tr', 'version', 'muzik-onay-v1',
+    'text', 'Yüklediğim müzik dosyasının davetiyemde kullanılmasına ve internet üzerinden misafirlere dinletilmesine ilişkin gerekli haklara ve izinlere sahip olduğumu kabul ediyorum. Müzik seçiminden ve gerekli izinlerin temininden sorumlu olduğumu beyan ediyorum.') end
 $$;
-create or replace function seoz_private.music_consent_sha()
+create or replace function seoz_private.music_consent_sha(p_lang text default 'tr')
 returns text language sql immutable set search_path = '' as $$
-  select encode(extensions.digest(convert_to(seoz_private.music_consent()->>'text', 'UTF8'), 'sha256'), 'hex')
+  select encode(extensions.digest(convert_to(seoz_private.music_consent(p_lang)->>'text', 'UTF8'), 'sha256'), 'hex')
+$$;
+-- Sürüm + özet çifti geçerli bir onay metnine (TR ya da EN) ait mi?
+create or replace function seoz_private.music_consent_valid(p_version text, p_sha text)
+returns boolean language sql immutable set search_path = '' as $$
+  select (p_version = seoz_private.music_consent('tr')->>'version' and p_sha = seoz_private.music_consent_sha('tr'))
+      or (p_version = seoz_private.music_consent('en')->>'version' and p_sha = seoz_private.music_consent_sha('en'))
 $$;
 
 -- Gizli anahtardan kayıt (anahtar yalnızca özetiyle saklanır).
@@ -96,25 +107,32 @@ returns public.music_tracks language sql stable security definer set search_path
 $$;
 
 -- 3) MÜŞTERİ (gizli anahtarla) ---------------------------------------------------
--- Durum: davetiye adı, etkin müzik bilgisi, devre dışı mı, bugünkü yükleme hakkı, onay metni.
+-- Durum: davetiye adı ve dili, etkin müzik bilgisi, devre dışı mı, bugünkü yükleme hakkı, onay metinleri (TR + EN).
 create or replace function public.music_manage_info(p_token text)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
-declare t public.music_tracks; v_today integer;
+declare t public.music_tracks; v_today integer; v_lang text;
 begin
   t := seoz_private.music_by_token(p_token);
   if t.invitation_slug is null then return null; end if;
   select count(*) into v_today from public.music_consents c where c.invitation_slug = t.invitation_slug and c.accepted_at > now() - interval '24 hours';
+  select case when p.document_data->'meta'->>'lang' = 'en' then 'en' else 'tr' end into v_lang
+    from public.published_invitations p where p.slug = t.invitation_slug order by p.id desc limit 1;
+  v_lang := coalesce(v_lang, 'tr');
   return jsonb_build_object(
+    'lang', v_lang,
     'slug', t.invitation_slug,
     'has_music', t.file_key is not null,
     'file_name', t.original_name, 'file_size', t.file_size, 'file_sha256', t.file_sha256, 'uploaded_at', t.uploaded_at,
     'disabled', t.disabled_at is not null,
     'uploads_left_today', greatest(0, 10 - v_today),
-    'consent', seoz_private.music_consent() || jsonb_build_object('sha256', seoz_private.music_consent_sha()));
+    'consent', seoz_private.music_consent(v_lang) || jsonb_build_object('sha256', seoz_private.music_consent_sha(v_lang)),
+    'consents', jsonb_build_object(
+      'tr', seoz_private.music_consent('tr') || jsonb_build_object('sha256', seoz_private.music_consent_sha('tr')),
+      'en', seoz_private.music_consent('en') || jsonb_build_object('sha256', seoz_private.music_consent_sha('en'))));
 end $$;
 
--- Yükleme kaydı: dosya R2'ye yazıldıktan SONRA sunucu (Cloudflare) çağırır. Onay metninin sürümü ve özeti
--- birebir tutmazsa, müzik devre dışıysa, günlük sınır dolduysa ya da dosya adı bu davetiyeye ait değilse REDDEDER.
+-- Yükleme kaydı: dosya R2'ye yazıldıktan SONRA sunucu (Cloudflare) çağırır. Onay metninin (TR ya da EN) sürümü
+-- ve özeti birebir tutmazsa, müzik devre dışıysa, günlük sınır dolduysa ya da dosya adı bu davetiyeye ait değilse REDDEDER.
 -- Dönen old_key: değiştirilen eski dosya (sunucu onu R2'den hemen siler).
 create or replace function public.music_manage_commit(p_token text, p_file_key text, p_file_size integer, p_file_sha256 text,
   p_original_name text, p_consent_version text, p_consent_sha256 text)
@@ -124,8 +142,7 @@ begin
   t := seoz_private.music_by_token(p_token);
   if t.invitation_slug is null then raise exception 'invalid_token'; end if;
   if t.disabled_at is not null then raise exception 'music_disabled'; end if;
-  if p_consent_version is distinct from (seoz_private.music_consent()->>'version')
-     or p_consent_sha256 is distinct from seoz_private.music_consent_sha() then raise exception 'consent_required'; end if;
+  if not coalesce(seoz_private.music_consent_valid(p_consent_version, p_consent_sha256), false) then raise exception 'consent_required'; end if;
   if p_file_key is null or p_file_key !~ ('^m/' || t.invitation_slug || '/[0-9a-f]{32}\.mp3$') then raise exception 'invalid_file_key'; end if;
   if p_file_size is null or p_file_size not between 1 and 10485760 then raise exception 'invalid_file_size'; end if;
   if p_file_sha256 is null or p_file_sha256 !~ '^[0-9a-f]{64}$' then raise exception 'invalid_file_hash'; end if;
@@ -236,8 +253,9 @@ begin
 end $$;
 
 -- 6) Yetkiler -------------------------------------------------------------------------
-revoke all on function seoz_private.music_consent()                 from public, anon, authenticated;
-revoke all on function seoz_private.music_consent_sha()             from public, anon, authenticated;
+revoke all on function seoz_private.music_consent(text)             from public, anon, authenticated;
+revoke all on function seoz_private.music_consent_sha(text)         from public, anon, authenticated;
+revoke all on function seoz_private.music_consent_valid(text, text) from public, anon, authenticated;
 revoke all on function seoz_private.music_by_token(text)            from public, anon, authenticated;
 revoke all on function public.music_manage_info(text)               from public;
 revoke all on function public.music_manage_commit(text, text, integer, text, text, text, text) from public;

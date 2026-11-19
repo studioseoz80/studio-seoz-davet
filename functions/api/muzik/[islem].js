@@ -3,7 +3,7 @@
    -----------------------------------------------------------------------------
    Müşterinin gizli anahtarı "X-Muzik-Anahtar" başlığıyla gelir (adreste / kayıtlarda görünmez).
    YÜKLE: 1) anahtar + devre dışı + günlük sınır Supabase'de denetlenir,
-          2) telif onayının sürümü ve metin özeti birebir tutmalı,
+          2) telif onayının (Türkçe ya da İngilizce metin) sürümü ve metin özeti birebir tutmalı,
           3) dosya en çok 10 MB olmalı ve İÇERİĞİ gerçekten MP3 olmalı (uzantıya bakılmaz),
           4) rastgele adla R2'ye yazılır, Supabase'e onayla birlikte kaydedilir
              (kayıt reddedilirse yazılan dosya hemen silinir), eski dosya R2'den silinir.
@@ -56,8 +56,11 @@ export async function onRequest(context) {
   // ---- YÜKLE ----
   if (info.data.disabled) return fail("music_disabled");
   if (!(info.data.uploads_left_today > 0)) return fail("daily_limit");
-  const consent = info.data.consent || {};
-  if (request.headers.get("X-Onay-Surum") !== consent.version || request.headers.get("X-Onay-Ozet") !== consent.sha256) return fail("consent_required");
+  // Onaylanan metin: Türkçe ya da İngilizce (sayfada hangisi gösterildiyse); sürüm + özet birebir tutmalı.
+  const ver = request.headers.get("X-Onay-Surum"), osha = request.headers.get("X-Onay-Ozet");
+  const all = info.data.consents ? Object.values(info.data.consents) : [info.data.consent];
+  const consent = all.find(c => c && c.version === ver && c.sha256 === osha);
+  if (!consent) return fail("consent_required");
 
   const bytes = await readCapped(request, MAX_BYTES);
   if (bytes === null) return fail("too_large");

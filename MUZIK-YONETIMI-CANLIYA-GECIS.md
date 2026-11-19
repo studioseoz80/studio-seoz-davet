@@ -8,6 +8,12 @@
 - Mevcut davetiyeler, Katılım Paneli, Anı Albümü ve anket etkilenmez.
 - Müzik modülünün varsayılanı eskisi gibi "Studio SEOZ yükler"dir.
 
+**Dil:** Sayfa davetiyenin diliyle açılır; davetiye İngilizceyse sayfa da İngilizce açılır. Müşteri sağ üstten TR / EN seçebilir.
+- Telif onayının Türkçe (`muzik-onay-v1`) ve İngilizce (`music-consent-v1-en`) metni ayrı sürüm adlarıyla tutulur. Kayıtta hangi dildeki metnin onaylandığı görünür.
+- Metinler `supabase/muzik-yonetimi.sql` içindeki `seoz_private.music_consent` fonksiyonunda durur.
+- **Metin değişirse sürüm adı da değiştirilmelidir.**
+- İngilizce metin canlıya geçmeden önce onaylanmalıdır.
+
 ## Sıra
 
 Her adım ayrı onayla yapılır.
