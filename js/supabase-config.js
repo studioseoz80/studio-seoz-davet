@@ -32,12 +32,14 @@ window.SEOZ_SUPABASE_CONFIG = {
   // tam adres. ör. "https://davet.studioseoz.com/view.html"
   // Boş bırakılırsa editörün açık olduğu adresteki view.html kullanılır
   // (bu, yalnızca editör de aynı sitede yayındaysa doğru olur).
- publicViewUrl: "https://seoz-davet.pages.dev/view.html",
+  // 20.11.2026: yeni bağlantılar alan adıyla üretilir (Türkiye'de pages.dev erişim sorunu). Daha önce verilmiş
+  // https://seoz-davet.pages.dev/... bağlantıları aynı müşteri sitesine gittiği için aynen çalışmaya devam eder.
+  publicViewUrl: "https://davet.studioseoz.com/view.html",
 
   // KISA BAĞLANTI: davetiyeler "<bu adres><slug>" olarak paylaşılır (ör. https://davet.studioseoz.com/kina-8vsgeh).
   // Önce alan adı Cloudflare'de müşteri projesine (seoz-davet) bağlanmalı; sonra buraya yazılır.
   // Boşsa kısa bağlantı publicViewUrl'in alan adıyla üretilir (ör. https://seoz-davet.pages.dev/kina-8vsgeh).
-  shortBaseUrl: "",
+  shortBaseUrl: "https://davet.studioseoz.com/",
 
   // MÜZİĞİMİ YÖNET: müzik dosyalarının (Cloudflare R2) bağlı olduğu müşteri sitesi. Müzik Denetimi'ndeki
   // "Dinle" ve yönetici "Müziği Sil" işlemleri bu adrese gider (Türkiye'de pages.dev engelli olabildiği için alan adı).
